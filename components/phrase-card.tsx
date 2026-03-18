@@ -12,7 +12,8 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { PhraseResult } from "@/app/actions/analyze";
-import { savePhrase, isSaved } from "@/lib/vocabulary";
+import { savePhrase, isSaved, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
+import { PremiumModal } from "@/components/premium-modal";
 
 const TYPE_CONFIG: Record<
   string,
@@ -62,10 +63,12 @@ export function PhraseCard({ phrase, sourceUrl }: PhraseCardProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showPremium, setShowPremium] = useState(false);
+  const [remaining, setRemaining] = useState(FREE_DAILY_LIMIT);
 
-  // localStorage の保存状態を初期化
   useEffect(() => {
     setSaved(isSaved(phrase.expression));
+    setRemaining(getDailyRemaining());
   }, [phrase.expression]);
 
   const typeConfig = TYPE_CONFIG[phrase.type] ?? TYPE_CONFIG.phrasal_verb;
@@ -105,7 +108,7 @@ export function PhraseCard({ phrase, sourceUrl }: PhraseCardProps) {
 
   const handleSave = useCallback(() => {
     if (saved) return;
-    savePhrase({
+    const result = savePhrase({
       expression: phrase.expression,
       type: phrase.type,
       cefr_level: phrase.cefr_level,
@@ -116,13 +119,21 @@ export function PhraseCard({ phrase, sourceUrl }: PhraseCardProps) {
       why_hard_for_japanese: phrase.why_hard_for_japanese,
       sourceUrl,
     });
-    setSaved(true);
-    toast.success("単語帳に保存しました", {
-      description: `「${phrase.expression}」をマイ単語帳に追加しました`,
-    });
+    if (result.success) {
+      setSaved(true);
+      setRemaining((r) => Math.max(0, r - 1));
+      toast.success("単語帳に保存しました", {
+        description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+      });
+    } else if (result.reason === "limit_reached") {
+      setShowPremium(true);
+    }
+    // duplicate は何もしない（すでに saved=true のはず）
   }, [phrase, sourceUrl, saved]);
 
   return (
+    <>
+    {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col">
       {/* ── Header ── */}
       <div className="p-5 flex-1">
@@ -266,10 +277,21 @@ export function PhraseCard({ phrase, sourceUrl }: PhraseCardProps) {
             <>
               <BookmarkPlus className="h-3.5 w-3.5" />
               単語帳に保存
+              {remaining <= 2 && remaining > 0 && (
+                <span className="ml-auto text-[10px] text-amber-500 font-semibold">
+                  本日あと{remaining}件
+                </span>
+              )}
+              {remaining === 0 && (
+                <span className="ml-auto text-[10px] text-rose-400 font-semibold">
+                  上限に達しました
+                </span>
+              )}
             </>
           )}
         </button>
       </div>
     </div>
+    </>
   );
 }

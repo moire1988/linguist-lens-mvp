@@ -24,6 +24,7 @@ import {
   deletePhrase,
   clearAll,
   exportToCSV,
+  exportToMarkdown,
   type SavedPhrase,
 } from "@/lib/vocabulary";
 import { AdPlaceholder } from "@/components/ad-placeholder";
@@ -343,6 +344,17 @@ export default function VocabularyPage() {
     toast.success("CSVをダウンロードしました");
   }, [vocabulary]);
 
+  const handleExportMarkdown = useCallback(() => {
+    if (vocabulary.length === 0) {
+      toast.error("保存された表現がありません");
+      return;
+    }
+    exportToMarkdown(vocabulary);
+    toast.success("Markdownをダウンロードしました", {
+      description: "Obsidianなどのツールで開けます",
+    });
+  }, [vocabulary]);
+
   const handleSpeak = useCallback((text: string) => {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
@@ -413,6 +425,13 @@ export default function VocabularyPage() {
               >
                 <Download className="h-4 w-4" />
                 CSV
+              </button>
+              <button
+                onClick={handleExportMarkdown}
+                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-violet-200 hover:text-violet-600 rounded-xl text-sm font-medium text-slate-600 transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                Obsidian
               </button>
               <button
                 onClick={() => setShowClearConfirm(true)}

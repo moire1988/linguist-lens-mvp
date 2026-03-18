@@ -25,6 +25,8 @@ import {
   type ExpressionType,
 } from "@/app/actions/analyze";
 import { savePhrase, getVocabularyCount } from "@/lib/vocabulary";
+import { getCachedResult, setCachedResult } from "@/lib/cache";
+import { PremiumModal } from "@/components/premium-modal";
 import { PhraseCard } from "@/components/phrase-card";
 import { AdPlaceholder } from "@/components/ad-placeholder";
 
@@ -115,6 +117,8 @@ export default function HomePage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [allSaved, setAllSaved] = useState(false);
   const [vocabCount, setVocabCount] = useState(0);
+  const [fromCache, setFromCache] = useState(false);
+  const [showPremium, setShowPremium] = useState(false);
 
   // 単語帳の件数をロード
   useEffect(() => {
@@ -152,13 +156,31 @@ export default function HomePage() {
     setError(null);
     setResults(null);
     setAllSaved(false);
+    setFromCache(false);
     setActiveFilter("all");
-    // URLモードのときだけソースURLを保存
     setSourceUrl(inputMode === "url" ? url : undefined);
+
+    // キャッシュチェック（URLモードのみ）
+    if (inputMode === "url" && url.trim()) {
+      const cached = getCachedResult(url.trim(), selectedLevel);
+      if (cached) {
+        setResults(cached);
+        setFromCache(true);
+        toast.success("キャッシュから読み込みました", {
+          description: "API呼び出しをスキップしました（7日間有効）",
+        });
+        return;
+      }
+    }
+
     startTransition(async () => {
       const result = await analyzeContent(inputValue, selectedLevel, inputMode);
       if (result.success) {
         setResults(result.data);
+        // URLモードの結果をキャッシュ保存
+        if (inputMode === "url" && url.trim()) {
+          setCachedResult(url.trim(), selectedLevel, result.data);
+        }
         if (result.data.total_count === 0) {
           setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
         }
@@ -179,7 +201,7 @@ export default function HomePage() {
     if (!results || allSaved) return;
     let count = 0;
     for (const phrase of results.phrases) {
-      savePhrase({
+      const res = savePhrase({
         expression: phrase.expression,
         type: phrase.type,
         cefr_level: phrase.cefr_level,
@@ -190,7 +212,18 @@ export default function HomePage() {
         why_hard_for_japanese: phrase.why_hard_for_japanese,
         sourceUrl,
       });
-      count++;
+      if (res.success) {
+        count++;
+      } else if (res.reason === "limit_reached") {
+        setShowPremium(true);
+        if (count > 0) {
+          toast.success(`${count}件保存しました`, {
+            description: "本日の上限に達しました。残りはプレミアムプランで保存できます。",
+          });
+          setVocabCount(getVocabularyCount());
+        }
+        return;
+      }
     }
     setAllSaved(true);
     setVocabCount(getVocabularyCount());
@@ -206,6 +239,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-slate-50/50">
+      {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
       {/* ── Header ── */}
       <header className="border-b border-slate-100 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
@@ -543,6 +577,11 @@ export default function HomePage() {
                   {SOURCE_LABELS[results.source_type].icon}{" "}
                   {SOURCE_LABELS[results.source_type].label}
                 </span>
+                {fromCache && (
+                  <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
+                    ⚡ キャッシュ
+                  </span>
+                )}
               </div>
 
               {/* Save all to vocabulary */}
