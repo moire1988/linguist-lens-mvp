@@ -24,6 +24,11 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+// 大文字小文字・前後スペースを無視した正規化比較
+function normalize(s: string): string {
+  return s.toLowerCase().trim();
+}
+
 // ─── CRUD ──────────────────────────────────────────────────────────────────
 
 export function getVocabulary(): SavedPhrase[] {
@@ -39,7 +44,9 @@ export function getVocabulary(): SavedPhrase[] {
 export function savePhrase(phrase: Omit<SavedPhrase, "id" | "savedAt">): SavedPhrase {
   const current = getVocabulary();
   // 重複チェック（同じ表現は保存しない）
-  const existing = current.find((p) => p.expression === phrase.expression);
+  const existing = current.find(
+    (p) => normalize(p.expression) === normalize(phrase.expression)
+  );
   if (existing) return existing;
 
   const newEntry: SavedPhrase = {
@@ -62,7 +69,9 @@ export function clearAll(): void {
 }
 
 export function isSaved(expression: string): boolean {
-  return getVocabulary().some((p) => p.expression === expression);
+  return getVocabulary().some(
+    (p) => normalize(p.expression) === normalize(expression)
+  );
 }
 
 export function getVocabularyCount(): number {

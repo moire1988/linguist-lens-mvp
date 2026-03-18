@@ -216,9 +216,25 @@ function FlashCard({
                   <p className="text-base font-semibold text-slate-800 mb-3">
                     {current.meaning_ja}
                   </p>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                    例文
-                  </p>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                      例文
+                    </p>
+                    <button
+                      onClick={() => {
+                        if (!("speechSynthesis" in window)) return;
+                        window.speechSynthesis.cancel();
+                        const u = new SpeechSynthesisUtterance(current.example);
+                        u.lang = "en-US";
+                        u.rate = 0.88;
+                        window.speechSynthesis.speak(u);
+                      }}
+                      className="p-1 rounded-lg hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600 transition-colors"
+                      title="例文を読み上げ"
+                    >
+                      <Volume2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                   <p className="text-sm text-indigo-700 font-medium">
                     {current.example}
                   </p>
@@ -603,10 +619,17 @@ export default function VocabularyPage() {
                     </div>
 
                     {/* Example (collapsible detail) */}
-                    <div className="mt-3 bg-indigo-50 rounded-xl px-3 py-2">
-                      <p className="text-xs text-indigo-700 font-medium leading-relaxed">
+                    <div className="mt-3 bg-indigo-50 rounded-xl px-3 py-2 flex items-start gap-2">
+                      <p className="text-xs text-indigo-700 font-medium leading-relaxed flex-1">
                         {phrase.example}
                       </p>
+                      <button
+                        onClick={() => handleSpeak(phrase.example)}
+                        className="flex-shrink-0 p-1 rounded-lg hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600 transition-colors mt-0.5"
+                        title="例文を読み上げ"
+                      >
+                        <Volume2 className="h-3 w-3" />
+                      </button>
                     </div>
                   </div>
                 </>
