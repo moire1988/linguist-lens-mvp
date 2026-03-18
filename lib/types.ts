@@ -19,4 +19,5 @@ export interface AnalysisResult {
   phrases: PhraseResult[];
   source_type: "youtube" | "web" | "text";
   total_count: number;
+  source_text?: string;
 }

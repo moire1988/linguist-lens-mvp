@@ -201,7 +201,7 @@ export async function analyzeContent(
 
     return {
       success: true,
-      data: { phrases, source_type: sourceType, total_count: phrases.length },
+      data: { phrases, source_type: sourceType, total_count: phrases.length, source_text: text },
     };
   } catch (error) {
     return {

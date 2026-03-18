@@ -28,6 +28,7 @@ import { savePhrase, getVocabularyCount } from "@/lib/vocabulary";
 import { getCachedResult, setCachedResult } from "@/lib/cache";
 import { PremiumModal } from "@/components/premium-modal";
 import { PhraseCard } from "@/components/phrase-card";
+import { ScriptViewer } from "@/components/script-viewer";
 import { AdPlaceholder } from "@/components/ad-placeholder";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -608,6 +609,15 @@ export default function HomePage() {
                 )}
               </button>
             </div>
+
+            {/* Script viewer with highlights */}
+            {results.source_text && (
+              <ScriptViewer
+                text={results.source_text}
+                phrases={results.phrases}
+                sourceUrl={sourceUrl}
+              />
+            )}
 
             {/* Filter pills */}
             <div className="flex flex-wrap gap-2 mb-5">
