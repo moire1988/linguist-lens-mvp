@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { PhraseResult } from "@/app/actions/analyze";
+import type { PhraseResult } from "@/lib/types";
 import { savePhrase, isSaved, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
 import { PremiumModal } from "@/components/premium-modal";
 

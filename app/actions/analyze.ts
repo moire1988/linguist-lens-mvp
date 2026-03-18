@@ -2,29 +2,8 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { YoutubeTranscript } from "youtube-transcript";
-
-export type ExpressionType =
-  | "phrasal_verb"
-  | "idiom"
-  | "collocation"
-  | "grammar_pattern";
-
-export interface PhraseResult {
-  expression: string;
-  type: ExpressionType;
-  context: string;
-  meaning_ja: string;
-  nuance: string;
-  example: string;
-  cefr_level: string;
-  why_hard_for_japanese: string;
-}
-
-export interface AnalysisResult {
-  phrases: PhraseResult[];
-  source_type: "youtube" | "web" | "text";
-  total_count: number;
-}
+import type { PhraseResult, AnalysisResult } from "@/lib/types";
+export type { ExpressionType, PhraseResult, AnalysisResult } from "@/lib/types";
 
 const LEVEL_DESCRIPTIONS: Record<string, string> = {
   A1: "英語学習を始めたばかりの超入門者（TOEIC 〜225程度）",

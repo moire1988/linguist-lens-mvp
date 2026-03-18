@@ -1,4 +1,4 @@
-import type { ExpressionType } from "@/app/actions/analyze";
+import type { ExpressionType } from "@/lib/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 

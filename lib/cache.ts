@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "@/app/actions/analyze";
+import type { AnalysisResult } from "@/lib/types";
 
 const CACHE_KEY = "linguist-lens-analysis-cache";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7日間
