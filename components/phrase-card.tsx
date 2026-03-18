@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Volume2,
   VolumeX,
@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { PhraseResult } from "@/app/actions/analyze";
+import { savePhrase, isSaved } from "@/lib/vocabulary";
 
 const TYPE_CONFIG: Record<
   string,
@@ -54,17 +55,21 @@ const CEFR_CONFIG: Record<string, { bg: string; text: string }> = {
 
 interface PhraseCardProps {
   phrase: PhraseResult;
+  sourceUrl?: string;
 }
 
-export function PhraseCard({ phrase }: PhraseCardProps) {
+export function PhraseCard({ phrase, sourceUrl }: PhraseCardProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const typeConfig =
-    TYPE_CONFIG[phrase.type] ?? TYPE_CONFIG.phrasal_verb;
-  const cefrConfig =
-    CEFR_CONFIG[phrase.cefr_level] ?? CEFR_CONFIG.B2;
+  // localStorage の保存状態を初期化
+  useEffect(() => {
+    setSaved(isSaved(phrase.expression));
+  }, [phrase.expression]);
+
+  const typeConfig = TYPE_CONFIG[phrase.type] ?? TYPE_CONFIG.phrasal_verb;
+  const cefrConfig = CEFR_CONFIG[phrase.cefr_level] ?? CEFR_CONFIG.B2;
 
   // ─── Web Speech API ────────────────────────────────────────────────────
 
@@ -78,19 +83,14 @@ export function PhraseCard({ phrase }: PhraseCardProps) {
       setIsSpeaking(false);
       return;
     }
-
     const utterance = new SpeechSynthesisUtterance(phrase.expression);
     utterance.lang = "en-US";
     utterance.rate = 0.82;
-    utterance.pitch = 1;
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
-
     setIsSpeaking(true);
     window.speechSynthesis.speak(utterance);
   }, [phrase.expression, isSpeaking]);
-
-  // ─── Speak example sentence ───────────────────────────────────────────
 
   const handleSpeakExample = useCallback(() => {
     if (!("speechSynthesis" in window)) return;
@@ -101,21 +101,32 @@ export function PhraseCard({ phrase }: PhraseCardProps) {
     window.speechSynthesis.speak(utterance);
   }, [phrase.example]);
 
-  // ─── Notion mock ──────────────────────────────────────────────────────
+  // ─── 単語帳に保存 ─────────────────────────────────────────────────────
 
-  const handleSaveToNotion = useCallback(() => {
-    setSaved(true);
-    toast.success("Notionに保存しました", {
-      description: `「${phrase.expression}」をデータベースに追加しました`,
+  const handleSave = useCallback(() => {
+    if (saved) return;
+    savePhrase({
+      expression: phrase.expression,
+      type: phrase.type,
+      cefr_level: phrase.cefr_level,
+      meaning_ja: phrase.meaning_ja,
+      nuance: phrase.nuance,
+      example: phrase.example,
+      context: phrase.context,
+      why_hard_for_japanese: phrase.why_hard_for_japanese,
+      sourceUrl,
     });
-    setTimeout(() => setSaved(false), 3000);
-  }, [phrase.expression]);
+    setSaved(true);
+    toast.success("単語帳に保存しました", {
+      description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+    });
+  }, [phrase, sourceUrl, saved]);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col">
       {/* ── Header ── */}
       <div className="p-5 flex-1">
-        {/* Badges row */}
+        {/* Badges */}
         <div className="flex items-center gap-2 flex-wrap mb-2.5">
           <span
             className={cn(
@@ -161,7 +172,7 @@ export function PhraseCard({ phrase }: PhraseCardProps) {
           </button>
         </div>
 
-        {/* Context quote */}
+        {/* Context */}
         <div className="flex gap-2 bg-slate-50 border border-slate-100 rounded-xl p-3 mb-4">
           <Quote className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-slate-500 leading-relaxed italic">
@@ -189,7 +200,7 @@ export function PhraseCard({ phrase }: PhraseCardProps) {
           </p>
         </div>
 
-        {/* Example sentence */}
+        {/* Example */}
         <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3">
           <div className="flex items-center justify-between mb-1">
             <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">
@@ -209,7 +220,7 @@ export function PhraseCard({ phrase }: PhraseCardProps) {
         </div>
       </div>
 
-      {/* ── Expandable: 学習のポイント ── */}
+      {/* ── 学習のポイント（展開） ── */}
       <div className="border-t border-slate-100">
         <button
           onClick={() => setShowDetail(!showDetail)}
@@ -234,26 +245,27 @@ export function PhraseCard({ phrase }: PhraseCardProps) {
         )}
       </div>
 
-      {/* ── Footer: Save to Notion ── */}
+      {/* ── 単語帳に保存 ── */}
       <div className="px-5 pb-4 pt-1 border-t border-slate-100 bg-slate-50/50">
         <button
-          onClick={handleSaveToNotion}
+          onClick={handleSave}
+          disabled={saved}
           className={cn(
             "w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-medium transition-all",
             saved
-              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+              ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
               : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
           )}
         >
           {saved ? (
             <>
               <Check className="h-3.5 w-3.5" />
-              保存済み
+              単語帳に保存済み
             </>
           ) : (
             <>
               <BookmarkPlus className="h-3.5 w-3.5" />
-              Notionに保存
+              単語帳に保存
             </>
           )}
         </button>

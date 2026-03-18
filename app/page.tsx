@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   Search,
   Youtube,
@@ -14,6 +15,7 @@ import {
   ChevronRight,
   Tv,
   Check,
+  BookMarked,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -22,7 +24,9 @@ import {
   type AnalysisResult,
   type ExpressionType,
 } from "@/app/actions/analyze";
+import { savePhrase, getVocabularyCount } from "@/lib/vocabulary";
 import { PhraseCard } from "@/components/phrase-card";
+import { AdPlaceholder } from "@/components/ad-placeholder";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -105,10 +109,17 @@ export default function HomePage() {
   const [textInput, setTextInput] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("B2");
   const [results, setResults] = useState<AnalysisResult | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | ExpressionType>("all");
   const [stepIndex, setStepIndex] = useState(0);
   const [allSaved, setAllSaved] = useState(false);
+  const [vocabCount, setVocabCount] = useState(0);
+
+  // 単語帳の件数をロード
+  useEffect(() => {
+    setVocabCount(getVocabularyCount());
+  }, []);
 
   const [isPending, startTransition] = useTransition();
 
@@ -140,7 +151,10 @@ export default function HomePage() {
   const handleSubmit = useCallback(() => {
     setError(null);
     setResults(null);
+    setAllSaved(false);
     setActiveFilter("all");
+    // URLモードのときだけソースURLを保存
+    setSourceUrl(inputMode === "url" ? url : undefined);
     startTransition(async () => {
       const result = await analyzeContent(inputValue, selectedLevel, inputMode);
       if (result.success) {
@@ -152,7 +166,7 @@ export default function HomePage() {
         setError(result.error);
       }
     });
-  }, [inputValue, selectedLevel, inputMode]);
+  }, [inputValue, url, selectedLevel, inputMode]);
 
   // Filtered results
   const filteredPhrases =
@@ -160,14 +174,30 @@ export default function HomePage() {
       (p) => activeFilter === "all" || p.type === activeFilter
     ) ?? [];
 
-  // Save all to Notion mock
+  // 全件を単語帳に保存
   const handleSaveAll = useCallback(() => {
+    if (!results || allSaved) return;
+    let count = 0;
+    for (const phrase of results.phrases) {
+      savePhrase({
+        expression: phrase.expression,
+        type: phrase.type,
+        cefr_level: phrase.cefr_level,
+        meaning_ja: phrase.meaning_ja,
+        nuance: phrase.nuance,
+        example: phrase.example,
+        context: phrase.context,
+        why_hard_for_japanese: phrase.why_hard_for_japanese,
+        sourceUrl,
+      });
+      count++;
+    }
     setAllSaved(true);
-    toast.success("Notionにすべて保存しました", {
-      description: `${results?.total_count}個の表現をデータベースに追加しました`,
+    setVocabCount(getVocabularyCount());
+    toast.success("単語帳にすべて保存しました", {
+      description: `${count}個の表現を追加しました`,
     });
-    setTimeout(() => setAllSaved(false), 3000);
-  }, [results?.total_count]);
+  }, [results, sourceUrl, allSaved]);
 
   const canSubmit =
     inputMode === "url" ? url.trim().length > 0 : textInput.trim().length > 10;
@@ -185,9 +215,18 @@ export default function HomePage() {
               LinguistLens
             </span>
           </div>
-          <span className="text-xs text-slate-400 hidden sm:block">
-            英語表現の深読みツール
-          </span>
+          <Link
+            href="/vocabulary"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-100 transition-colors"
+          >
+            <BookMarked className="h-3.5 w-3.5" />
+            マイ単語帳
+            {vocabCount > 0 && (
+              <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {vocabCount}
+              </span>
+            )}
+          </Link>
         </div>
       </header>
 
@@ -201,8 +240,10 @@ export default function HomePage() {
             </span>
           </div>
           <h1 className={cn(
-            "font-extrabold text-slate-900 leading-tight tracking-tight mb-4",
-            hasContent ? "text-2xl sm:text-3xl" : "text-3xl sm:text-[2.75rem]"
+            "font-extrabold text-slate-900 tracking-tight mb-4",
+            hasContent
+              ? "text-2xl sm:text-3xl leading-snug"
+              : "text-3xl sm:text-[2.75rem] leading-snug sm:leading-[1.35]"
           )}>
             英語コンテンツから
             <br />
@@ -446,22 +487,26 @@ export default function HomePage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-white rounded-2xl border border-slate-200 p-5 animate-pulse"
-                >
-                  <div className="flex gap-2 mb-3">
-                    <div className="h-5 w-16 bg-slate-100 rounded-full" />
-                    <div className="h-5 w-8 bg-slate-100 rounded-full" />
+                i === 3 ? (
+                  <AdPlaceholder key="ad-loading" slot="解析待機中 · 300×250" size="md" className="min-h-[140px]" />
+                ) : (
+                  <div
+                    key={i}
+                    className="bg-white rounded-2xl border border-slate-200 p-5 animate-pulse"
+                  >
+                    <div className="flex gap-2 mb-3">
+                      <div className="h-5 w-16 bg-slate-100 rounded-full" />
+                      <div className="h-5 w-8 bg-slate-100 rounded-full" />
+                    </div>
+                    <div className="h-7 w-3/4 bg-slate-100 rounded-lg mb-3" />
+                    <div className="h-12 bg-slate-50 rounded-xl mb-3" />
+                    <div className="space-y-2">
+                      <div className="h-3 bg-slate-100 rounded w-full" />
+                      <div className="h-3 bg-slate-100 rounded w-5/6" />
+                      <div className="h-3 bg-slate-100 rounded w-4/6" />
+                    </div>
                   </div>
-                  <div className="h-7 w-3/4 bg-slate-100 rounded-lg mb-3" />
-                  <div className="h-12 bg-slate-50 rounded-xl mb-3" />
-                  <div className="space-y-2">
-                    <div className="h-3 bg-slate-100 rounded w-full" />
-                    <div className="h-3 bg-slate-100 rounded w-5/6" />
-                    <div className="h-3 bg-slate-100 rounded w-4/6" />
-                  </div>
-                </div>
+                )
               ))}
             </div>
           </div>
@@ -500,9 +545,10 @@ export default function HomePage() {
                 </span>
               </div>
 
-              {/* Save all to Notion */}
+              {/* Save all to vocabulary */}
               <button
                 onClick={handleSaveAll}
+                disabled={allSaved}
                 className={cn(
                   "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
                   allSaved
@@ -518,7 +564,7 @@ export default function HomePage() {
                 ) : (
                   <>
                     <BookmarkPlus className="h-4 w-4" />
-                    Notionに全て保存
+                    単語帳に全て保存
                   </>
                 )}
               </button>
@@ -565,7 +611,18 @@ export default function HomePage() {
             {/* Phrase cards grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredPhrases.map((phrase, i) => (
-                <PhraseCard key={`${phrase.expression}-${i}`} phrase={phrase} />
+                <>
+                  <PhraseCard key={`${phrase.expression}-${i}`} phrase={phrase} sourceUrl={sourceUrl} />
+                  {/* 6枚ごとに広告プレースホルダー */}
+                  {(i + 1) % 6 === 0 && i + 1 < filteredPhrases.length && (
+                    <AdPlaceholder
+                      key={`ad-${i}`}
+                      slot="結果フィード広告 · 336×280"
+                      size="md"
+                      className="sm:col-span-2 lg:col-span-1"
+                    />
+                  )}
+                </>
               ))}
             </div>
           </div>
