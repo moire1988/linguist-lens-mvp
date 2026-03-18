@@ -154,7 +154,7 @@ ${snippet}
       "why_hard_for_japanese": "日本人学習者がこの表現を能動的に使いこなすのが難しい理由（1〜2文）"
     }
   ],
-  "fullScriptWithHighlight": "【重要】上記テキストを一字一句そのままコピーし、抽出した各表現が実際に使われている箇所のみ <b data-expr=\\"expressionフィールドの値\\">実際のテキスト</b> で囲んだ文字列。ルール：①代名詞の変化（oneself→himself/herself/yourself等）があっても同じ表現として<b>で囲む ②動詞の活用形（end up→ended up/ends up）も同じ表現として囲む ③語が離れていても文脈上同じパターンなら囲む ④テキストの文字は一切変更せず<b>タグの追加のみ行う ⑤data-expr属性にはphrasesのexpressionフィールドの値をそのまま使用する"
+  "fullScriptWithHighlight": "【重要】上記テキストを一字一句正確にコピーし、抽出した各表現が実際に使われている箇所のみHTMLタグで囲んだ文字列。タグ形式は必ずシングルクォートを使うこと: <b data-expr='expressionの値'>実際のテキスト</b>。ルール：①代名詞の変化（oneself→himself等）があっても同じ表現として囲む ②動詞活用形（end up→ended up）も囲む ③テキストの文字は一切変更せずタグ追加のみ ④data-exprにはphrasesのexpressionの値をそのまま入れる"
 }`;
 
   const response = await client.messages.create({
@@ -167,22 +167,37 @@ ${snippet}
   const rawText =
     response.content[0].type === "text" ? response.content[0].text : "";
 
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch)
-    throw new Error("AIの応答形式が予期しないものでした。もう一度お試しください。");
-
-  try {
-    const parsed = JSON.parse(jsonMatch[0]) as {
-      phrases: PhraseResult[];
-      fullScriptWithHighlight: string;
-    };
-    return {
-      phrases: parsed.phrases ?? [],
-      fullScriptWithHighlight: parsed.fullScriptWithHighlight ?? snippet,
-    };
-  } catch {
-    throw new Error("AI応答のパースに失敗しました。もう一度お試しください。");
+  // ── Try parsing as full object ──────────────────────────────────────────
+  const objMatch = rawText.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    try {
+      const parsed = JSON.parse(objMatch[0]) as {
+        phrases: PhraseResult[];
+        fullScriptWithHighlight?: string;
+      };
+      if (Array.isArray(parsed.phrases) && parsed.phrases.length > 0) {
+        return {
+          phrases: parsed.phrases,
+          fullScriptWithHighlight: parsed.fullScriptWithHighlight ?? snippet,
+        };
+      }
+    } catch {
+      // fall through to array fallback below
+    }
   }
+
+  // ── Fallback: extract phrases array only (ignore highlight) ─────────────
+  const arrMatch = rawText.match(/\[[\s\S]*\]/);
+  if (arrMatch) {
+    try {
+      const phrases = JSON.parse(arrMatch[0]) as PhraseResult[];
+      return { phrases, fullScriptWithHighlight: snippet };
+    } catch {
+      // fall through
+    }
+  }
+
+  throw new Error("AIの応答形式が予期しないものでした。もう一度お試しください。");
 }
 
 // ─── Main Server Action ────────────────────────────────────────────────────

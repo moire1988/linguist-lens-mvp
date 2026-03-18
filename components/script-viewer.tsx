@@ -38,17 +38,17 @@ function escapeHtml(s: string): string {
 
 function sanitizeHighlight(html: string): string {
   const result: string[] = [];
-  // Match <b data-expr="...">content</b> or plain <b>content</b>
-  const re = /<b(?:\s+data-expr="([^"]{0,300})")?>([\s\S]*?)<\/b>/gi;
+  // Accept both single- and double-quoted data-expr attributes
+  const re = /<b(?:\s+data-expr=(?:"([^"]{0,300})"|'([^']{0,300})'))?>([\s\S]*?)<\/b>/gi;
   let lastIndex = 0;
   let m: RegExpExecArray | null;
 
   while ((m = re.exec(html)) !== null) {
-    // Text before this match
     result.push(escapeHtml(html.slice(lastIndex, m.index)));
-    // Reconstruct safe <b> tag
-    const expr = m[1] ? ` data-expr="${escapeHtml(m[1])}"` : "";
-    result.push(`<b${expr}>${escapeHtml(m[2])}</b>`);
+    // m[1] = double-quoted value, m[2] = single-quoted value, m[3] = content
+    const exprVal = m[1] ?? m[2] ?? "";
+    const expr = exprVal ? ` data-expr="${escapeHtml(exprVal)}"` : "";
+    result.push(`<b${expr}>${escapeHtml(m[3])}</b>`);
     lastIndex = m.index + m[0].length;
   }
   result.push(escapeHtml(html.slice(lastIndex)));
