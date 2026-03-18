@@ -1,62 +1,68 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { Volume2, VolumeX, BookmarkPlus, Check, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Volume2,
+  VolumeX,
+  BookmarkPlus,
+  Check,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { PhraseResult } from "@/lib/types";
 import { savePhrase, isSaved } from "@/lib/vocabulary";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Props ───────────────────────────────────────────────────────────────────
 
 interface ScriptViewerProps {
+  /** Raw text (used for TTS when highlightedHtml is absent) */
   text: string;
   phrases: PhraseResult[];
+  /** AI-generated HTML with <b data-expr="..."> markup */
+  highlightedHtml?: string;
   sourceUrl?: string;
 }
 
-type Segment =
-  | { kind: "text"; content: string }
-  | { kind: "highlight"; content: string; phrase: PhraseResult };
+// ─── Sanitizer ───────────────────────────────────────────────────────────────
+// Only <b data-expr="..."> and </b> are allowed. Everything else is escaped.
 
-// ─── Highlight colors per type ───────────────────────────────────────────────
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
-const TYPE_HL: Record<string, { base: string; hover: string }> = {
-  phrasal_verb:   { base: "bg-violet-100 text-violet-900", hover: "hover:bg-violet-200" },
-  idiom:          { base: "bg-amber-100  text-amber-900",  hover: "hover:bg-amber-200"  },
-  collocation:    { base: "bg-sky-100    text-sky-900",    hover: "hover:bg-sky-200"    },
-  grammar_pattern:{ base: "bg-emerald-100 text-emerald-900", hover: "hover:bg-emerald-200" },
-};
-const SAVED_HL = "bg-emerald-50 text-emerald-700 hover:bg-emerald-100";
+function sanitizeHighlight(html: string): string {
+  const result: string[] = [];
+  // Match <b data-expr="...">content</b> or plain <b>content</b>
+  const re = /<b(?:\s+data-expr="([^"]{0,300})")?>([\s\S]*?)<\/b>/gi;
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
 
-// ─── Text segmentation ───────────────────────────────────────────────────────
-
-function buildSegments(text: string, phrases: PhraseResult[]): Segment[] {
-  if (!text || !phrases.length) return [{ kind: "text", content: text }];
-
-  const sorted = [...phrases]
-    .filter((p) => p.expression.trim())
-    .sort((a, b) => b.expression.length - a.expression.length);
-
-  const escaped = sorted.map((p) =>
-    p.expression.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  );
-  const regex = new RegExp(`(${escaped.join("|")})`, "gi");
-  const parts = text.split(regex);
-
-  return parts.map((part) => {
-    const matched = phrases.find(
-      (p) => p.expression.toLowerCase() === part.toLowerCase()
-    );
-    return matched
-      ? { kind: "highlight", content: part, phrase: matched }
-      : { kind: "text", content: part };
-  });
+  while ((m = re.exec(html)) !== null) {
+    // Text before this match
+    result.push(escapeHtml(html.slice(lastIndex, m.index)));
+    // Reconstruct safe <b> tag
+    const expr = m[1] ? ` data-expr="${escapeHtml(m[1])}"` : "";
+    result.push(`<b${expr}>${escapeHtml(m[2])}</b>`);
+    lastIndex = m.index + m[0].length;
+  }
+  result.push(escapeHtml(html.slice(lastIndex)));
+  return result.join("");
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function ScriptViewer({ text, phrases, sourceUrl }: ScriptViewerProps) {
+export function ScriptViewer({
+  text,
+  phrases,
+  highlightedHtml,
+  sourceUrl,
+}: ScriptViewerProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speed, setSpeed] = useState(1.0);
   const [collapsed, setCollapsed] = useState(false);
@@ -68,20 +74,28 @@ export function ScriptViewer({ text, phrases, sourceUrl }: ScriptViewerProps) {
   } | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  // Initialise saved set from localStorage
+  // Initialise saved set
   useEffect(() => {
-    setSavedSet(
-      new Set(
-        phrases
-          .filter((p) => isSaved(p.expression))
-          .map((p) => p.expression.toLowerCase())
-      )
-    );
+    const init = new Set<string>();
+    phrases.forEach((p) => {
+      if (isSaved(p.expression)) init.add(p.expression.toLowerCase());
+    });
+    setSavedSet(init);
   }, [phrases]);
 
-  const segments = useMemo(() => buildSegments(text, phrases), [text, phrases]);
+  // Sanitized HTML (memoized)
+  const safeHtml = useMemo(
+    () => (highlightedHtml ? sanitizeHighlight(highlightedHtml) : null),
+    [highlightedHtml]
+  );
 
-  // ─── TTS ─────────────────────────────────────────────────────────────────
+  // Plain text for TTS (strip tags if needed)
+  const ttsText = useMemo(() => {
+    if (highlightedHtml) return highlightedHtml.replace(/<[^>]*>/g, "");
+    return text;
+  }, [highlightedHtml, text]);
+
+  // ─── TTS ───────────────────────────────────────────────────────────────
 
   const handleSpeak = useCallback(() => {
     if (!("speechSynthesis" in window)) {
@@ -93,14 +107,14 @@ export function ScriptViewer({ text, phrases, sourceUrl }: ScriptViewerProps) {
       setIsSpeaking(false);
       return;
     }
-    const utt = new SpeechSynthesisUtterance(text);
+    const utt = new SpeechSynthesisUtterance(ttsText);
     utt.lang = "en-US";
     utt.rate = speed;
     utt.onend = () => setIsSpeaking(false);
     utt.onerror = () => setIsSpeaking(false);
     setIsSpeaking(true);
     window.speechSynthesis.speak(utt);
-  }, [text, isSpeaking, speed]);
+  }, [ttsText, isSpeaking, speed]);
 
   const handleSpeedChange = useCallback(
     (s: number) => {
@@ -113,16 +127,7 @@ export function ScriptViewer({ text, phrases, sourceUrl }: ScriptViewerProps) {
     [isSpeaking]
   );
 
-  // ─── Tooltip ─────────────────────────────────────────────────────────────
-
-  const showTooltip = useCallback(
-    (phrase: PhraseResult, e: React.MouseEvent<HTMLElement>) => {
-      clearTimeout(hideTimer.current);
-      const rect = e.currentTarget.getBoundingClientRect();
-      setTooltip({ phrase, x: rect.left, y: rect.bottom + 6 });
-    },
-    []
-  );
+  // ─── Tooltip via event delegation ──────────────────────────────────────
 
   const scheduleHide = useCallback(() => {
     hideTimer.current = setTimeout(() => setTooltip(null), 180);
@@ -132,7 +137,32 @@ export function ScriptViewer({ text, phrases, sourceUrl }: ScriptViewerProps) {
     clearTimeout(hideTimer.current);
   }, []);
 
-  // ─── Save from tooltip ───────────────────────────────────────────────────
+  const handleMouseOver = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName !== "B") return;
+      const expr = target.getAttribute("data-expr");
+      if (!expr) return;
+      const phrase = phrases.find(
+        (p) => p.expression.toLowerCase() === expr.toLowerCase()
+      );
+      if (!phrase) return;
+      clearTimeout(hideTimer.current);
+      const rect = target.getBoundingClientRect();
+      setTooltip({ phrase, x: rect.left, y: rect.bottom + 6 });
+    },
+    [phrases]
+  );
+
+  const handleMouseOut = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "B") scheduleHide();
+    },
+    [scheduleHide]
+  );
+
+  // ─── Save from tooltip ─────────────────────────────────────────────────
 
   const handleSave = useCallback(
     (phrase: PhraseResult) => {
@@ -150,14 +180,20 @@ export function ScriptViewer({ text, phrases, sourceUrl }: ScriptViewerProps) {
         sourceUrl,
       });
       if (result.success) {
-        setSavedSet((s) => { const n = new Set(s); n.add(key); return n; });
+        setSavedSet((s) => {
+          const n = new Set(s);
+          n.add(key);
+          return n;
+        });
         toast.success(`「${phrase.expression}」を保存しました`);
       }
     },
     [savedSet, sourceUrl]
   );
 
-  // ─── Render ──────────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────
+
+  const hasHighlight = !!safeHtml;
 
   return (
     <>
@@ -225,59 +261,40 @@ export function ScriptViewer({ text, phrases, sourceUrl }: ScriptViewerProps) {
 
         {/* Script body */}
         {!collapsed && (
-          <div className="px-5 py-4 max-h-72 overflow-y-auto text-sm leading-[1.9] text-slate-700">
-            {segments.map((seg, i) => {
-              if (seg.kind === "text") {
-                return <span key={i}>{seg.content}</span>;
-              }
-              const hl = TYPE_HL[seg.phrase.type] ?? {
-                base: "bg-indigo-100 text-indigo-900",
-                hover: "hover:bg-indigo-200",
-              };
-              const saved = savedSet.has(seg.phrase.expression.toLowerCase());
-              return (
-                <mark
-                  key={i}
-                  className={cn(
-                    "rounded px-0.5 font-bold cursor-pointer transition-colors not-italic",
-                    saved ? SAVED_HL : `${hl.base} ${hl.hover}`
-                  )}
-                  onMouseEnter={(e) => showTooltip(seg.phrase, e)}
-                  onMouseLeave={scheduleHide}
-                >
-                  {seg.content}
-                </mark>
-              );
-            })}
-          </div>
-        )}
+          <>
+            {hasHighlight ? (
+              /* AI-highlighted HTML — event delegation for tooltips */
+              <div
+                className={cn(
+                  "px-5 py-4 max-h-72 overflow-y-auto text-sm leading-[1.9] text-slate-700",
+                  /* Style all <b> tags inside */
+                  "[&_b]:bg-amber-100 [&_b]:text-amber-900 [&_b]:font-bold [&_b]:rounded [&_b]:px-0.5 [&_b]:cursor-pointer [&_b]:transition-colors [&_b:hover]:bg-amber-200"
+                )}
+                onMouseOver={handleMouseOver}
+                onMouseOut={handleMouseOut}
+                dangerouslySetInnerHTML={{ __html: safeHtml! }}
+              />
+            ) : (
+              /* Fallback: plain text */
+              <div className="px-5 py-4 max-h-72 overflow-y-auto text-sm leading-[1.9] text-slate-700">
+                {text}
+              </div>
+            )}
 
-        {/* Color legend */}
-        {!collapsed && (
-          <div className="px-5 pb-3 flex flex-wrap gap-3">
-            {[
-              { key: "phrasal_verb",    label: "句動詞",       cls: "bg-violet-100 text-violet-700" },
-              { key: "idiom",           label: "イディオム",   cls: "bg-amber-100  text-amber-700"  },
-              { key: "collocation",     label: "コロケーション", cls: "bg-sky-100  text-sky-700"    },
-              { key: "grammar_pattern", label: "文法パターン", cls: "bg-emerald-100 text-emerald-700" },
-            ]
-              .filter((l) => phrases.some((p) => p.type === l.key))
-              .map((l) => (
-                <span
-                  key={l.key}
-                  className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", l.cls)}
-                >
-                  {l.label}
-                </span>
-              ))}
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-              ✓ 保存済み
-            </span>
-          </div>
+            {/* Legend */}
+            <div className="px-5 pb-3 flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                ハイライト = 抽出表現
+              </span>
+              <span className="text-[10px] text-slate-400">
+                ホバーで意味・保存ボタンを表示
+              </span>
+            </div>
+          </>
         )}
       </div>
 
-      {/* Hover tooltip (fixed) */}
+      {/* Hover tooltip (fixed position) */}
       {tooltip && (
         <div
           className="fixed z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-3 w-56"
@@ -300,7 +317,7 @@ export function ScriptViewer({ text, phrases, sourceUrl }: ScriptViewerProps) {
           <button
             onClick={() => handleSave(tooltip.phrase)}
             className={cn(
-              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg w-full justify-center transition-all font-medium",
+              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg w-full justify-center font-medium transition-all",
               savedSet.has(tooltip.phrase.expression.toLowerCase())
                 ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
                 : "bg-indigo-600 text-white hover:bg-indigo-700"

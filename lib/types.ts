@@ -20,4 +20,5 @@ export interface AnalysisResult {
   source_type: "youtube" | "web" | "text";
   total_count: number;
   source_text?: string;
+  full_script_with_highlight?: string;
 }

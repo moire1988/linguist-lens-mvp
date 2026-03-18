@@ -96,8 +96,14 @@ async function getWebContent(url: string): Promise<string> {
 
 // ─── Claude AI ─────────────────────────────────────────────────────────────
 
-async function callClaude(text: string, cefrLevel: string): Promise<PhraseResult[]> {
+interface ClaudeResult {
+  phrases: PhraseResult[];
+  fullScriptWithHighlight: string;
+}
+
+async function callClaude(text: string, cefrLevel: string): Promise<ClaudeResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const snippet = text.slice(0, 5500);
 
   const systemPrompt = `あなたは英語教育の専門家です。日本人英語学習者のために、英語テキストから学習価値の高い表現を分析・抽出します。出力は必ず指定されたJSON形式のみとし、前置きや説明文は一切出力しないでください。`;
 
@@ -131,26 +137,29 @@ async function callClaude(text: string, cefrLevel: string): Promise<PhraseResult
 - **8〜12個**を目安に、質を重視して厳選する
 
 ## テキスト
-${text.slice(0, 5500)}
+${snippet}
 
 ## 出力形式
-以下のJSON配列のみを返してください（他のテキストは不要）：
-[
-  {
-    "expression": "表現そのもの（例: give it a shot, not to mention, What's more）",
-    "type": "phrasal_verb | idiom | collocation | grammar_pattern",
-    "context": "テキスト内での使用箇所（前後の文脈を含む1〜2文。原文を正確に引用）",
-    "meaning_ja": "この文脈での自然な日本語訳（直訳でなく意訳）",
-    "nuance": "なぜこの場面でこの表現が選ばれたか、語感・ニュアンス・使用場面の解説（2〜3文。学習者が「なるほど！」と思える内容を）",
-    "example": "別のシチュエーションでの自然な使用例文（英語、日常会話やビジネスシーン）",
-    "cefr_level": "A1 | A2 | B1 | B2 | C1 | C2",
-    "why_hard_for_japanese": "日本人学習者がこの表現を能動的に使いこなすのが難しい理由（1〜2文。母語干渉や日本語にない概念など具体的に）"
-  }
-]`;
+以下のJSONオブジェクトのみを返してください（他のテキストは一切不要）：
+{
+  "phrases": [
+    {
+      "expression": "表現の基本形（例: give it a shot, end up -ing, talk oneself out of）",
+      "type": "phrasal_verb | idiom | collocation | grammar_pattern",
+      "context": "テキスト内での使用箇所（前後の文脈を含む1〜2文。原文を正確に引用）",
+      "meaning_ja": "この文脈での自然な日本語訳（直訳でなく意訳）",
+      "nuance": "なぜこの場面でこの表現が選ばれたか、語感・ニュアンス・使用場面の解説（2〜3文）",
+      "example": "別のシチュエーションでの自然な使用例文（英語）",
+      "cefr_level": "A1 | A2 | B1 | B2 | C1 | C2",
+      "why_hard_for_japanese": "日本人学習者がこの表現を能動的に使いこなすのが難しい理由（1〜2文）"
+    }
+  ],
+  "fullScriptWithHighlight": "【重要】上記テキストを一字一句そのままコピーし、抽出した各表現が実際に使われている箇所のみ <b data-expr=\\"expressionフィールドの値\\">実際のテキスト</b> で囲んだ文字列。ルール：①代名詞の変化（oneself→himself/herself/yourself等）があっても同じ表現として<b>で囲む ②動詞の活用形（end up→ended up/ends up）も同じ表現として囲む ③語が離れていても文脈上同じパターンなら囲む ④テキストの文字は一切変更せず<b>タグの追加のみ行う ⑤data-expr属性にはphrasesのexpressionフィールドの値をそのまま使用する"
+}`;
 
   const response = await client.messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 4096,
+    max_tokens: 8000,
     messages: [{ role: "user", content: userPrompt }],
     system: systemPrompt,
   });
@@ -158,12 +167,19 @@ ${text.slice(0, 5500)}
   const rawText =
     response.content[0].type === "text" ? response.content[0].text : "";
 
-  const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch)
     throw new Error("AIの応答形式が予期しないものでした。もう一度お試しください。");
 
   try {
-    return JSON.parse(jsonMatch[0]) as PhraseResult[];
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      phrases: PhraseResult[];
+      fullScriptWithHighlight: string;
+    };
+    return {
+      phrases: parsed.phrases ?? [],
+      fullScriptWithHighlight: parsed.fullScriptWithHighlight ?? snippet,
+    };
   } catch {
     throw new Error("AI応答のパースに失敗しました。もう一度お試しください。");
   }
@@ -197,11 +213,17 @@ export async function analyzeContent(
       sourceType = "web";
     }
 
-    const phrases = await callClaude(text, cefrLevel);
+    const { phrases, fullScriptWithHighlight } = await callClaude(text, cefrLevel);
 
     return {
       success: true,
-      data: { phrases, source_type: sourceType, total_count: phrases.length, source_text: text },
+      data: {
+        phrases,
+        source_type: sourceType,
+        total_count: phrases.length,
+        source_text: text,
+        full_script_with_highlight: fullScriptWithHighlight,
+      },
     };
   } catch (error) {
     return {

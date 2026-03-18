@@ -611,10 +611,11 @@ export default function HomePage() {
             </div>
 
             {/* Script viewer with highlights */}
-            {results.source_text && (
+            {(results.source_text || results.full_script_with_highlight) && (
               <ScriptViewer
-                text={results.source_text}
+                text={results.source_text ?? ""}
                 phrases={results.phrases}
+                highlightedHtml={results.full_script_with_highlight}
                 sourceUrl={sourceUrl}
               />
             )}
