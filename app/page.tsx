@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { EXAMPLES } from "@/lib/examples-data";
 import {
   Search,
   Youtube,
@@ -105,29 +106,7 @@ const SOURCE_LABELS = {
   text: { label: "テキスト入力", icon: "📄" },
 };
 
-// ─── Sample Videos ─────────────────────────────────────────────────────────
-// URLを変更する場合はここだけ修正すればOK
-
-const SAMPLE_VIDEOS = [
-  {
-    emoji: "⚾",
-    title: "大谷翔平 インタビュー",
-    sublabel: "MLB · English",
-    url: "https://www.youtube.com/watch?v=qLb7bROuWbM",
-  },
-  {
-    emoji: "🍎",
-    title: "Jobs Stanford スピーチ",
-    sublabel: "Stanford 2005",
-    url: "https://www.youtube.com/watch?v=UF8uR6Z6KLc",
-  },
-  {
-    emoji: "💡",
-    title: "Simon Sinek TED Talk",
-    sublabel: "How Leaders Inspire",
-    url: "https://www.youtube.com/watch?v=qp0HIF3SfI4",
-  },
-] as const;
+// SAMPLE_VIDEOS は lib/examples-data.ts の EXAMPLES を使用
 
 const CEFR_RANK: Record<string, number> = {
   A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6,
@@ -355,10 +334,17 @@ export default function HomePage() {
   const hasContent = isPending || !!results || !!error;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50/50">
+    <div className="min-h-screen relative" style={{ backgroundColor: "#f7f8ff" }}>
+      {/* Animated mesh background */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <div className="animate-blob-1 absolute -top-48 -left-48 w-[500px] h-[500px] rounded-full bg-indigo-200/20 blur-3xl" />
+        <div className="animate-blob-2 absolute top-1/2 -right-48 w-[420px] h-[420px] rounded-full bg-purple-200/15 blur-3xl" />
+        <div className="animate-blob-3 absolute -bottom-48 left-1/4 w-[460px] h-[460px] rounded-full bg-blue-200/15 blur-3xl" />
+        <div className="absolute inset-0 bg-dot-grid opacity-40" />
+      </div>
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
       {/* ── Header ── */}
-      <header className="border-b border-slate-100 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+      <header className="border-b border-slate-100 bg-white/70 backdrop-blur-sm sticky top-0 z-10 relative">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-indigo-600" />
@@ -381,7 +367,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+      <main className="relative max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
         {/* ── Hero（常に表示） ── */}
         <div className={cn("text-center", hasContent ? "mb-8" : "mb-10")}>
           <div className="flex justify-center mb-5">
@@ -638,19 +624,21 @@ export default function HomePage() {
               <div className="flex-1 h-px bg-slate-200" />
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {SAMPLE_VIDEOS.map((v) => (
-                <button
-                  key={v.url}
-                  onClick={() => handleQuickSubmit(v.url)}
-                  disabled={isPending}
-                  className="flex flex-col items-center gap-1.5 p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 hover:shadow-sm transition-all text-center group disabled:opacity-50"
+              {EXAMPLES.map((v) => (
+                <Link
+                  key={v.slug}
+                  href={`/examples/${v.slug}`}
+                  className="flex flex-col items-center gap-1.5 p-3 bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/70 hover:shadow-sm transition-all text-center group"
                 >
                   <span className="text-2xl leading-none">{v.emoji}</span>
                   <span className="text-xs font-semibold text-slate-700 group-hover:text-indigo-700 leading-tight transition-colors">
                     {v.title}
                   </span>
-                  <span className="text-[10px] text-slate-400">{v.sublabel}</span>
-                </button>
+                  <span className="text-[10px] text-slate-400 mb-0.5">{v.sublabel}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+                    {v.cefrRange}
+                  </span>
+                </Link>
               ))}
             </div>
           </div>
