@@ -25,7 +25,7 @@ export function MeshBackground() {
           style={{
             width: 700, height: 700,
             top: -260, left: -260,
-            background: "rgba(99, 102, 241, 0.42)",
+            background: "rgba(99, 102, 241, 0.28)",
           }}
         />
         {/* Blob 2 – violet, anchored top-right */}
@@ -34,7 +34,7 @@ export function MeshBackground() {
           style={{
             width: 620, height: 620,
             top: -200, right: -220,
-            background: "rgba(139, 92, 246, 0.37)",
+            background: "rgba(139, 92, 246, 0.24)",
           }}
         />
         {/* Blob 3 – sky blue, anchored bottom-center */}
@@ -43,7 +43,7 @@ export function MeshBackground() {
           style={{
             width: 660, height: 660,
             bottom: -270, left: "calc(50% - 330px)",
-            background: "rgba(96, 165, 250, 0.34)",
+            background: "rgba(96, 165, 250, 0.22)",
           }}
         />
         {/* Blob 4 – lavender, anchored bottom-right */}
@@ -52,7 +52,7 @@ export function MeshBackground() {
           style={{
             width: 520, height: 520,
             bottom: -180, right: -160,
-            background: "rgba(196, 181, 253, 0.36)",
+            background: "rgba(196, 181, 253, 0.24)",
           }}
         />
       </div>
