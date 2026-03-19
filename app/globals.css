@@ -41,37 +41,7 @@
   }
 }
 
-/* ─── SVG mesh gradient animations ──────────────────────────────────────── */
-
-@keyframes mesh-float-1 {
-  0%,  100% { transform: translate(0px,   0px);  }
-  25%        { transform: translate(65px, -50px); }
-  50%        { transform: translate(-40px, 60px); }
-  75%        { transform: translate(50px,  32px); }
-}
-
-@keyframes mesh-float-2 {
-  0%,  100% { transform: translate(0px,   0px);  }
-  33%        { transform: translate(-68px, 42px); }
-  66%        { transform: translate(52px, -58px); }
-}
-
-@keyframes mesh-float-3 {
-  0%,  100% { transform: translate(0px,   0px);  }
-  40%        { transform: translate(44px,  62px); }
-  80%        { transform: translate(-52px,-34px); }
-}
-
-@keyframes mesh-float-4 {
-  0%,  100% { transform: translate(0px,   0px);  }
-  30%        { transform: translate(-46px,-66px); }
-  70%        { transform: translate(56px,  42px); }
-}
-
-.animate-mesh-1 { animation: mesh-float-1 22s ease-in-out infinite; }
-.animate-mesh-2 { animation: mesh-float-2 28s ease-in-out infinite; }
-.animate-mesh-3 { animation: mesh-float-3 25s ease-in-out infinite; }
-.animate-mesh-4 { animation: mesh-float-4 32s ease-in-out infinite; }
+/* Animation is handled by SVG feTurbulence SMIL <animate> in MeshBackground */
 
 .bg-dot-grid {
   background-image: radial-gradient(circle, rgba(99, 102, 241, 0.07) 1px, transparent 1px);
