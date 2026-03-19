@@ -54,6 +54,45 @@ function sanitizeHighlight(html: string): string {
   return result.join("");
 }
 
+/**
+ * AI highlight が空だった場合のクライアント側フォールバック。
+ * phrases をテキスト内で検索し <b data-expr="..."> で囲む。
+ */
+function buildClientHighlight(text: string, phrases: PhraseResult[]): string {
+  if (!phrases.length) return escapeHtml(text);
+
+  type Span = { start: number; end: number; expr: string };
+  const spans: Span[] = [];
+
+  // 長い表現を優先してマッチ（短い表現が長いものの一部に重複しないよう）
+  const sorted = [...phrases].sort((a, b) => b.expression.length - a.expression.length);
+
+  for (const p of sorted) {
+    const escaped = p.expression.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(escaped, "gi");
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const start = m.index;
+      const end = start + m[0].length;
+      if (!spans.some((s) => start < s.end && end > s.start)) {
+        spans.push({ start, end, expr: p.expression });
+      }
+    }
+  }
+
+  spans.sort((a, b) => a.start - b.start);
+
+  const parts: string[] = [];
+  let pos = 0;
+  for (const s of spans) {
+    parts.push(escapeHtml(text.slice(pos, s.start)));
+    parts.push(`<b data-expr="${escapeHtml(s.expr)}">${escapeHtml(text.slice(s.start, s.end))}</b>`);
+    pos = s.end;
+  }
+  parts.push(escapeHtml(text.slice(pos)));
+  return parts.join("");
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function ScriptViewer({
@@ -74,10 +113,15 @@ export function ScriptViewer({
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // Sanitized HTML (memoized)
-  const safeHtml = useMemo(
-    () => (highlightedHtml ? sanitizeHighlight(highlightedHtml) : null),
-    [highlightedHtml]
-  );
+  // If AI highlight has no <b> tags (e.g. web scrape text too messy for verbatim copy),
+  // fall back to client-side phrase matching on the raw source text.
+  const safeHtml = useMemo(() => {
+    if (!highlightedHtml) return null;
+    const sanitized = sanitizeHighlight(highlightedHtml);
+    if (sanitized.includes("<b ")) return sanitized;
+    // No highlights survived sanitization → build client-side
+    return phrases.length ? buildClientHighlight(text, phrases) : sanitized;
+  }, [highlightedHtml, text, phrases]);
 
   // Plain text for TTS (strip tags if needed)
   const ttsText = useMemo(() => {
@@ -242,6 +286,7 @@ export function ScriptViewer({
                 )}
                 onMouseOver={handleMouseOver}
                 onMouseOut={handleMouseOut}
+                onMouseLeave={scheduleHide}
                 dangerouslySetInnerHTML={{ __html: safeHtml! }}
               />
             ) : (
