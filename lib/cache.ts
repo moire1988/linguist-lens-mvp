@@ -33,10 +33,17 @@ export function getCachedResult(
   const entry = store[buildKey(url, cefrLevel)];
   if (!entry) return null;
 
+  const key = buildKey(url, cefrLevel);
+
+  // full_script_with_highlight がない旧フォーマットは無効として削除
+  if (!entry.data.full_script_with_highlight) {
+    delete store[key];
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(store)); } catch { /* ignore */ }
+    return null;
+  }
+
   const age = Date.now() - new Date(entry.cachedAt).getTime();
   if (age > CACHE_TTL_MS) {
-    // 期限切れを削除
-    const key = buildKey(url, cefrLevel);
     delete store[key];
     localStorage.setItem(CACHE_KEY, JSON.stringify(store));
     return null;
