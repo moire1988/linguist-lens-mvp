@@ -41,33 +41,58 @@
   }
 }
 
-/* ─── Animated mesh background ──────────────────────────────────────────── */
+/* ─── SVG mesh gradient animations ──────────────────────────────────────── */
 
-@keyframes blob-drift-1 {
-  0%,  100% { transform: translate(0px, 0px)   scale(1);    }
-  25%        { transform: translate(50px, -40px) scale(1.06); }
-  50%        { transform: translate(-30px, 35px) scale(0.96); }
-  75%        { transform: translate(40px, 20px)  scale(1.03); }
+@keyframes mesh-float-1 {
+  0%,  100% { transform: translate(0px,   0px);  }
+  25%        { transform: translate(65px, -50px); }
+  50%        { transform: translate(-40px, 60px); }
+  75%        { transform: translate(50px,  32px); }
 }
 
-@keyframes blob-drift-2 {
-  0%,  100% { transform: translate(0px, 0px)   scale(1);    }
-  25%        { transform: translate(-50px, 30px) scale(1.04); }
-  50%        { transform: translate(40px, -35px) scale(0.97); }
-  75%        { transform: translate(-25px, -20px) scale(1.02); }
+@keyframes mesh-float-2 {
+  0%,  100% { transform: translate(0px,   0px);  }
+  33%        { transform: translate(-68px, 42px); }
+  66%        { transform: translate(52px, -58px); }
 }
 
-@keyframes blob-drift-3 {
-  0%,  100% { transform: translate(0px, 0px)   scale(1);    }
-  33%        { transform: translate(30px, 45px)  scale(1.05); }
-  66%        { transform: translate(-45px, -25px) scale(0.97); }
+@keyframes mesh-float-3 {
+  0%,  100% { transform: translate(0px,   0px);  }
+  40%        { transform: translate(44px,  62px); }
+  80%        { transform: translate(-52px,-34px); }
 }
 
-.animate-blob-1 { animation: blob-drift-1 20s ease-in-out infinite; }
-.animate-blob-2 { animation: blob-drift-2 26s ease-in-out infinite; }
-.animate-blob-3 { animation: blob-drift-3 23s ease-in-out infinite; }
+@keyframes mesh-float-4 {
+  0%,  100% { transform: translate(0px,   0px);  }
+  30%        { transform: translate(-46px,-66px); }
+  70%        { transform: translate(56px,  42px); }
+}
+
+.animate-mesh-1 { animation: mesh-float-1 22s ease-in-out infinite; }
+.animate-mesh-2 { animation: mesh-float-2 28s ease-in-out infinite; }
+.animate-mesh-3 { animation: mesh-float-3 25s ease-in-out infinite; }
+.animate-mesh-4 { animation: mesh-float-4 32s ease-in-out infinite; }
 
 .bg-dot-grid {
-  background-image: radial-gradient(circle, rgba(99, 102, 241, 0.10) 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(99, 102, 241, 0.07) 1px, transparent 1px);
   background-size: 28px 28px;
+}
+
+/* ─── Transcript highlight ───────────────────────────────────────────────── */
+
+.transcript-content mark {
+  background-color: rgba(199, 210, 254, 0.65);
+  color: #3730a3;
+  font-weight: 600;
+  padding: 0.06em 0.22em;
+  border-radius: 0.2em;
+  font-style: normal;
+}
+
+.transcript-content p {
+  margin-bottom: 0.85rem;
+}
+
+.transcript-content p:last-child {
+  margin-bottom: 0;
 }

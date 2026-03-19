@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { BookOpen, BookMarked, ExternalLink, ChevronRight } from "lucide-react";
+import { BookOpen, BookMarked, ExternalLink, FileText, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ExampleVideo } from "@/lib/examples-data";
@@ -11,6 +11,7 @@ import type { ExpressionType } from "@/app/actions/analyze";
 import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
 import { PhraseCard } from "@/components/phrase-card";
 import { PremiumModal } from "@/components/premium-modal";
+import { MeshBackground } from "@/components/mesh-background";
 
 const CEFR_RANK: Record<string, number> = { A1:1, A2:2, B1:3, B2:4, C1:5, C2:6 };
 const CEFR_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
@@ -30,12 +31,39 @@ const FILTER_OPTIONS: { value: "all" | ExpressionType; label: string }[] = [
   { value: "grammar_pattern", label: "文法パターン" },
 ];
 
+/** Build HTML string with extracted expressions highlighted via <mark> tags. */
+function buildHighlightedHtml(transcript: string, phrases: PhraseResult[]): string {
+  const paras = transcript
+    .split(/\n\n+/)
+    .map((p) =>
+      p
+        .trim()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br/>")
+    );
+
+  let html = paras.map((p) => `<p>${p}</p>`).join("\n");
+
+  // Longest expression first to avoid partial matches
+  const sorted = [...phrases].sort((a, b) => b.expression.length - a.expression.length);
+  for (const phrase of sorted) {
+    const escaped = phrase.expression.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\b(${escaped})\\b`, "gi");
+    html = html.replace(regex, "<mark>$1</mark>");
+  }
+
+  return html;
+}
+
 export function ExamplePageContent({ example }: { example: ExampleVideo }) {
   const [activeFilter, setActiveFilter] = useState<"all" | ExpressionType>("all");
   const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
   const [vocabCount, setVocabCount] = useState(0);
   const [showPremium, setShowPremium] = useState(false);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   useEffect(() => {
     setVocabCount(getVocabularyCount());
@@ -74,20 +102,14 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
     : example.phrases.filter((p) => p.type === activeFilter);
 
   const meta = CEFR_META[example.overallLevel];
-  // Use B2 as default user level for advice message on example pages
   const gap = (CEFR_RANK[example.overallLevel] ?? 0) - CEFR_RANK["B2"];
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f7f8ff" }}>
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
 
-      {/* ── Animated background ── */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        <div className="animate-blob-1 absolute -top-48 -left-48 w-[500px] h-[500px] rounded-full bg-indigo-200/20 blur-3xl" />
-        <div className="animate-blob-2 absolute top-1/2 -right-48 w-[420px] h-[420px] rounded-full bg-purple-200/15 blur-3xl" />
-        <div className="animate-blob-3 absolute -bottom-48 left-1/4 w-[460px] h-[460px] rounded-full bg-blue-200/15 blur-3xl" />
-        <div className="absolute inset-0 bg-dot-grid opacity-40" />
-      </div>
+      {/* ── Animated SVG mesh background ── */}
+      <MeshBackground />
 
       {/* ── Header ── */}
       <header className="border-b border-slate-100 bg-white/70 backdrop-blur-sm sticky top-0 z-10 relative">
@@ -218,7 +240,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
         </div>
 
         {/* ── Phrase cards ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {filtered.map((phrase, i) => (
             <PhraseCard
               key={`${phrase.expression}-${i}`}
@@ -230,6 +252,51 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
           ))}
         </div>
 
+        {/* ── Full transcript (accordion) ── */}
+        <div className="mb-10">
+          <button
+            onClick={() => setTranscriptOpen(!transcriptOpen)}
+            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm hover:bg-white hover:border-indigo-200 transition-all text-left"
+          >
+            <div className="flex items-center gap-2.5">
+              <FileText className="h-4 w-4 text-indigo-500" />
+              <span className="text-sm font-semibold text-slate-700">全文スクリプト</span>
+              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full hidden sm:inline">
+                抽出された表現をハイライト表示
+              </span>
+            </div>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 text-slate-400 transition-transform duration-200 flex-shrink-0",
+                transcriptOpen && "rotate-180"
+              )}
+            />
+          </button>
+
+          {transcriptOpen && (
+            <div className="mt-2 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+              {/* Legend */}
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                <span
+                  className="inline-block text-xs font-semibold px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "rgba(199,210,254,0.65)", color: "#3730a3" }}
+                >
+                  highlight
+                </span>
+                <span className="text-xs text-slate-500">= このページで紹介した表現</span>
+              </div>
+
+              {/* Transcript with highlights */}
+              <div
+                className="transcript-content text-sm text-slate-700 leading-relaxed max-h-[420px] overflow-y-auto pr-1"
+                dangerouslySetInnerHTML={{
+                  __html: buildHighlightedHtml(example.transcript, example.phrases),
+                }}
+              />
+            </div>
+          )}
+        </div>
+
         {/* ── CTA ── */}
         <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 sm:p-8 text-center text-white">
           <h2 className="text-lg sm:text-xl font-extrabold mb-2">
@@ -239,17 +306,10 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
             YouTube・Web記事のURLを貼るだけ。<br />
             あなたのCEFRレベルに合ったフレーズをAIがリアルタイムで抽出します。
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link
-              href={`/?url=${encodeURIComponent(example.url)}`}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-indigo-700 rounded-xl text-sm font-semibold hover:bg-indigo-50 transition-colors"
-            >
-              このスピーチを別のレベルで解析
-              <ChevronRight className="h-4 w-4" />
-            </Link>
+          <div className="flex justify-center">
             <Link
               href="/"
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-500/50 border border-indigo-400 text-white rounded-xl text-sm font-semibold hover:bg-indigo-500/70 transition-colors"
+              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-indigo-700 rounded-xl text-sm font-semibold hover:bg-indigo-50 transition-colors"
             >
               別のコンテンツを解析する
             </Link>

@@ -3,15 +3,16 @@ import type { PhraseResult } from "@/lib/types";
 export interface ExampleVideo {
   slug: string;
   emoji: string;
-  title: string;       // Button short title
-  sublabel: string;    // Button sub-label
-  cefrRange: string;   // e.g. "A2 〜 B1"
-  cefrRangeLabel: string; // e.g. "初〜中級"
+  title: string;
+  sublabel: string;
+  cefrRange: string;
+  cefrRangeLabel: string;
   url: string;
   pageTitle: string;
   description: string;
   overallLevel: string;
   phrases: PhraseResult[];
+  transcript: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,6 +90,28 @@ const EMMA_WATSON_PHRASES: PhraseResult[] = [
   },
 ];
 
+const EMMA_TRANSCRIPT = `Today we are launching a campaign called "HeForShe." I am reaching out to you because I need your help. We want to end gender inequality—and to do that we need everyone to be involved.
+
+I was appointed six months ago and the more I have spoken about feminism the more I have realized that fighting for women's rights has too often become synonymous with man-hating. If there is one thing I know for certain, it is that this has to stop.
+
+For the record, feminism by definition is: "The belief that men and women should have equal rights and opportunities." It is the theory of the political, economic and social equality of the sexes.
+
+Both men and women should feel free to be sensitive. Both men and women should feel free to be strong. It is time that we all stand up for gender equality.
+
+Men—I would like to take this opportunity to extend your formal invitation. Gender equality is your issue too. Because to date, I have seen my father's role as a parent being valued less by society despite my need of his presence as a child. I have seen young men suffering from mental illness, unable to ask for help for fear it would make them less of a man.
+
+If you believe in equality, you might be one of those inadvertent feminists I spoke of earlier. You might inadvertently hold back those around you without ever meaning to. And for this I applaud you for listening.
+
+My government is committed to the UN Women campaign. My Prime Minister has given me his full support.
+
+We do not often take for granted the rights and opportunities that so many others have fought hard to secure. But we must speak up for those who cannot yet speak for themselves.
+
+We can make a difference—but only if we act together. We are struggling for a uniting word, but the good news is we have a uniting movement.
+
+I am inviting you to step forward, to be seen and to ask yourself: If not me, who? If not now, when?`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const JOBS_STANFORD_PHRASES: PhraseResult[] = [
   {
     expression: "connect the dots",
@@ -113,7 +136,7 @@ const JOBS_STANFORD_PHRASES: PhraseResult[] = [
   {
     expression: "fall in love with",
     type: "collocation",
-    context: "If I had never dropped in on that single calligraphy course in college, the Mac would have never had multiple typefaces or proportionally spaced fonts. And since Windows just copied the Mac, it's likely that no personal computer would have them. I fell in love with the beauty of great typography.",
+    context: "If I had never dropped in on that single calligraphy course in college, the Mac would have never had multiple typefaces or proportionally spaced fonts. I fell in love with the beauty of great typography.",
     meaning_ja: "〜に夢中になる、〜に恋する（物・事にも使う）",
     nuance: "人への恋愛だけでなく、趣味・職業・場所などへの強い情熱・魅了を表す。Jobsのように自分の仕事への愛を語る文脈でよく使われる。",
     example: "After visiting Kyoto, she completely fell in love with Japanese architecture.",
@@ -171,6 +194,26 @@ const JOBS_STANFORD_PHRASES: PhraseResult[] = [
     why_hard_for_japanese: "「空腹のまま」という直訳から離れ、「欲求・向上心を維持する」という意味を能動的に使えるようになるには意識的な学習が必要。",
   },
 ];
+
+const JOBS_TRANSCRIPT = `I am honored to be with you today at your commencement from one of the finest universities in the world. Truth be told, this is the closest I've ever gotten to a college graduation. Today I want to tell you three stories from my life. That's it. No big deal. Just three stories.
+
+The first story is about connecting the dots.
+
+I dropped out of Reed College after the first six months. I didn't have a dorm room, so I slept on the floor in friends' rooms, returned Coke bottles for the 5¢ deposits to buy food with, and walked the seven miles across town every Sunday night to get one good meal a week.
+
+I fell in love with the beauty of great typography. None of this had even a hope of any practical application in my life. But ten years later, when we were designing the first Macintosh computer, it all came back to me.
+
+You can't connect the dots looking forward; you can only connect them looking backward. So you have to trust that the dots will somehow connect in your future. You have to trust in something—your gut, destiny, life, karma, whatever.
+
+I didn't see it then, but it turned out that getting fired from Apple was the best thing that could have ever happened to me. The heaviness of being successful was replaced by the lightness of being a beginner again, less sure about everything. It freed me to enter one of the most creative periods of my life.
+
+Don't let the noise of others' opinions drown out your own inner voice. And most important, have the courage to follow your heart and intuition. They somehow already know what you truly want to become. Everything else is secondary.
+
+Your time is limited, so don't waste it living someone else's life. Don't be trapped by dogma. If you try to live up to everyone else's expectations, you will never discover your own path.
+
+Stay hungry. Stay foolish.`;
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const SINEK_TED_PHRASES: PhraseResult[] = [
   {
@@ -255,6 +298,22 @@ const SINEK_TED_PHRASES: PhraseResult[] = [
   },
 ];
 
+const SINEK_TRANSCRIPT = `How do you explain when things don't go as we assume? Or better, how do you explain when others are able to achieve things that seem to defy all assumptions?
+
+Every single person, every single organization on the planet knows what they do, 100 percent. Some know how they do it. But very few people or organizations know why they do what they do. Most companies can only come up with strategies based on what they produce, never why they exist.
+
+Why is Apple so innovative? Year after year, after year, they're more innovative than all their competition. And yet, they're just a computer company. They're just like everyone else. They have the same access to the same talent, the same agencies, the same consultants.
+
+People don't buy what you do; they buy why you do it. And what you do simply proves what you believe.
+
+The Wright Brothers were not the only ones working on powered man flight. Samuel Pierpont Langley had all the resources. But the Wright Brothers went against all conventional wisdom and managed to pull off what no well-funded competitor could. In spite of having far fewer resources, they succeeded because they were inspired by a vision of what flight could mean for the world.
+
+Martin Luther King Jr. gave the "I Have a Dream" speech, not the "I Have a Plan" speech. He made a case for equality so powerfully and so clearly that people felt drawn to his cause from across the country.
+
+There are leaders and there are those who lead. Leaders hold a position of power or authority. But those who lead inspire us. We follow them not because we have to, but because we want to. We follow those who lead not for them, but for ourselves—to figure out who we are and what we believe.
+
+And it's those who start with 'why' that have the ability to inspire those around them.`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const EXAMPLES: ExampleVideo[] = [
@@ -270,6 +329,7 @@ export const EXAMPLES: ExampleVideo[] = [
     description: "Emma Watson が2014年に国連で行ったHeForSheスピーチ。明瞭で聞き取りやすい英語から、A2〜B1レベルの学習者必修フレーズを厳選しました。",
     overallLevel: "B1",
     phrases: EMMA_WATSON_PHRASES,
+    transcript: EMMA_TRANSCRIPT,
   },
   {
     slug: "jobs-stanford",
@@ -283,6 +343,7 @@ export const EXAMPLES: ExampleVideo[] = [
     description: "Steve Jobs が2005年スタンフォード大学卒業式で行った伝説のスピーチ。句動詞・慣用表現を中心にB2〜C1レベルのフレーズを厳選しました。",
     overallLevel: "C1",
     phrases: JOBS_STANFORD_PHRASES,
+    transcript: JOBS_TRANSCRIPT,
   },
   {
     slug: "simon-sinek-ted",
@@ -296,5 +357,6 @@ export const EXAMPLES: ExampleVideo[] = [
     description: "Simon Sinek の人気TED Talk「Why Leaders Inspire Action」。ビジネス英語の必須フレーズをB1〜B2レベルで解説します。",
     overallLevel: "B2",
     phrases: SINEK_TED_PHRASES,
+    transcript: SINEK_TRANSCRIPT,
   },
 ];

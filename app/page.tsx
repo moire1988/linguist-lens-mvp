@@ -32,6 +32,7 @@ import { PremiumModal } from "@/components/premium-modal";
 import { PhraseCard } from "@/components/phrase-card";
 import { ScriptViewer } from "@/components/script-viewer";
 import { AdPlaceholder } from "@/components/ad-placeholder";
+import { MeshBackground } from "@/components/mesh-background";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -335,13 +336,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: "#f7f8ff" }}>
-      {/* Animated mesh background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        <div className="animate-blob-1 absolute -top-48 -left-48 w-[500px] h-[500px] rounded-full bg-indigo-200/20 blur-3xl" />
-        <div className="animate-blob-2 absolute top-1/2 -right-48 w-[420px] h-[420px] rounded-full bg-purple-200/15 blur-3xl" />
-        <div className="animate-blob-3 absolute -bottom-48 left-1/4 w-[460px] h-[460px] rounded-full bg-blue-200/15 blur-3xl" />
-        <div className="absolute inset-0 bg-dot-grid opacity-40" />
-      </div>
+      <MeshBackground />
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
       {/* ── Header ── */}
       <header className="border-b border-slate-100 bg-white/70 backdrop-blur-sm sticky top-0 z-10 relative">
