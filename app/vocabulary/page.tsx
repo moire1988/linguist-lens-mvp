@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -17,9 +17,11 @@ import {
   X,
   AlertTriangle,
   Brain,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, getBestEnglishVoice } from "@/lib/utils";
 import {
   getVocabulary,
   deletePhrase,
@@ -32,6 +34,92 @@ import { AdPlaceholder } from "@/components/ad-placeholder";
 import { CoachModal } from "@/components/coach-modal";
 
 const MIN_COACH_PHRASES = 5;
+
+// ─── Speech Recognition types ──────────────────────────────────────────────
+
+interface SpeechRecognitionEvent extends Event {
+  results: { isFinal: boolean; [i: number]: { transcript: string } }[];
+}
+interface SpeechRecognitionInstance extends EventTarget {
+  lang: string; continuous: boolean; interimResults: boolean;
+  start(): void; stop(): void;
+  onresult: ((e: SpeechRecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+}
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognitionInstance;
+    webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+  }
+}
+
+// ─── Pronunciation scoring ─────────────────────────────────────────────────
+
+type Feedback = "excellent" | "passed" | "retry";
+
+function evaluate(recognized: string, example: string, expression: string): Feedback {
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean);
+  const recSet = new Set(norm(recognized));
+  const exOverlap = norm(example).filter((w) => recSet.has(w)).length / (norm(example).length || 1);
+  const tgtOverlap = norm(expression).filter((w) => recSet.has(w)).length / (norm(expression).length || 1);
+  if (exOverlap >= 0.75) return "excellent";
+  if (tgtOverlap >= 0.6)  return "passed";
+  return "retry";
+}
+
+const FEEDBACK_CONFIG: Record<Feedback, { label: string; className: string }> = {
+  excellent: { label: "Excellent! ✨", className: "text-emerald-600" },
+  passed:    { label: "Passed! ✅",    className: "text-blue-600"    },
+  retry:     { label: "Try again 🔄", className: "text-amber-600"   },
+};
+
+// ─── Word-level diff ───────────────────────────────────────────────────────
+
+const EXPAND: Record<string, string[]> = {
+  im:["i","am"],ive:["i","have"],id:["i","would"],ill:["i","will"],
+  youre:["you","are"],youve:["you","have"],youll:["you","will"],youd:["you","would"],
+  hes:["he","is"],shes:["she","is"],shell:["she","will"],its:["it","is"],weve:["we","have"],
+  theyre:["they","are"],theyve:["they","have"],theyll:["they","will"],
+  dont:["do","not"],doesnt:["does","not"],didnt:["did","not"],
+  cant:["can","not"],wont:["will","not"],couldnt:["could","not"],
+  wouldnt:["would","not"],shouldnt:["should","not"],
+  isnt:["is","not"],arent:["are","not"],wasnt:["was","not"],
+  werent:["were","not"],havent:["have","not"],hasnt:["has","not"],hadnt:["had","not"],
+};
+
+function stemWord(w: string): string {
+  if (w.length <= 4) return w;
+  if (w.endsWith("ing") && w.length > 5) return w.slice(0, -3);
+  if (w.endsWith("ied"))                  return w.slice(0, -3) + "y";
+  if (w.endsWith("ies"))                  return w.slice(0, -3) + "y";
+  if (w.endsWith("ed")  && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith("es")  && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith("s")   && w.length > 4) return w.slice(0, -1);
+  return w;
+}
+
+function renderExampleDiff(recognized: string, example: string) {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const recWords = recognized.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean);
+  const recSet   = new Set(recWords);
+  const recStems = new Set(recWords.map(stemWord));
+  return example.split(/(\s+)/).map((token, i) => {
+    if (/^\s+$/.test(token)) return <span key={i}>{token}</span>;
+    const n = norm(token);
+    if (!n) return <span key={i}>{token}</span>;
+    const matched =
+      recSet.has(n) ||
+      (n.length >= 5 && recStems.has(stemWord(n))) ||
+      (EXPAND[n] !== undefined && EXPAND[n].every((w) => recSet.has(w)));
+    return (
+      <span key={i} className={matched ? "text-emerald-600 font-bold" : "text-rose-500 font-bold underline decoration-dotted"}>
+        {token}
+      </span>
+    );
+  });
+}
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -50,6 +138,125 @@ const CEFR_COLORS: Record<string, string> = {
   C1: "bg-purple-100 text-purple-700",
   C2: "bg-rose-100 text-rose-700",
 };
+
+// ─── VocabCard Component ──────────────────────────────────────────────────
+
+function VocabCard({
+  phrase,
+  onDelete,
+}: {
+  phrase: SavedPhrase;
+  onDelete: (id: string, expression: string) => void;
+}) {
+  const [isListening, setIsListening] = useState(false);
+  const [recognized,  setRecognized]  = useState("");
+  const [feedback,    setFeedback]    = useState<Feedback | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+
+  useEffect(() => { return () => { recognitionRef.current?.stop(); }; }, []);
+
+  const handleSpeak = useCallback((text: string, rate = 0.85) => {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US"; u.rate = rate;
+    const voice = getBestEnglishVoice();
+    if (voice) u.voice = voice;
+    window.speechSynthesis.speak(u);
+  }, []);
+
+  const handlePractice = useCallback(() => {
+    const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!SR) { toast.error("音声認識はChrome / Edgeでご利用ください"); return; }
+    if (isListening) { recognitionRef.current?.stop(); return; }
+    setRecognized(""); setFeedback(null);
+    const rec = new SR();
+    rec.lang = "en-US"; rec.continuous = false; rec.interimResults = false;
+    rec.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      setRecognized(text);
+      setFeedback(evaluate(text, phrase.example, phrase.expression));
+    };
+    rec.onerror = () => setIsListening(false);
+    rec.onend   = () => setIsListening(false);
+    recognitionRef.current = rec;
+    rec.start(); setIsListening(true);
+  }, [isListening, phrase.example, phrase.expression]);
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+            <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full border",
+              TYPE_CONFIG[phrase.type]?.color ?? "bg-slate-100 text-slate-600 border-slate-200")}>
+              {TYPE_CONFIG[phrase.type]?.label ?? phrase.type}
+            </span>
+            <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+              CEFR_COLORS[phrase.cefr_level] ?? "bg-slate-100 text-slate-600")}>
+              {phrase.cefr_level}
+            </span>
+            <span className="text-[10px] text-slate-300 ml-auto hidden sm:block">
+              {new Date(phrase.savedAt).toLocaleDateString("ja-JP")}
+            </span>
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 leading-tight">{phrase.expression}</h3>
+          <p className="text-sm text-slate-500 mt-0.5 leading-snug">{phrase.meaning_ja}</p>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={() => handleSpeak(phrase.expression, 0.82)}
+            className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" title="発音を聞く">
+            <Volume2 className="h-4 w-4" />
+          </button>
+          <button onClick={() => onDelete(phrase.id, phrase.expression)}
+            className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors" title="削除">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Example + Practice */}
+      <div className="mt-3 bg-indigo-50 rounded-xl px-3 py-2">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">例文</p>
+          <div className="flex items-center gap-1">
+            <button onClick={() => handleSpeak(phrase.example, 0.88)}
+              className="p-1 rounded-lg hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600 transition-colors" title="例文を読み上げ">
+              <Volume2 className="h-3 w-3" />
+            </button>
+            <button onClick={handlePractice}
+              className={cn("flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors",
+                isListening ? "bg-rose-100 text-rose-500 animate-pulse" : "hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600")}
+              title={isListening ? "停止" : "音読練習"}>
+              {isListening ? <><MicOff className="h-3 w-3" /> Stop</> : <><Mic className="h-3 w-3" /> Practice</>}
+            </button>
+          </div>
+        </div>
+
+        <p className="text-xs text-indigo-700 font-medium leading-relaxed">{phrase.example}</p>
+
+        {isListening && (
+          <div className="mt-2 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+            <p className="text-xs text-rose-500 font-medium">Listening...</p>
+          </div>
+        )}
+
+        {!isListening && recognized && (
+          <div className="mt-2 space-y-1.5">
+            <p className="text-xs leading-relaxed">{renderExampleDiff(recognized, phrase.example)}</p>
+            <p className="text-[11px] text-indigo-400 italic">「{recognized}」</p>
+            {feedback && (
+              <p className={cn("text-xs font-bold", FEEDBACK_CONFIG[feedback].className)}>
+                {FEEDBACK_CONFIG[feedback].label}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── Flashcard Component ───────────────────────────────────────────────────
 
@@ -360,15 +567,6 @@ export default function VocabularyPage() {
     });
   }, [vocabulary]);
 
-  const handleSpeak = useCallback((text: string) => {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-US";
-    u.rate = 0.85;
-    window.speechSynthesis.speak(u);
-  }, []);
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-slate-50/50">
       {/* Flashcard overlay */}
@@ -606,87 +804,17 @@ export default function VocabularyPage() {
 
             <div className="space-y-3">
               {filtered.map((phrase, i) => (
-                <>
+                <div key={phrase.id}>
                   {/* Ad placeholder every 8 items */}
                   {i > 0 && i % 8 === 0 && (
                     <AdPlaceholder
-                      key={`ad-${i}`}
                       slot={`インフィード広告 · 336×280`}
                       size="md"
+                      className="mb-3"
                     />
                   )}
-                  <div
-                    key={phrase.id}
-                    className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5"
-                  >
-                    <div className="flex items-start gap-3">
-                      {/* Main content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                          <span
-                            className={cn(
-                              "text-xs font-semibold px-2 py-0.5 rounded-full border",
-                              TYPE_CONFIG[phrase.type]?.color ??
-                                "bg-slate-100 text-slate-600 border-slate-200"
-                            )}
-                          >
-                            {TYPE_CONFIG[phrase.type]?.label ?? phrase.type}
-                          </span>
-                          <span
-                            className={cn(
-                              "text-xs font-bold px-2 py-0.5 rounded-full",
-                              CEFR_COLORS[phrase.cefr_level] ??
-                                "bg-slate-100 text-slate-600"
-                            )}
-                          >
-                            {phrase.cefr_level}
-                          </span>
-                          <span className="text-[10px] text-slate-300 ml-auto hidden sm:block">
-                            {new Date(phrase.savedAt).toLocaleDateString("ja-JP")}
-                          </span>
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-900 leading-tight">
-                          {phrase.expression}
-                        </h3>
-                        <p className="text-sm text-slate-500 mt-0.5 leading-snug">
-                          {phrase.meaning_ja}
-                        </p>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => handleSpeak(phrase.expression)}
-                          className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-                          title="発音を聞く"
-                        >
-                          <Volume2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(phrase.id, phrase.expression)}
-                          className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors"
-                          title="削除"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Example (collapsible detail) */}
-                    <div className="mt-3 bg-indigo-50 rounded-xl px-3 py-2 flex items-start gap-2">
-                      <p className="text-xs text-indigo-700 font-medium leading-relaxed flex-1">
-                        {phrase.example}
-                      </p>
-                      <button
-                        onClick={() => handleSpeak(phrase.example)}
-                        className="flex-shrink-0 p-1 rounded-lg hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600 transition-colors mt-0.5"
-                        title="例文を読み上げ"
-                      >
-                        <Volume2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                </>
+                  <VocabCard phrase={phrase} onDelete={handleDelete} />
+                </div>
               ))}
             </div>
           </>

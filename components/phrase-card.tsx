@@ -8,6 +8,7 @@ import {
   Quote,
   ChevronDown,
   Check,
+  Mic,
   MicOff,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -57,6 +58,65 @@ function evaluate(recognized: string, example: string, expression: string): Feed
   if (exOverlap >= 0.75) return "excellent";
   if (targetOverlap >= 0.6) return "passed";
   return "retry";
+}
+
+// ─── Word-level diff ─────────────────────────────────────────────────────────
+
+// When speech recognition expands contractions (e.g. "don't" → "do not"),
+// check the expansion words against the recognized set instead.
+const EXPAND: Record<string, string[]> = {
+  im: ["i","am"], ive: ["i","have"], id: ["i","would"], ill: ["i","will"],
+  youre: ["you","are"], youve: ["you","have"], youll: ["you","will"], youd: ["you","would"],
+  hes: ["he","is"], shes: ["she","is"], shell: ["she","will"],
+  its: ["it","is"], weve: ["we","have"],
+  theyre: ["they","are"], theyve: ["they","have"], theyll: ["they","will"],
+  dont: ["do","not"], doesnt: ["does","not"], didnt: ["did","not"],
+  cant: ["can","not"], wont: ["will","not"], couldnt: ["could","not"],
+  wouldnt: ["would","not"], shouldnt: ["should","not"],
+  isnt: ["is","not"], arent: ["are","not"], wasnt: ["was","not"],
+  werent: ["were","not"], havent: ["have","not"], hasnt: ["has","not"], hadnt: ["had","not"],
+};
+
+// Simple suffix stemmer to handle -ing/-ed/-es/-s variations
+function stemWord(w: string): string {
+  if (w.length <= 4) return w;
+  if (w.endsWith("ing") && w.length > 5) return w.slice(0, -3);
+  if (w.endsWith("ied"))                  return w.slice(0, -3) + "y";
+  if (w.endsWith("ies"))                  return w.slice(0, -3) + "y";
+  if (w.endsWith("ed")  && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith("es")  && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith("s")   && w.length > 4) return w.slice(0, -1);
+  return w;
+}
+
+function renderExampleDiff(recognized: string, example: string) {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const recWords = recognized.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean);
+  const recSet   = new Set(recWords);
+  const recStems = new Set(recWords.map(stemWord));
+
+  const tokens = example.split(/(\s+)/);
+  return tokens.map((token, i) => {
+    if (/^\s+$/.test(token)) return <span key={i}>{token}</span>;
+    const n = norm(token);
+    if (!n) return <span key={i}>{token}</span>;
+
+    const matched =
+      recSet.has(n) ||
+      // stem match: handles -ing/-ed/-s recognition variations
+      (n.length >= 5 && recStems.has(stemWord(n))) ||
+      // contraction expansion: "don't" → ["do","not"] all present in recognized
+      (EXPAND[n] !== undefined && EXPAND[n].every((w) => recSet.has(w)));
+
+    return (
+      <span
+        key={i}
+        className={matched ? "text-emerald-600 font-bold" : "text-rose-500 font-bold underline decoration-dotted"}
+      >
+        {token}
+      </span>
+    );
+  });
 }
 
 const FEEDBACK_CONFIG: Record<Feedback, { label: string; className: string }> = {
@@ -272,7 +332,7 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
               >
                 {isListening
                   ? <><MicOff className="h-3 w-3" /> Stop</>
-                  : <>🎙️ Practice</>
+                  : <><Mic className="h-3 w-3" /> Practice</>
                 }
               </button>
             </div>
@@ -290,7 +350,11 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
 
           {/* Result */}
           {!isListening && recognized && (
-            <div className="mt-2 space-y-1">
+            <div className="mt-2 space-y-1.5">
+              {/* diff: example with per-word coloring */}
+              <p className="text-sm leading-relaxed">
+                {renderExampleDiff(recognized, phrase.example)}
+              </p>
               <p className="text-[11px] text-indigo-400 italic leading-relaxed">
                 「{recognized}」
               </p>
