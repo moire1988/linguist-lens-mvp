@@ -105,6 +105,30 @@ const SOURCE_LABELS = {
   text: { label: "テキスト入力", icon: "📄" },
 };
 
+// ─── Sample Videos ─────────────────────────────────────────────────────────
+// URLを変更する場合はここだけ修正すればOK
+
+const SAMPLE_VIDEOS = [
+  {
+    emoji: "⚾",
+    title: "大谷翔平 インタビュー",
+    sublabel: "MLB · English",
+    url: "https://www.youtube.com/watch?v=qLb7bROuWbM",
+  },
+  {
+    emoji: "🍎",
+    title: "Jobs Stanford スピーチ",
+    sublabel: "Stanford 2005",
+    url: "https://www.youtube.com/watch?v=UF8uR6Z6KLc",
+  },
+  {
+    emoji: "💡",
+    title: "Simon Sinek TED Talk",
+    sublabel: "How Leaders Inspire",
+    url: "https://www.youtube.com/watch?v=qp0HIF3SfI4",
+  },
+] as const;
+
 const CEFR_RANK: Record<string, number> = {
   A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6,
 };
@@ -208,6 +232,44 @@ export default function HomePage() {
       }
     });
   }, [inputValue, url, selectedLevel, inputMode]);
+
+  // Sample video quick-submit (URL is passed directly, bypasses state timing)
+  const handleQuickSubmit = useCallback(
+    (videoUrl: string) => {
+      setUrl(videoUrl);
+      setInputMode("url");
+      setError(null);
+      setResults(null);
+      setAllSaved(false);
+      setFromCache(false);
+      setActiveFilter("all");
+      setSourceUrl(videoUrl);
+
+      const cached = getCachedResult(videoUrl, selectedLevel);
+      if (cached) {
+        setResults(cached);
+        setFromCache(true);
+        toast.success("キャッシュから読み込みました", {
+          description: "API呼び出しをスキップしました（7日間有効）",
+        });
+        return;
+      }
+
+      startTransition(async () => {
+        const result = await analyzeContent(videoUrl, selectedLevel, "url");
+        if (result.success) {
+          setResults(result.data);
+          setCachedResult(videoUrl, selectedLevel, result.data);
+          if (result.data.total_count === 0) {
+            setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
+          }
+        } else {
+          setError(result.error);
+        }
+      });
+    },
+    [selectedLevel]
+  );
 
   // Filtered results
   const filteredPhrases =
@@ -564,6 +626,35 @@ export default function HomePage() {
             </button>
           </div>
         </div>
+
+        {/* ── Sample Videos ── */}
+        {inputMode === "url" && !hasContent && (
+          <div className="max-w-2xl mx-auto mt-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex-1 h-px bg-slate-200" />
+              <span className="text-xs font-medium text-slate-400 whitespace-nowrap">
+                👇 まずは人気の動画で試す
+              </span>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {SAMPLE_VIDEOS.map((v) => (
+                <button
+                  key={v.url}
+                  onClick={() => handleQuickSubmit(v.url)}
+                  disabled={isPending}
+                  className="flex flex-col items-center gap-1.5 p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 hover:shadow-sm transition-all text-center group disabled:opacity-50"
+                >
+                  <span className="text-2xl leading-none">{v.emoji}</span>
+                  <span className="text-xs font-semibold text-slate-700 group-hover:text-indigo-700 leading-tight transition-colors">
+                    {v.title}
+                  </span>
+                  <span className="text-[10px] text-slate-400">{v.sublabel}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Loading Skeleton ── */}
         {isPending && (

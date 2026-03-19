@@ -1,6 +1,7 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { unstable_cache } from "next/cache";
 import type { PhraseResult, AnalysisResult } from "@/lib/types";
 export type { ExpressionType, PhraseResult, AnalysisResult } from "@/lib/types";
 
@@ -210,6 +211,28 @@ ${snippet}
   throw new Error("AIの応答形式が予期しないものでした。もう一度お試しください。");
 }
 
+// ─── Server-side shared cache for URL analysis ────────────────────────────
+// Shared across ALL users — prevents repeated Supadata + Claude API calls
+// for the same URL+level (e.g. sample videos). TTL: 7 days.
+
+const cachedUrlAnalysis = unstable_cache(
+  async (url: string, cefrLevel: string) => {
+    let text: string;
+    let sourceType: "youtube" | "web";
+    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+      text = await getYouTubeTranscript(url);
+      sourceType = "youtube";
+    } else {
+      text = await getWebContent(url);
+      sourceType = "web";
+    }
+    const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(text, cefrLevel);
+    return { text, sourceType, phrases, fullScriptWithHighlight, overallLevel };
+  },
+  ["url-analysis-v1"],
+  { revalidate: 7 * 24 * 60 * 60 } // 7 days
+);
+
 // ─── Main Server Action ────────────────────────────────────────────────────
 
 export async function analyzeContent(
@@ -224,21 +247,25 @@ export async function analyzeContent(
     if (!process.env.ANTHROPIC_API_KEY)
       return { success: false, error: "APIキーが設定されていません。.env.local を確認してください。" };
 
-    let text: string;
-    let sourceType: AnalysisResult["source_type"];
-
     if (inputMode === "text") {
-      text = input.trim();
-      sourceType = "text";
-    } else if (input.includes("youtube.com") || input.includes("youtu.be")) {
-      text = await getYouTubeTranscript(input);
-      sourceType = "youtube";
-    } else {
-      text = await getWebContent(input);
-      sourceType = "web";
+      const text = input.trim();
+      const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(text, cefrLevel);
+      return {
+        success: true,
+        data: {
+          phrases,
+          source_type: "text",
+          total_count: phrases.length,
+          source_text: text,
+          full_script_with_highlight: fullScriptWithHighlight,
+          overall_level: overallLevel,
+        },
+      };
     }
 
-    const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(text, cefrLevel);
+    // URL mode: use server-side cache (shared across users)
+    const { text, sourceType, phrases, fullScriptWithHighlight, overallLevel } =
+      await cachedUrlAnalysis(input.trim(), cefrLevel);
 
     return {
       success: true,
