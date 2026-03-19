@@ -8,11 +8,10 @@ import {
   Quote,
   ChevronDown,
   Check,
-  Mic,
   MicOff,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, getBestEnglishVoice } from "@/lib/utils";
 import type { PhraseResult } from "@/lib/types";
 
 // ─── Web Speech API types ────────────────────────────────────────────────────
@@ -130,6 +129,8 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
     const utterance = new SpeechSynthesisUtterance(phrase.expression);
     utterance.lang = "en-US";
     utterance.rate = 0.82;
+    const voice = getBestEnglishVoice();
+    if (voice) utterance.voice = voice;
     utterance.onend  = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
     setIsSpeaking(true);
@@ -142,6 +143,8 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
     const utterance = new SpeechSynthesisUtterance(phrase.example);
     utterance.lang = "en-US";
     utterance.rate = 0.88;
+    const voice = getBestEnglishVoice();
+    if (voice) utterance.voice = voice;
     window.speechSynthesis.speak(utterance);
   }, [phrase.example]);
 
@@ -256,18 +259,21 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
               >
                 <Volume2 className="h-3 w-3" />
               </button>
-              {/* Mic */}
+              {/* Practice button */}
               <button
                 onClick={handlePractice}
                 className={cn(
-                  "p-1 rounded-lg transition-colors",
+                  "flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors",
                   isListening
                     ? "bg-rose-100 text-rose-500 animate-pulse"
                     : "hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600"
                 )}
                 title={isListening ? "停止" : "音読練習"}
               >
-                {isListening ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}
+                {isListening
+                  ? <><MicOff className="h-3 w-3" /> Stop</>
+                  : <>🎙️ Practice</>
+                }
               </button>
             </div>
           </div>

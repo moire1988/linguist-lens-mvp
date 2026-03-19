@@ -9,7 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getBestEnglishVoice } from "@/lib/utils";
 import type { PhraseResult } from "@/lib/types";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -143,6 +143,8 @@ export function ScriptViewer({
     const utt = new SpeechSynthesisUtterance(ttsText);
     utt.lang = "en-US";
     utt.rate = speed;
+    const voice = getBestEnglishVoice();
+    if (voice) utt.voice = voice;
     utt.onend = () => setIsSpeaking(false);
     utt.onerror = () => setIsSpeaking(false);
     setIsSpeaking(true);
