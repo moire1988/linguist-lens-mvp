@@ -1,7 +1,6 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
-import { YoutubeTranscript } from "youtube-transcript";
 import type { PhraseResult, AnalysisResult } from "@/lib/types";
 export type { ExpressionType, PhraseResult, AnalysisResult } from "@/lib/types";
 
@@ -14,141 +13,46 @@ const LEVEL_DESCRIPTIONS: Record<string, string> = {
   C2: "ネイティブに近い表現力を持つ熟達者",
 };
 
-// ─── YouTube ───────────────────────────────────────────────────────────────
-
-const YOUTUBE_BLOCKED_MSG =
-  "サーバーからのYouTube字幕取得がブロックされています。" +
-  "動画ページで字幕（CC）を表示してテキストをコピーし、" +
-  "「テキスト入力」タブからご利用ください。";
-
-/** Method 2: YouTube ページを直接フェッチし ytInitialPlayerResponse から字幕URLを抽出 */
-async function fetchTranscriptViaHtml(videoId: string): Promise<string | null> {
-  const res = await fetch(
-    `https://www.youtube.com/watch?v=${videoId}&hl=en`,
-    {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(12000),
-    }
-  );
-  if (!res.ok) return null;
-
-  const html = await res.text();
-
-  // ytInitialPlayerResponse の JSON を括弧マッチで抽出
-  const markerIdx = html.indexOf("ytInitialPlayerResponse");
-  if (markerIdx === -1) return null;
-  const jsonStart = html.indexOf("{", markerIdx);
-  if (jsonStart === -1) return null;
-
-  let depth = 0;
-  let jsonEnd = -1;
-  for (let i = jsonStart; i < html.length; i++) {
-    if (html[i] === "{") depth++;
-    else if (html[i] === "}" && --depth === 0) {
-      jsonEnd = i + 1;
-      break;
-    }
-  }
-  if (jsonEnd === -1) return null;
-
-  let player: unknown;
-  try {
-    player = JSON.parse(html.slice(jsonStart, jsonEnd));
-  } catch {
-    return null;
-  }
-
-  type CaptionTrack = { languageCode: string; baseUrl: string };
-  const tracks = (
-    player as {
-      captions?: {
-        playerCaptionsTracklistRenderer?: { captionTracks?: CaptionTrack[] };
-      };
-    }
-  )?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-
-  if (!tracks?.length) return null;
-
-  const track =
-    tracks.find((t) => t.languageCode?.startsWith("en")) ?? tracks[0];
-
-  const transcriptRes = await fetch(`${track.baseUrl}&fmt=json3`, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!transcriptRes.ok) return null;
-
-  const data = (await transcriptRes.json()) as {
-    events?: Array<{ segs?: Array<{ utf8?: string }> }>;
-  };
-
-  return (
-    data.events
-      ?.filter((e) => e.segs)
-      .flatMap((e) => (e.segs ?? []).map((s) => s.utf8 ?? ""))
-      .join(" ")
-      .replace(/\[.*?\]/g, "")
-      .replace(/\s{2,}/g, " ")
-      .trim() ?? null
-  );
-}
+// ─── YouTube（Supadata API 経由）──────────────────────────────────────────
 
 async function getYouTubeTranscript(url: string): Promise<string> {
   const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
   if (!match) throw new Error("YouTube URLの形式が正しくありません");
   const videoId = match[1];
 
-  // ── Method 1: youtube-transcript ライブラリ（高速、ローカルで確実）──────
-  try {
-    let segments;
-    try {
-      segments = await YoutubeTranscript.fetchTranscript(videoId, { lang: "en" });
-    } catch {
-      segments = await YoutubeTranscript.fetchTranscript(videoId);
-    }
-    if (segments && segments.length > 0) {
-      return segments
-        .map((t) => t.text)
-        .join(" ")
-        .replace(/\[.*?\]/g, "")
-        .replace(/\s{2,}/g, " ")
-        .trim();
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message.toLowerCase() : "";
-    // 字幕が無効・存在しない → 即エラー（フォールバック不要）
-    if (
-      msg.includes("disabled") ||
-      msg.includes("could not find") ||
-      msg.includes("unavailable") ||
-      msg.includes("no transcript")
-    ) {
-      throw new Error(
-        "この動画には字幕が無効または存在しません。字幕付きの別の動画をお試しください。"
-      );
-    }
-    // IP ブロック系エラー → Method 2 へ
+  const apiKey = process.env.SUPADATA_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "字幕取得APIキーが設定されていません（SUPADATA_API_KEY）。管理者に連絡してください。"
+    );
   }
 
-  // ── Method 2: YouTube HTML 直接パース（ブラウザ同等ヘッダーで再試行）──
-  try {
-    const result = await fetchTranscriptViaHtml(videoId);
-    if (result) return result;
-  } catch {
-    // fall through
+  const endpoint =
+    `https://api.supadata.ai/v1/youtube/transcript` +
+    `?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}` +
+    `&text=true`;
+
+  const res = await fetch(endpoint, {
+    headers: { "x-api-key": apiKey },
+    signal: AbortSignal.timeout(20000),
+  });
+
+  if (res.status === 404) {
+    throw new Error(
+      "この動画には字幕が存在しません。字幕付きの別の動画をお試しください。"
+    );
+  }
+  if (!res.ok) {
+    throw new Error(`字幕の取得に失敗しました（HTTP ${res.status}）`);
   }
 
-  // ── 両方失敗 → ユーザーフレンドリーなエラー ────────────────────────────
-  throw new Error(YOUTUBE_BLOCKED_MSG);
+  const data = (await res.json()) as { content?: string };
+  const transcript = data.content?.trim();
+  if (!transcript) {
+    throw new Error("この動画には字幕が見つかりませんでした。");
+  }
+
+  return transcript.replace(/\s{2,}/g, " ").slice(0, 8000);
 }
 
 // ─── Web Article ───────────────────────────────────────────────────────────
