@@ -24,7 +24,8 @@ import {
   type AnalysisResult,
   type ExpressionType,
 } from "@/app/actions/analyze";
-import { savePhrase, getVocabularyCount } from "@/lib/vocabulary";
+import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
+import type { PhraseResult } from "@/lib/types";
 import { getCachedResult, setCachedResult } from "@/lib/cache";
 import { PremiumModal } from "@/components/premium-modal";
 import { PhraseCard } from "@/components/phrase-card";
@@ -120,10 +121,14 @@ export default function HomePage() {
   const [vocabCount, setVocabCount] = useState(0);
   const [fromCache, setFromCache] = useState(false);
   const [showPremium, setShowPremium] = useState(false);
+  const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
+  const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
 
-  // 単語帳の件数をロード
+  // 単語帳の件数・保存済みセット・残り回数をロード
   useEffect(() => {
     setVocabCount(getVocabularyCount());
+    setSavedExpressions(new Set(getVocabulary().map((p) => p.expression.toLowerCase())));
+    setDailyRemaining(getDailyRemaining());
   }, []);
 
   const [isPending, startTransition] = useTransition();
@@ -201,6 +206,7 @@ export default function HomePage() {
   const handleSaveAll = useCallback(() => {
     if (!results || allSaved) return;
     let count = 0;
+    const newKeys: string[] = [];
     for (const phrase of results.phrases) {
       const res = savePhrase({
         expression: phrase.expression,
@@ -215,23 +221,58 @@ export default function HomePage() {
       });
       if (res.success) {
         count++;
+        newKeys.push(phrase.expression.toLowerCase());
       } else if (res.reason === "limit_reached") {
         setShowPremium(true);
         if (count > 0) {
+          setSavedExpressions((s) => { const n = new Set(Array.from(s)); newKeys.forEach((k) => n.add(k)); return n; });
+          setDailyRemaining(getDailyRemaining());
+          setVocabCount(getVocabularyCount());
           toast.success(`${count}件保存しました`, {
             description: "本日の上限に達しました。残りはプレミアムプランで保存できます。",
           });
-          setVocabCount(getVocabularyCount());
         }
         return;
       }
     }
+    setSavedExpressions((s) => { const n = new Set(Array.from(s)); newKeys.forEach((k) => n.add(k)); return n; });
+    setDailyRemaining(getDailyRemaining());
     setAllSaved(true);
     setVocabCount(getVocabularyCount());
     toast.success("単語帳にすべて保存しました", {
       description: `${count}個の表現を追加しました`,
     });
   }, [results, sourceUrl, allSaved]);
+
+  // 個別保存（ScriptViewer / PhraseCard 共通）
+  const handleSavePhrase = useCallback(
+    (phrase: PhraseResult) => {
+      const key = phrase.expression.toLowerCase();
+      if (savedExpressions.has(key)) return;
+      const result = savePhrase({
+        expression: phrase.expression,
+        type: phrase.type,
+        cefr_level: phrase.cefr_level,
+        meaning_ja: phrase.meaning_ja,
+        nuance: phrase.nuance,
+        example: phrase.example,
+        context: phrase.context,
+        why_hard_for_japanese: phrase.why_hard_for_japanese,
+        sourceUrl,
+      });
+      if (result.success) {
+        setSavedExpressions((s) => { const n = new Set(Array.from(s)); n.add(key); return n; });
+        setDailyRemaining((r) => Math.max(0, r - 1));
+        setVocabCount((c) => c + 1);
+        toast.success("単語帳に保存しました", {
+          description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+        });
+      } else if (result.reason === "limit_reached") {
+        setShowPremium(true);
+      }
+    },
+    [savedExpressions, sourceUrl]
+  );
 
   const canSubmit =
     inputMode === "url" ? url.trim().length > 0 : textInput.trim().length > 10;
@@ -616,7 +657,8 @@ export default function HomePage() {
                 text={results.source_text ?? ""}
                 phrases={results.phrases}
                 highlightedHtml={results.full_script_with_highlight}
-                sourceUrl={sourceUrl}
+                savedExpressions={savedExpressions}
+                onSave={handleSavePhrase}
               />
             )}
 
@@ -662,7 +704,13 @@ export default function HomePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredPhrases.map((phrase, i) => (
                 <>
-                  <PhraseCard key={`${phrase.expression}-${i}`} phrase={phrase} sourceUrl={sourceUrl} />
+                  <PhraseCard
+                    key={`${phrase.expression}-${i}`}
+                    phrase={phrase}
+                    savedExpressions={savedExpressions}
+                    dailyRemaining={dailyRemaining}
+                    onSave={handleSavePhrase}
+                  />
                   {/* 6枚ごとに広告プレースホルダー */}
                   {(i + 1) % 6 === 0 && i + 1 < filteredPhrases.length && (
                     <AdPlaceholder

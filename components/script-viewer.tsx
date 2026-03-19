@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import {
   Volume2,
   VolumeX,
@@ -9,10 +9,8 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { PhraseResult } from "@/lib/types";
-import { savePhrase, isSaved } from "@/lib/vocabulary";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -22,7 +20,8 @@ interface ScriptViewerProps {
   phrases: PhraseResult[];
   /** AI-generated HTML with <b data-expr="..."> markup */
   highlightedHtml?: string;
-  sourceUrl?: string;
+  savedExpressions: Set<string>;
+  onSave: (phrase: PhraseResult) => void;
 }
 
 // ─── Sanitizer ───────────────────────────────────────────────────────────────
@@ -61,27 +60,18 @@ export function ScriptViewer({
   text,
   phrases,
   highlightedHtml,
-  sourceUrl,
+  savedExpressions,
+  onSave,
 }: ScriptViewerProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speed, setSpeed] = useState(1.0);
   const [collapsed, setCollapsed] = useState(false);
-  const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
   const [tooltip, setTooltip] = useState<{
     phrase: PhraseResult;
     x: number;
     y: number;
   } | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
-
-  // Initialise saved set
-  useEffect(() => {
-    const init = new Set<string>();
-    phrases.forEach((p) => {
-      if (isSaved(p.expression)) init.add(p.expression.toLowerCase());
-    });
-    setSavedSet(init);
-  }, [phrases]);
 
   // Sanitized HTML (memoized)
   const safeHtml = useMemo(
@@ -99,7 +89,6 @@ export function ScriptViewer({
 
   const handleSpeak = useCallback(() => {
     if (!("speechSynthesis" in window)) {
-      toast.error("このブラウザは音声読み上げに対応していません");
       return;
     }
     if (isSpeaking) {
@@ -166,29 +155,10 @@ export function ScriptViewer({
 
   const handleSave = useCallback(
     (phrase: PhraseResult) => {
-      const key = phrase.expression.toLowerCase();
-      if (savedSet.has(key)) return;
-      const result = savePhrase({
-        expression: phrase.expression,
-        type: phrase.type,
-        cefr_level: phrase.cefr_level,
-        meaning_ja: phrase.meaning_ja,
-        nuance: phrase.nuance,
-        example: phrase.example,
-        context: phrase.context,
-        why_hard_for_japanese: phrase.why_hard_for_japanese,
-        sourceUrl,
-      });
-      if (result.success) {
-        setSavedSet((s) => {
-          const n = new Set(s);
-          n.add(key);
-          return n;
-        });
-        toast.success(`「${phrase.expression}」を保存しました`);
-      }
+      if (savedExpressions.has(phrase.expression.toLowerCase())) return;
+      onSave(phrase);
     },
-    [savedSet, sourceUrl]
+    [savedExpressions, onSave]
   );
 
   // ─── Render ────────────────────────────────────────────────────────────
@@ -318,12 +288,12 @@ export function ScriptViewer({
             onClick={() => handleSave(tooltip.phrase)}
             className={cn(
               "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg w-full justify-center font-medium transition-all",
-              savedSet.has(tooltip.phrase.expression.toLowerCase())
+              savedExpressions.has(tooltip.phrase.expression.toLowerCase())
                 ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
                 : "bg-indigo-600 text-white hover:bg-indigo-700"
             )}
           >
-            {savedSet.has(tooltip.phrase.expression.toLowerCase()) ? (
+            {savedExpressions.has(tooltip.phrase.expression.toLowerCase()) ? (
               <>
                 <Check className="h-3 w-3" />
                 保存済み

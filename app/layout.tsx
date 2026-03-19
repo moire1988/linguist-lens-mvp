@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import { GoogleTagManager } from "@next/third-parties/google";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,8 +17,11 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const gtmId = process.env.NEXT_PUBLIC_GTM_ID ?? "GTM-TJX8DZFD";
+
   return (
     <html lang="ja">
+      <GoogleTagManager gtmId={gtmId} />
       <body className={inter.className}>
         {children}
         <Toaster richColors position="bottom-right" />

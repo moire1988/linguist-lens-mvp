@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
   Volume2,
   VolumeX,
@@ -12,8 +12,6 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { PhraseResult } from "@/lib/types";
-import { savePhrase, isSaved, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
-import { PremiumModal } from "@/components/premium-modal";
 
 const TYPE_CONFIG: Record<
   string,
@@ -56,20 +54,16 @@ const CEFR_CONFIG: Record<string, { bg: string; text: string }> = {
 
 interface PhraseCardProps {
   phrase: PhraseResult;
-  sourceUrl?: string;
+  savedExpressions: Set<string>;
+  dailyRemaining: number;
+  onSave: (phrase: PhraseResult) => void;
 }
 
-export function PhraseCard({ phrase, sourceUrl }: PhraseCardProps) {
+export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }: PhraseCardProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [showPremium, setShowPremium] = useState(false);
-  const [remaining, setRemaining] = useState(FREE_DAILY_LIMIT);
 
-  useEffect(() => {
-    setSaved(isSaved(phrase.expression));
-    setRemaining(getDailyRemaining());
-  }, [phrase.expression]);
+  const saved = savedExpressions.has(phrase.expression.toLowerCase());
 
   const typeConfig = TYPE_CONFIG[phrase.type] ?? TYPE_CONFIG.phrasal_verb;
   const cefrConfig = CEFR_CONFIG[phrase.cefr_level] ?? CEFR_CONFIG.B2;
@@ -108,32 +102,10 @@ export function PhraseCard({ phrase, sourceUrl }: PhraseCardProps) {
 
   const handleSave = useCallback(() => {
     if (saved) return;
-    const result = savePhrase({
-      expression: phrase.expression,
-      type: phrase.type,
-      cefr_level: phrase.cefr_level,
-      meaning_ja: phrase.meaning_ja,
-      nuance: phrase.nuance,
-      example: phrase.example,
-      context: phrase.context,
-      why_hard_for_japanese: phrase.why_hard_for_japanese,
-      sourceUrl,
-    });
-    if (result.success) {
-      setSaved(true);
-      setRemaining((r) => Math.max(0, r - 1));
-      toast.success("単語帳に保存しました", {
-        description: `「${phrase.expression}」をマイ単語帳に追加しました`,
-      });
-    } else if (result.reason === "limit_reached") {
-      setShowPremium(true);
-    }
-    // duplicate は何もしない（すでに saved=true のはず）
-  }, [phrase, sourceUrl, saved]);
+    onSave(phrase);
+  }, [saved, phrase, onSave]);
 
   return (
-    <>
-    {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col">
       {/* ── Header ── */}
       <div className="p-5 flex-1">
@@ -277,12 +249,12 @@ export function PhraseCard({ phrase, sourceUrl }: PhraseCardProps) {
             <>
               <BookmarkPlus className="h-3.5 w-3.5" />
               単語帳に保存
-              {remaining <= 2 && remaining > 0 && (
+              {dailyRemaining <= 2 && dailyRemaining > 0 && (
                 <span className="ml-auto text-[10px] text-amber-500 font-semibold">
-                  本日あと{remaining}件
+                  本日あと{dailyRemaining}件
                 </span>
               )}
-              {remaining === 0 && (
+              {dailyRemaining === 0 && (
                 <span className="ml-auto text-[10px] text-rose-400 font-semibold">
                   上限に達しました
                 </span>
@@ -292,6 +264,5 @@ export function PhraseCard({ phrase, sourceUrl }: PhraseCardProps) {
         </button>
       </div>
     </div>
-    </>
   );
 }
