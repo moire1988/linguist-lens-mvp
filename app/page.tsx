@@ -105,6 +105,19 @@ const SOURCE_LABELS = {
   text: { label: "テキスト入力", icon: "📄" },
 };
 
+const CEFR_RANK: Record<string, number> = {
+  A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6,
+};
+
+const CEFR_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
+  A1: { label: "入門",   bg: "bg-slate-100",  text: "text-slate-700",  border: "border-slate-200"  },
+  A2: { label: "初級",   bg: "bg-green-100",  text: "text-green-700",  border: "border-green-200"  },
+  B1: { label: "中級",   bg: "bg-blue-100",   text: "text-blue-700",   border: "border-blue-200"   },
+  B2: { label: "中上級", bg: "bg-indigo-100", text: "text-indigo-700", border: "border-indigo-200" },
+  C1: { label: "上級",   bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200" },
+  C2: { label: "熟達",   bg: "bg-rose-100",   text: "text-rose-700",   border: "border-rose-200"   },
+};
+
 // ─── Page Component ────────────────────────────────────────────────────────
 
 export default function HomePage() {
@@ -650,6 +663,66 @@ export default function HomePage() {
                 )}
               </button>
             </div>
+
+            {/* ── Overall Level Badge ── */}
+            {results.overall_level && (() => {
+              const meta = CEFR_META[results.overall_level];
+              const gap = (CEFR_RANK[results.overall_level] ?? 0) - (CEFR_RANK[selectedLevel] ?? 0);
+              return (
+                <div className="mb-5 space-y-2">
+                  {/* Badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-slate-500">
+                      コンテンツの総合難易度
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-extrabold border",
+                        meta?.bg ?? "bg-slate-100",
+                        meta?.text ?? "text-slate-700",
+                        meta?.border ?? "border-slate-200"
+                      )}
+                    >
+                      {results.overall_level}
+                      <span className="font-medium text-xs opacity-80">
+                        {meta?.label}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Advice message */}
+                  {gap >= 2 && (
+                    <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                      <span className="text-base leading-none mt-0.5">💡</span>
+                      <p className="text-sm text-amber-800 leading-relaxed">
+                        このコンテンツはあなたの現在のレベル（
+                        <span className="font-bold">{selectedLevel}</span>）より
+                        <span className="font-bold">{gap}段階</span>
+                        上の難易度です。難しく感じても大丈夫！
+                        抽出されたフレーズを一つずつ押さえていきましょう。
+                      </p>
+                    </div>
+                  )}
+                  {gap === 1 && (
+                    <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+                      <span className="text-base leading-none mt-0.5">✨</span>
+                      <p className="text-sm text-emerald-800 leading-relaxed">
+                        ちょうど背伸びできる難易度です。理想的な学習素材です！
+                      </p>
+                    </div>
+                  )}
+                  {gap < 0 && (
+                    <div className="flex items-start gap-2.5 bg-sky-50 border border-sky-100 rounded-xl px-4 py-3">
+                      <span className="text-base leading-none mt-0.5">📘</span>
+                      <p className="text-sm text-sky-800 leading-relaxed">
+                        あなたのレベルに対してやさしめのコンテンツです。
+                        表現のニュアンスや使い分けを深掘りしてみましょう。
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Script viewer with highlights */}
             {(results.source_text || results.full_script_with_highlight) && (

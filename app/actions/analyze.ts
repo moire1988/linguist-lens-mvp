@@ -105,6 +105,7 @@ async function getWebContent(url: string): Promise<string> {
 interface ClaudeResult {
   phrases: PhraseResult[];
   fullScriptWithHighlight: string;
+  overallLevel?: string;
 }
 
 async function callClaude(text: string, cefrLevel: string): Promise<ClaudeResult> {
@@ -148,6 +149,7 @@ ${snippet}
 ## 出力形式
 以下のJSONオブジェクトのみを返してください（他のテキストは一切不要）：
 {
+  "overallLevel": "テキスト全体の難易度をCEFRで総合判定（語彙・文法・内容の複雑さを考慮）。A1/A2/B1/B2/C1/C2 のいずれか1つ",
   "phrases": [
     {
       "expression": "表現の基本形（例: give it a shot, end up -ing, talk oneself out of）",
@@ -180,11 +182,13 @@ ${snippet}
       const parsed = JSON.parse(objMatch[0]) as {
         phrases: PhraseResult[];
         fullScriptWithHighlight?: string;
+        overallLevel?: string;
       };
       if (Array.isArray(parsed.phrases) && parsed.phrases.length > 0) {
         return {
           phrases: parsed.phrases,
           fullScriptWithHighlight: parsed.fullScriptWithHighlight ?? snippet,
+          overallLevel: parsed.overallLevel,
         };
       }
     } catch {
@@ -234,7 +238,7 @@ export async function analyzeContent(
       sourceType = "web";
     }
 
-    const { phrases, fullScriptWithHighlight } = await callClaude(text, cefrLevel);
+    const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(text, cefrLevel);
 
     return {
       success: true,
@@ -244,6 +248,7 @@ export async function analyzeContent(
         total_count: phrases.length,
         source_text: text,
         full_script_with_highlight: fullScriptWithHighlight,
+        overall_level: overallLevel,
       },
     };
   } catch (error) {

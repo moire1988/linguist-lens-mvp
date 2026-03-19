@@ -21,4 +21,5 @@ export interface AnalysisResult {
   total_count: number;
   source_text?: string;
   full_script_with_highlight?: string;
+  overall_level?: string;
 }
