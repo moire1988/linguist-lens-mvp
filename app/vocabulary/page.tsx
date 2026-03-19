@@ -16,6 +16,7 @@ import {
   BookMarked,
   X,
   AlertTriangle,
+  Brain,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,9 @@ import {
   type SavedPhrase,
 } from "@/lib/vocabulary";
 import { AdPlaceholder } from "@/components/ad-placeholder";
+import { CoachModal } from "@/components/coach-modal";
+
+const MIN_COACH_PHRASES = 5;
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -294,6 +298,7 @@ export default function VocabularyPage() {
   const [cefrFilter, setCefrFilter] = useState<string>("all");
   const [showFlashcard, setShowFlashcard] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showCoach, setShowCoach] = useState(false);
 
   // Load from localStorage after mount
   useEffect(() => {
@@ -374,6 +379,14 @@ export default function VocabularyPage() {
         />
       )}
 
+      {/* Coach modal */}
+      {showCoach && (
+        <CoachModal
+          vocabulary={vocabulary}
+          onClose={() => setShowCoach(false)}
+        />
+      )}
+
       {/* Header */}
       <header className="border-b border-slate-100 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
@@ -411,10 +424,25 @@ export default function VocabularyPage() {
           </div>
 
           {vocabulary.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-col items-start sm:items-end gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+              {/* AI coach button */}
+              <button
+                onClick={() => vocabulary.length >= MIN_COACH_PHRASES && setShowCoach(true)}
+                disabled={vocabulary.length < MIN_COACH_PHRASES}
+                className={cn(
+                  "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm",
+                  vocabulary.length >= MIN_COACH_PHRASES
+                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:opacity-90"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                )}
+              >
+                <Brain className="h-4 w-4" />
+                傾向と対策を分析する
+              </button>
               <button
                 onClick={() => setShowFlashcard(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-sm font-semibold text-slate-600 transition-colors"
               >
                 <Eye className="h-4 w-4" />
                 フラッシュカード
@@ -440,6 +468,13 @@ export default function VocabularyPage() {
                 <Trash2 className="h-4 w-4" />
                 全削除
               </button>
+              </div>
+              {/* Coach unlock hint */}
+              {vocabulary.length < MIN_COACH_PHRASES && (
+                <p className="text-[11px] text-slate-400">
+                  ※ 5個以上の保存でAIコーチが解放されます（現在{vocabulary.length}個）
+                </p>
+              )}
             </div>
           )}
         </div>
