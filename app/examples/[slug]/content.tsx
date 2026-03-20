@@ -199,6 +199,51 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
           </div>
         </div>
 
+        {/* ── Full transcript (accordion) ── */}
+        <div className="mb-8">
+          <button
+            onClick={() => setTranscriptOpen(!transcriptOpen)}
+            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm hover:bg-white hover:border-indigo-200 transition-all text-left"
+          >
+            <div className="flex items-center gap-2.5">
+              <FileText className="h-4 w-4 text-indigo-500" />
+              <span className="text-sm font-semibold text-slate-700">全文スクリプト</span>
+              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full hidden sm:inline">
+                抽出された表現をハイライト表示
+              </span>
+            </div>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 text-slate-400 transition-transform duration-200 flex-shrink-0",
+                transcriptOpen && "rotate-180"
+              )}
+            />
+          </button>
+
+          {transcriptOpen && (
+            <div className="mt-2 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+              {/* Legend */}
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                <span
+                  className="inline-block text-xs font-semibold px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "rgba(199,210,254,0.65)", color: "#3730a3" }}
+                >
+                  highlight
+                </span>
+                <span className="text-xs text-slate-500">= このページで紹介した表現</span>
+              </div>
+
+              {/* Transcript with highlights */}
+              <div
+                className="transcript-content text-sm text-slate-700 leading-relaxed max-h-[420px] overflow-y-auto pr-1"
+                dangerouslySetInnerHTML={{
+                  __html: buildHighlightedHtml(example.transcript, example.phrases),
+                }}
+              />
+            </div>
+          )}
+        </div>
+
         {/* ── Results header ── */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -250,51 +295,6 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
               onSave={handleSave}
             />
           ))}
-        </div>
-
-        {/* ── Full transcript (accordion) ── */}
-        <div className="mb-10">
-          <button
-            onClick={() => setTranscriptOpen(!transcriptOpen)}
-            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm hover:bg-white hover:border-indigo-200 transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <FileText className="h-4 w-4 text-indigo-500" />
-              <span className="text-sm font-semibold text-slate-700">全文スクリプト</span>
-              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full hidden sm:inline">
-                抽出された表現をハイライト表示
-              </span>
-            </div>
-            <ChevronDown
-              className={cn(
-                "h-4 w-4 text-slate-400 transition-transform duration-200 flex-shrink-0",
-                transcriptOpen && "rotate-180"
-              )}
-            />
-          </button>
-
-          {transcriptOpen && (
-            <div className="mt-2 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
-              {/* Legend */}
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-                <span
-                  className="inline-block text-xs font-semibold px-2 py-0.5 rounded"
-                  style={{ backgroundColor: "rgba(199,210,254,0.65)", color: "#3730a3" }}
-                >
-                  highlight
-                </span>
-                <span className="text-xs text-slate-500">= このページで紹介した表現</span>
-              </div>
-
-              {/* Transcript with highlights */}
-              <div
-                className="transcript-content text-sm text-slate-700 leading-relaxed max-h-[420px] overflow-y-auto pr-1"
-                dangerouslySetInnerHTML={{
-                  __html: buildHighlightedHtml(example.transcript, example.phrases),
-                }}
-              />
-            </div>
-          )}
         </div>
 
         {/* ── CTA ── */}

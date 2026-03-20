@@ -2,8 +2,30 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { unstable_cache } from "next/cache";
+import fs from "fs";
+import path from "path";
 import type { PhraseResult, AnalysisResult } from "@/lib/types";
+import { DEV_TEST_VIDEO_ID } from "@/lib/settings";
 export type { ExpressionType, PhraseResult, AnalysisResult } from "@/lib/types";
+
+function loadMockTranscript(): string {
+  const filePath = path.join(process.cwd(), "data", "mock-transcript.json");
+  const raw = JSON.parse(fs.readFileSync(filePath, "utf-8")) as { content: string };
+  return raw.content.replace(/\s{2,}/g, " ").slice(0, 8000);
+}
+
+// ─── Demo transcript for Developer Mode ────────────────────────────────────
+// Used when devMode=true to bypass Supadata API for testing Claude prompts.
+
+const DEMO_TRANSCRIPT = `I was completely caught off guard when my manager asked me to step up to the plate and take on the new project. At first, I wanted to back out because I had too much on my plate already. But she made it clear that this was a make-or-break moment for my career, and I couldn't afford to drop the ball.
+
+I decided to figure out a way to pull it off. I reached out to a few colleagues and asked them to pitch in. We burned the midnight oil for a couple of weeks trying to get everything sorted out. There were moments when things seemed to fall apart, but we always managed to get back on track.
+
+The hardest part was dealing with a stakeholder who kept moving the goalposts. Every time we thought we had nailed down the requirements, he would come up with new demands out of the blue. It was getting on everyone's nerves, but we had to grin and bear it.
+
+In the long run, the experience was a real eye-opener. I learned to roll with the punches and not get bogged down by setbacks. I'm glad I didn't throw in the towel when things got tough. It really paid off in the end.
+
+The key takeaway was that you have to be willing to go the extra mile if you want to stand out. You can't just sit on the fence when an opportunity comes your way. Sometimes you need to take the bull by the horns and make things happen.`.trim();
 
 const LEVEL_DESCRIPTIONS: Record<string, string> = {
   A1: "英語学習を始めたばかりの超入門者（TOEIC 〜225程度）",
@@ -144,6 +166,13 @@ async function callClaude(text: string, cefrLevel: string): Promise<ClaudeResult
 - 単純な単語や基礎表現（${cefrLevel}以下のレベル）は絶対に含めない
 - **8〜12個**を目安に、質を重視して厳選する
 
+## expression フィールドの表記ルール（必須）
+
+- 必ず辞書に載っている**原形（ベースフォーム）**で出力すること
+- 文脈上の目的語（someone / something / oneself 等）は**含めない**
+- 活用形（過去形・ing 形・三単現 -s 等）は原形に戻すこと
+- 例: 「lug something」→「lug」 ／ 「took off」→「take off」 ／ 「burned the midnight oil」→「burn the midnight oil」 ／ 「figuring out」→「figure out」
+
 ## テキスト
 ${snippet}
 
@@ -238,7 +267,8 @@ const cachedUrlAnalysis = unstable_cache(
 export async function analyzeContent(
   input: string,
   cefrLevel: string,
-  inputMode: "url" | "text"
+  inputMode: "url" | "text",
+  devMode?: boolean
 ): Promise<
   { success: true; data: AnalysisResult } | { success: false; error: string }
 > {
@@ -246,6 +276,25 @@ export async function analyzeContent(
     if (!input.trim()) return { success: false, error: "入力が空です" };
     if (!process.env.ANTHROPIC_API_KEY)
       return { success: false, error: "APIキーが設定されていません。.env.local を確認してください。" };
+
+    // Developer mode: skip Supadata API, load transcript from local file or demo text
+    if (devMode && inputMode === "url") {
+      const isTestUrl = input.trim().includes(DEV_TEST_VIDEO_ID);
+      const transcript = isTestUrl ? loadMockTranscript() : DEMO_TRANSCRIPT;
+      // Always call Claude directly — bypass unstable_cache so every submit tests the prompt
+      const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(transcript, cefrLevel);
+      return {
+        success: true,
+        data: {
+          phrases,
+          source_type: "youtube",
+          total_count: phrases.length,
+          source_text: transcript,
+          full_script_with_highlight: fullScriptWithHighlight,
+          overall_level: overallLevel,
+        },
+      };
+    }
 
     if (inputMode === "text") {
       const text = input.trim();

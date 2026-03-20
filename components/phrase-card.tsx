@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
+import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import type { PhraseResult } from "@/lib/types";
 
 // ─── Web Speech API types ────────────────────────────────────────────────────
@@ -187,9 +188,10 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
       return;
     }
     const utterance = new SpeechSynthesisUtterance(phrase.expression);
-    utterance.lang = "en-US";
+    const { accent } = getSettings();
+    utterance.lang = ACCENT_LANG[accent];
     utterance.rate = 0.82;
-    const voice = getBestEnglishVoice();
+    const voice = getBestEnglishVoice(accent);
     if (voice) utterance.voice = voice;
     utterance.onend  = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
@@ -201,9 +203,10 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(phrase.example);
-    utterance.lang = "en-US";
+    const { accent } = getSettings();
+    utterance.lang = ACCENT_LANG[accent];
     utterance.rate = 0.88;
-    const voice = getBestEnglishVoice();
+    const voice = getBestEnglishVoice(accent);
     if (voice) utterance.voice = voice;
     window.speechSynthesis.speak(utterance);
   }, [phrase.example]);

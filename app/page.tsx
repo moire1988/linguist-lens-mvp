@@ -17,6 +17,8 @@ import {
   Tv,
   Check,
   BookMarked,
+  Settings,
+  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -33,6 +35,14 @@ import { PhraseCard } from "@/components/phrase-card";
 import { ScriptViewer } from "@/components/script-viewer";
 import { AdPlaceholder } from "@/components/ad-placeholder";
 import { MeshBackground } from "@/components/mesh-background";
+import { SettingsModal } from "@/components/settings-modal";
+import { getSettings, DEV_TEST_URL } from "@/lib/settings";
+import {
+  saveAnalysis,
+  getSavedAnalyses,
+  getPendingRestore,
+  ANALYSIS_MAX_SLOTS,
+} from "@/lib/saved-analyses";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -140,12 +150,39 @@ export default function HomePage() {
   const [showPremium, setShowPremium] = useState(false);
   const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
+  const [showSettings, setShowSettings] = useState(false);
+  const [devMode, setDevMode] = useState(false);
+  const [analysisSaved, setAnalysisSaved] = useState(false);
+  const [savedAnalysisSlots, setSavedAnalysisSlots] = useState(0);
 
-  // 単語帳の件数・保存済みセット・残り回数をロード
+  // 単語帳の件数・保存済みセット・残り回数、設定をロード
   useEffect(() => {
     setVocabCount(getVocabularyCount());
     setSavedExpressions(new Set(getVocabulary().map((p) => p.expression.toLowerCase())));
     setDailyRemaining(getDailyRemaining());
+    const s = getSettings();
+    setSelectedLevel(s.defaultLevel);
+    setDevMode(s.devMode);
+    if (s.devMode) setUrl(DEV_TEST_URL);
+
+    // 解析結果ストックの件数を読み込む
+    const saved = getSavedAnalyses();
+    setSavedAnalysisSlots(saved.length);
+
+    // マイページからの復元チェック
+    const restoreId = getPendingRestore();
+    if (restoreId) {
+      const target = saved.find((a) => a.id === restoreId);
+      if (target) {
+        setResults(target.data);
+        setSelectedLevel(target.cefrLevel);
+        setSourceUrl(target.sourceUrl);
+        setInputMode(target.inputMode);
+        if (target.sourceUrl && target.inputMode === "url") setUrl(target.sourceUrl);
+        setActiveFilter("all");
+        setAnalysisSaved(true);
+      }
+    }
   }, []);
 
   const [isPending, startTransition] = useTransition();
@@ -181,10 +218,11 @@ export default function HomePage() {
     setAllSaved(false);
     setFromCache(false);
     setActiveFilter("all");
+    setAnalysisSaved(false);
     setSourceUrl(inputMode === "url" ? url : undefined);
 
-    // キャッシュチェック（URLモードのみ）
-    if (inputMode === "url" && url.trim()) {
+    // キャッシュチェック（URLモードのみ・devModeはスキップ）
+    if (inputMode === "url" && url.trim() && !devMode) {
       const cached = getCachedResult(url.trim(), selectedLevel);
       if (cached) {
         setResults(cached);
@@ -197,11 +235,11 @@ export default function HomePage() {
     }
 
     startTransition(async () => {
-      const result = await analyzeContent(inputValue, selectedLevel, inputMode);
+      const result = await analyzeContent(inputValue, selectedLevel, inputMode, devMode);
       if (result.success) {
         setResults(result.data);
-        // URLモードの結果をキャッシュ保存
-        if (inputMode === "url" && url.trim()) {
+        // URLモードの結果をキャッシュ保存（devModeはスキップ）
+        if (inputMode === "url" && url.trim() && !devMode) {
           setCachedResult(url.trim(), selectedLevel, result.data);
         }
         if (result.data.total_count === 0) {
@@ -211,7 +249,7 @@ export default function HomePage() {
         setError(result.error);
       }
     });
-  }, [inputValue, url, selectedLevel, inputMode]);
+  }, [inputValue, url, selectedLevel, inputMode, devMode]);
 
   // Sample video quick-submit (URL is passed directly, bypasses state timing)
   const handleQuickSubmit = useCallback(
@@ -223,23 +261,26 @@ export default function HomePage() {
       setAllSaved(false);
       setFromCache(false);
       setActiveFilter("all");
+      setAnalysisSaved(false);
       setSourceUrl(videoUrl);
 
-      const cached = getCachedResult(videoUrl, selectedLevel);
-      if (cached) {
-        setResults(cached);
-        setFromCache(true);
-        toast.success("キャッシュから読み込みました", {
-          description: "API呼び出しをスキップしました（7日間有効）",
-        });
-        return;
+      if (!devMode) {
+        const cached = getCachedResult(videoUrl, selectedLevel);
+        if (cached) {
+          setResults(cached);
+          setFromCache(true);
+          toast.success("キャッシュから読み込みました", {
+            description: "API呼び出しをスキップしました（7日間有効）",
+          });
+          return;
+        }
       }
 
       startTransition(async () => {
-        const result = await analyzeContent(videoUrl, selectedLevel, "url");
+        const result = await analyzeContent(videoUrl, selectedLevel, "url", devMode);
         if (result.success) {
           setResults(result.data);
-          setCachedResult(videoUrl, selectedLevel, result.data);
+          if (!devMode) setCachedResult(videoUrl, selectedLevel, result.data);
           if (result.data.total_count === 0) {
             setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
           }
@@ -248,7 +289,7 @@ export default function HomePage() {
         }
       });
     },
-    [selectedLevel]
+    [selectedLevel, devMode]
   );
 
   // Filtered results
@@ -299,6 +340,19 @@ export default function HomePage() {
     });
   }, [results, sourceUrl, allSaved]);
 
+  // 解析結果全体をストックに保存
+  const handleSaveAnalysis = useCallback(() => {
+    if (!results || analysisSaved) return;
+    const res = saveAnalysis(results, inputMode, selectedLevel, sourceUrl);
+    if (res.success) {
+      setAnalysisSaved(true);
+      setSavedAnalysisSlots((c) => c + 1);
+      toast.success("解析結果を保存しました", {
+        description: "マイページからいつでも復元できます",
+      });
+    }
+  }, [results, analysisSaved, inputMode, selectedLevel, sourceUrl]);
+
   // 個別保存（ScriptViewer / PhraseCard 共通）
   const handleSavePhrase = useCallback(
     (phrase: PhraseResult) => {
@@ -338,6 +392,16 @@ export default function HomePage() {
     <div className="min-h-screen relative" style={{ backgroundColor: "#f7f8ff" }}>
       <MeshBackground />
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => {
+            setShowSettings(false);
+            const s = getSettings();
+            setDevMode(s.devMode);
+            if (s.devMode) setUrl(DEV_TEST_URL);
+          }}
+        />
+      )}
       {/* ── Header ── */}
       <header className="border-b border-slate-100 bg-white/70 backdrop-blur-sm sticky top-0 z-10 relative">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
@@ -346,19 +410,33 @@ export default function HomePage() {
             <span className="font-bold text-slate-800 tracking-tight">
               LinguistLens
             </span>
-          </div>
-          <Link
-            href="/vocabulary"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-100 transition-colors"
-          >
-            <BookMarked className="h-3.5 w-3.5" />
-            マイ単語帳
-            {vocabCount > 0 && (
-              <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {vocabCount}
+            {devMode && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-600 border border-amber-200">
+                🛠️ DEV
               </span>
             )}
-          </Link>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSettings((v) => !v)}
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              title="設定"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+            <Link
+              href="/vocabulary"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-100 transition-colors"
+            >
+              <BookMarked className="h-3.5 w-3.5" />
+              マイ単語帳
+              {vocabCount > 0 && (
+                <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {vocabCount}
+                </span>
+              )}
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -713,29 +791,69 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* Save all to vocabulary */}
-              <button
-                onClick={handleSaveAll}
-                disabled={allSaved}
-                className={cn(
-                  "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
-                  allSaved
-                    ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
-                )}
-              >
-                {allSaved ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    全て保存済み
-                  </>
-                ) : (
-                  <>
-                    <BookmarkPlus className="h-4 w-4" />
-                    単語帳に全て保存
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Save analysis result */}
+                <div className="relative group">
+                  <button
+                    onClick={handleSaveAnalysis}
+                    disabled={analysisSaved || savedAnalysisSlots >= ANALYSIS_MAX_SLOTS}
+                    className={cn(
+                      "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
+                      analysisSaved
+                        ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                        : savedAnalysisSlots >= ANALYSIS_MAX_SLOTS
+                        ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-violet-200 hover:text-violet-600 hover:bg-violet-50"
+                    )}
+                  >
+                    {analysisSaved ? (
+                      <>
+                        <Check className="h-4 w-4" />
+                        結果を保存済み
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        この結果を保存
+                        <span className="text-[10px] font-bold opacity-60">
+                          {savedAnalysisSlots}/{ANALYSIS_MAX_SLOTS}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                  {/* Tooltip when full */}
+                  {!analysisSaved && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS && (
+                    <div className="absolute bottom-full right-0 mb-2 w-56 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 leading-snug">
+                      保存枠がいっぱいです。マイページから削除してください
+                      <div className="absolute top-full right-4 border-4 border-transparent border-t-slate-800" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Save all to vocabulary */}
+                <button
+                  onClick={handleSaveAll}
+                  disabled={allSaved}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
+                    allSaved
+                      ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
+                  )}
+                >
+                  {allSaved ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      全て保存済み
+                    </>
+                  ) : (
+                    <>
+                      <BookmarkPlus className="h-4 w-4" />
+                      単語帳に全て保存
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* ── Overall Level Badge ── */}
