@@ -19,6 +19,7 @@ import {
   BookMarked,
   Settings,
   Save,
+  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ import {
   type AnalysisResult,
   type ExpressionType,
 } from "@/app/actions/analyze";
+import { generateArticle } from "@/app/actions/generate-article";
 import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
 import type { PhraseResult } from "@/lib/types";
 import { getCachedResult, setCachedResult } from "@/lib/cache";
@@ -154,6 +156,7 @@ export default function HomePage() {
   const [devMode, setDevMode] = useState(false);
   const [analysisSaved, setAnalysisSaved] = useState(false);
   const [savedAnalysisSlots, setSavedAnalysisSlots] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // 単語帳の件数・保存済みセット・残り回数、設定をロード
   useEffect(() => {
@@ -352,6 +355,45 @@ export default function HomePage() {
       });
     }
   }, [results, analysisSaved, inputMode, selectedLevel, sourceUrl]);
+
+  // AI記事生成 → そのまま解析
+  const handleGenerateAndAnalyze = useCallback(async () => {
+    setIsGenerating(true);
+    setError(null);
+
+    const genResult = await generateArticle(selectedLevel);
+
+    if (!genResult.success) {
+      setIsGenerating(false);
+      setError(`記事の生成に失敗しました: ${genResult.error}`);
+      return;
+    }
+
+    // タイトル + 本文をテキストエリアに注入
+    const fullText = `${genResult.title}\n\n${genResult.body}`;
+    setTextInput(fullText);
+    setIsGenerating(false);
+
+    // すぐに解析を開始（state更新を待たず直接 fullText を渡す）
+    setResults(null);
+    setAllSaved(false);
+    setFromCache(false);
+    setActiveFilter("all");
+    setAnalysisSaved(false);
+    setSourceUrl(undefined);
+
+    startTransition(async () => {
+      const result = await analyzeContent(fullText, selectedLevel, "text", devMode);
+      if (result.success) {
+        setResults(result.data);
+        if (result.data.total_count === 0) {
+          setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
+        }
+      } else {
+        setError(result.error);
+      }
+    });
+  }, [selectedLevel, devMode]);
 
   // 個別保存（ScriptViewer / PhraseCard 共通）
   const handleSavePhrase = useCallback(
@@ -577,6 +619,31 @@ export default function HomePage() {
                 <p className="mt-1.5 text-xs text-slate-400 text-right">
                   {textInput.length} 文字
                 </p>
+                <div className="mt-3 flex flex-col items-start gap-1.5">
+                  <button
+                    onClick={handleGenerateAndAnalyze}
+                    disabled={isGenerating || isPending}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-sm font-semibold shadow-sm hover:from-violet-600 hover:to-indigo-600 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        面白い記事を執筆中...✍️
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="h-4 w-4" />
+                        AIに面白い記事を作ってもらう ✨
+                      </>
+                    )}
+                  </button>
+                  <p className="text-xs text-slate-400">
+                    ※ あなたが選択したレベル（<span className="font-semibold text-indigo-500">{selectedLevel}</span>）に合わせて生成されます
+                  </p>
+                </div>
               </div>
             )}
 

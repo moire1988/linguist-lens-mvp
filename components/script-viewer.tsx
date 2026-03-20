@@ -217,16 +217,70 @@ export function ScriptViewer({
     <>
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-8 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-sm font-bold text-slate-700">全文スクリプト</h2>
-            <span className="text-[11px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 font-medium">
-              {phrases.length} 語ハイライト済み
-            </span>
+        <div className="px-5 py-3.5 border-b border-slate-100">
+          {/* Row 1: title + badge (left) / collapse toggle (right) */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-sm font-bold text-slate-700">全文スクリプト</h2>
+              <span className="text-[11px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 font-medium">
+                {phrases.length} 語ハイライト済み
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Speed selector + TTS — PC only (hidden on SP) */}
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+                  {[0.5, 1.0, 1.5, 2.0].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => handleSpeedChange(s)}
+                      className={cn(
+                        "px-2 py-1 rounded-md text-xs font-medium transition-all",
+                        speed === s
+                          ? "bg-white text-indigo-600 shadow-sm font-semibold"
+                          : "text-slate-500 hover:text-slate-700"
+                      )}
+                    >
+                      {s}x
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleSpeak}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                    isSpeaking
+                      ? "bg-indigo-100 text-indigo-600 ring-2 ring-indigo-200"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  )}
+                >
+                  {isSpeaking ? (
+                    <VolumeX className="h-3.5 w-3.5" />
+                  ) : (
+                    <Volume2 className="h-3.5 w-3.5" />
+                  )}
+                  {isSpeaking ? "停止" : "読み上げ"}
+                </button>
+              </div>
+
+              {/* Collapse toggle */}
+              <button
+                onClick={() => setCollapsed((c) => !c)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+                title={collapsed ? "展開" : "折りたたむ"}
+              >
+                {collapsed ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Speed selector */}
+          {/* Row 2: Speed selector + TTS — SP only (hidden on PC) */}
+          <div className="flex sm:hidden items-center gap-2 mt-2.5">
             <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
               {[0.5, 1.0, 1.5, 2.0].map((s) => (
                 <button
@@ -243,8 +297,6 @@ export function ScriptViewer({
                 </button>
               ))}
             </div>
-
-            {/* TTS button */}
             <button
               onClick={handleSpeak}
               className={cn(
@@ -260,19 +312,6 @@ export function ScriptViewer({
                 <Volume2 className="h-3.5 w-3.5" />
               )}
               {isSpeaking ? "停止" : "読み上げ"}
-            </button>
-
-            {/* Collapse toggle */}
-            <button
-              onClick={() => setCollapsed((c) => !c)}
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
-              title={collapsed ? "展開" : "折りたたむ"}
-            >
-              {collapsed ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronUp className="h-4 w-4" />
-              )}
             </button>
           </div>
         </div>
