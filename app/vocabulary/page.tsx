@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   Search,
@@ -19,9 +20,14 @@ import {
   Brain,
   Mic,
   MicOff,
+  RotateCcw,
+  Youtube,
+  Globe,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
+import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import {
   getVocabulary,
   deletePhrase,
@@ -32,6 +38,13 @@ import {
 } from "@/lib/vocabulary";
 import { AdPlaceholder } from "@/components/ad-placeholder";
 import { CoachModal } from "@/components/coach-modal";
+import {
+  getSavedAnalyses,
+  deleteSavedAnalysis,
+  setPendingRestore,
+  ANALYSIS_MAX_SLOTS,
+  type SavedAnalysis,
+} from "@/lib/saved-analyses";
 
 const MIN_COACH_PHRASES = 5;
 
@@ -159,8 +172,9 @@ function VocabCard({
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-US"; u.rate = rate;
-    const voice = getBestEnglishVoice();
+    const { accent } = getSettings();
+    u.lang = ACCENT_LANG[accent]; u.rate = rate;
+    const voice = getBestEnglishVoice(accent);
     if (voice) u.voice = voice;
     window.speechSynthesis.speak(u);
   }, []);
@@ -499,7 +513,9 @@ function FlashCard({
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function VocabularyPage() {
+  const router = useRouter();
   const [vocabulary, setVocabulary] = useState<SavedPhrase[]>([]);
+  const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [cefrFilter, setCefrFilter] = useState<string>("all");
@@ -510,6 +526,7 @@ export default function VocabularyPage() {
   // Load from localStorage after mount
   useEffect(() => {
     setVocabulary(getVocabulary());
+    setSavedAnalyses(getSavedAnalyses());
   }, []);
 
   // Filtered vocabulary
@@ -546,6 +563,17 @@ export default function VocabularyPage() {
     setShowClearConfirm(false);
     toast.success("単語帳をすべて削除しました");
   }, []);
+
+  const handleDeleteAnalysis = useCallback((id: string) => {
+    deleteSavedAnalysis(id);
+    setSavedAnalyses(getSavedAnalyses());
+    toast.success("保存した解析結果を削除しました");
+  }, []);
+
+  const handleRestoreAnalysis = useCallback((id: string) => {
+    setPendingRestore(id);
+    router.push("/");
+  }, [router]);
 
   const handleExportCSV = useCallback(() => {
     if (vocabulary.length === 0) {
@@ -673,6 +701,83 @@ export default function VocabularyPage() {
                   ※ 5個以上の保存でAIコーチが解放されます（現在{vocabulary.length}個）
                 </p>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* ── 保存した解析結果 ── */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-bold text-slate-700">保存した解析結果</h2>
+            <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+              {savedAnalyses.length} / {ANALYSIS_MAX_SLOTS} 枠
+            </span>
+          </div>
+
+          {savedAnalyses.length === 0 ? (
+            <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl px-6 py-8 text-center">
+              <p className="text-sm text-slate-400">保存された解析結果はありません</p>
+              <p className="text-xs text-slate-300 mt-1">
+                解析結果画面の「この結果を保存」ボタンで最大3件保存できます
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {savedAnalyses.map((analysis) => {
+                const isYt = analysis.data.source_type === "youtube";
+                const isWeb = analysis.data.source_type === "web";
+                const truncUrl = analysis.sourceUrl
+                  ? analysis.sourceUrl.length > 52
+                    ? analysis.sourceUrl.slice(0, 49) + "…"
+                    : analysis.sourceUrl
+                  : null;
+                return (
+                  <div
+                    key={analysis.id}
+                    className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+                  >
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        {isYt && <Youtube className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />}
+                        {isWeb && <Globe className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />}
+                        {!isYt && !isWeb && <FileText className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />}
+                        <span className="text-xs font-medium text-slate-600 truncate">
+                          {truncUrl ?? "テキスト入力"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-400">
+                        <span className="font-bold text-indigo-600">{analysis.cefrLevel}</span>
+                        {analysis.data.overall_level && (
+                          <span>→ {analysis.data.overall_level}</span>
+                        )}
+                        <span>·</span>
+                        <span>{analysis.data.total_count}個の表現</span>
+                        <span>·</span>
+                        <span>{new Date(analysis.savedAt).toLocaleDateString("ja-JP")}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleRestoreAnalysis(analysis.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold border border-indigo-100 transition-colors"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        復元して表示
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAnalysis(analysis.id)}
+                        className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-300 hover:text-rose-400 transition-colors"
+                        title="削除"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

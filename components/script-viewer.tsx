@@ -10,6 +10,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
+import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import type { PhraseResult } from "@/lib/types";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -141,9 +142,10 @@ export function ScriptViewer({
       return;
     }
     const utt = new SpeechSynthesisUtterance(ttsText);
-    utt.lang = "en-US";
+    const { accent } = getSettings();
+    utt.lang = ACCENT_LANG[accent];
     utt.rate = speed;
-    const voice = getBestEnglishVoice();
+    const voice = getBestEnglishVoice(accent);
     if (voice) utt.voice = voice;
     utt.onend = () => setIsSpeaking(false);
     utt.onerror = () => setIsSpeaking(false);
