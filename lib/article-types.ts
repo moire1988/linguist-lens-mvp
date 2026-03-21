@@ -20,6 +20,7 @@ export interface Article {
   englishVariant:  EnglishVariant;
   keyword?:        string;   // SEO focus keyword (e.g. "Netflix slang English B2")
   category?:       string;   // Content category (e.g. "Pop Culture & Entertainment")
+  culturalTip?:    string;   // 文化・語学豆知識（日本語 2〜3文）
   contentHtml:     string;
   translationHtml: string;
   vocabularyList:  ArticleVocabItem[];

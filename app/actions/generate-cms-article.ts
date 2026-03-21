@@ -63,9 +63,11 @@ Do NOT use boring textbook topics.
 
 • Generate TWO titles — they must describe the SAME article in the SAME format:
   - titleEn: A natural, compelling English title that accurately reflects the article content.
-             Example: "The Secret Language of Silicon Valley"
-  - titleJa: A natural Japanese translation of titleEn, enhanced with the SEO keyword.
-             Example: "シリコンバレーの隠語から学ぶ！テック業界で使える英語表現"
+             Example: "The Hidden Cafés You Must Visit in Melbourne"
+  - titleJa: A beautiful, natural Japanese translation of titleEn — NOT an SEO-stuffed phrase.
+             Translate the meaning faithfully; feel free to paraphrase for elegance.
+             ❌ Bad: "メルボルンの隠れカフェで学ぶ英語表現" (SEO-stuffed, unnatural)
+             ✅ Good: "メルボルンで絶対に訪れたい隠れ家カフェ" (faithful, natural translation)
              Max 30 Japanese characters.
 
 • CRITICAL — Title/Content format consistency:
@@ -102,6 +104,20 @@ Rules for spans:
 Write a fluent, natural Japanese translation of the full article.
 Wrap each paragraph in <p>…</p> tags. Plain prose — no annotations, no vocabulary notes.
 
+═══ STEP 6 — CULTURAL TIP ══════════════════════════════════════════════
+Write a short Japanese cultural or linguistic tip (2–3 sentences) related to the article's topic or the ${variant} English variant.
+This is a "Did you know?" style insight that makes readers think "へぇ！" (Wow, I didn't know that!).
+
+Good examples:
+  • "メルボルンは世界有数のコーヒーの街として知られ、バリスタ文化が非常に発達しています。'flat white'はオーストラリア発祥のコーヒーで、現在は世界中のカフェメニューに登場しています。"
+  • "'grab a seat'という表現は、アメリカ英語よりもイギリス・オーストラリア英語でより日常的に使われます。フォーマルな場でも自然に使える便利なフレーズです。"
+  • "シリコンバレーでは'pivot'（方向転換）という言葉がビジネス文化に深く根付いており、失敗を恥とせず方向転換する姿勢がスタートアップ文化の核心です。"
+
+Rules:
+  • Write in natural Japanese (not translated English).
+  • Focus on culture, regional language use, etymology, or surprising facts.
+  • 2–3 sentences only. No bullet points, no lists.
+
 ═══ OUTPUT FORMAT (STRICT JSON) ════════════════════════════════════════
 Return ONLY a valid JSON object — no markdown fences, no preamble, absolutely nothing else.
 CRITICAL: All string values must be on a single line — use NO raw newlines inside JSON strings.
@@ -115,6 +131,7 @@ Use <p>…</p> tags (not \\n) to separate paragraphs in HTML fields.
   "slug": "seo-friendly-english-slug",
   "contentHtml": "<p>Article body with <span class=\\"vocabulary-highlight\\" data-word=\\"word\\" data-meaning=\\"意味\\" data-nuance=\\"ニュアンス\\" data-example=\\"Example sentence.\\">word</span> highlights.</p><p>Second paragraph...</p>",
   "translationHtml": "<p>第1段落の翻訳。</p><p>第2段落の翻訳。</p>",
+  "culturalTip": "記事のテーマや${variant}英語に関する文化・語学豆知識（日本語2〜3文）",
   "vocabularyList": [
     {
       "word": "base form",
@@ -171,6 +188,7 @@ interface RawArticleJson {
   slug?:            string;
   contentHtml?:     string;
   translationHtml?: string;
+  culturalTip?:     string;
   vocabularyList?:  ArticleVocabItem[];
 }
 
@@ -183,7 +201,7 @@ function parseAiResponse(raw: string): RawArticleJson {
 // ─── Server Action ───────────────────────────────────────────────────────────
 
 const SELECT_COLS =
-  "id, slug, title_en, title_ja, level, english_variant, keyword, category, content_html, translation_html, vocabulary_json, published_at, created_at";
+  "id, slug, title_en, title_ja, level, english_variant, keyword, category, cultural_tip, content_html, translation_html, vocabulary_json, published_at, created_at";
 
 export async function generateCmsArticle(
   level: string,
@@ -255,6 +273,7 @@ export async function generateCmsArticle(
     english_variant:  variant,
     keyword:          parsed.keyword?.trim() ?? null,
     category:         parsed.category?.trim() ?? null,
+    cultural_tip:     parsed.culturalTip?.trim() ?? null,
     content_html:     parsed.contentHtml.trim(),
     translation_html: parsed.translationHtml.trim(),
     vocabulary_json:  parsed.vocabularyList ?? [],
@@ -283,6 +302,7 @@ export async function generateCmsArticle(
     english_variant: EnglishVariant;
     keyword: string | null;
     category: string | null;
+    cultural_tip: string | null;
     content_html: string;
     translation_html: string;
     vocabulary_json: ArticleVocabItem[];
@@ -299,6 +319,7 @@ export async function generateCmsArticle(
     englishVariant:  row.english_variant,
     keyword:         row.keyword ?? undefined,
     category:        row.category ?? undefined,
+    culturalTip:     row.cultural_tip ?? undefined,
     contentHtml:     row.content_html,
     translationHtml: row.translation_html,
     vocabularyList:  row.vocabulary_json,
