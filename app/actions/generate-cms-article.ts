@@ -20,16 +20,23 @@ const LEVEL_DESCRIPTIONS: Record<string, string> = {
   C2: "near-native — full vocabulary range, subtle nuance, literary style acceptable",
 };
 
+// ─── Categories (picked by TypeScript, not AI) ───────────────────────────────
+
+const CATEGORIES = [
+  "Tech & Startup Culture (e.g., remote work, AI tools, silicon valley trends)",
+  "Pop Culture & Entertainment (e.g., movies, music, internet slang)",
+  "Psychology & Human Behavior (e.g., motivation, habits, communication)",
+  "Modern Daily Life & Relationships (e.g., dating, family dynamics, friendships)",
+  "Health, Wellness & Food (e.g., diet trends, mental health, workouts)",
+];
+
+function pickCategory(): string {
+  return CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+}
+
 // ─── English variant ─────────────────────────────────────────────────────────
 
 const VARIANTS: EnglishVariant[] = ["US", "UK", "AU", "common"];
-
-const VARIANT_INSTRUCTIONS: Record<EnglishVariant, string> = {
-  US:     "Use American English spelling and vocabulary throughout (e.g. color, favorite, apartment, elevator, vacation, trash, soccer).",
-  UK:     "Use British English spelling and vocabulary throughout (e.g. colour, favourite, flat, lift, holiday, rubbish, football).",
-  AU:     "Use Australian English spelling and vocabulary throughout (e.g. colour, favourite, arvo, biscuit, footpath, servo, ute).",
-  common: "Use internationally neutral English with no strong regional bias. Avoid clearly American, British, or Australian slang.",
-};
 
 function pickVariant(): EnglishVariant {
   return VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
@@ -37,37 +44,40 @@ function pickVariant(): EnglishVariant {
 
 // ─── Prompt ───────────────────────────────────────────────────────────────────
 
-function buildPrompt(level: string, variant: EnglishVariant): string {
+function buildPrompt(level: string, variant: EnglishVariant, selectedCategory: string): string {
   const levelDesc = LEVEL_DESCRIPTIONS[level] ?? "intermediate";
 
-  return `You are an expert ESL teacher and a top-tier SEO copywriter. Your task is to generate an engaging English learning article for Japanese learners.
+  return `You are an expert ESL teacher and a creative editor. Generate a highly engaging English learning article for Japanese learners.
 
 [Parameters]
+Category/Topic: ${selectedCategory}
 Target CEFR Level: ${level} — ${levelDesc}
-English Variant: ${variant} — ${VARIANT_INSTRUCTIONS[variant]}
+English Dialect/Variant: ${variant} (US, UK, or AU)
 
-═══ STEP 1 — CATEGORY & TOPIC SELECTION (Randomize) ═══════════════════
-Pick EXACTLY ONE category, then invent a specific, highly engaging topic within it.
-Do NOT use boring textbook topics.
+═══ CRITICAL RULES FOR DIALECT (${variant}) ════════════════════════════
+The ${variant} parameter dictates the vocabulary, spelling, idioms, and slang — NOT the geographical setting.
 
-• Tech & Startup             (e.g., Silicon Valley jargon, remote work culture, AI buzzwords)
-• Pop Culture & Entertainment (e.g., Netflix slang, music festival vibes, streaming wars)
-• Lifehacks & Psychology      (e.g., productivity myths, cognitive biases, sleep science)
-• Real Parenting & Family     (e.g., modern parenting in the UK/US, screen time battles)
-• Local Travel Secrets        (e.g., hidden cafés in Melbourne, pub etiquette in London)
+${variant === "AU" ? `Since AU is selected: the story does NOT need to be about Sydney or kangaroos. It can be about ANY topic in ${selectedCategory}, but MUST use Australian vocabulary (e.g., "mate", "heaps", "reckon", "arvo", "flat white" instead of latte) and AU/UK spelling (e.g., "colour", "realise").` : ""}
+${variant === "UK" ? `Since UK is selected: use words like "cheers", "mate", "rubbish", "queue", "knackered", "chuffed", "brilliant" etc. Use British spelling (e.g., "colour", "favourite", "realise"). The topic can be about anything — it does NOT have to be set in the UK.` : ""}
+${variant === "US" ? `Since US is selected: use standard American English vocabulary and spelling (e.g., "color", "favorite", "apartment", "trash", "vacation"). The topic can be about anything.` : ""}
+${variant === "common" ? `Since common is selected: use internationally neutral English with no strong regional bias. Avoid clearly American, British, or Australian slang.` : ""}
 
-═══ STEP 2 — SEO STRATEGY ══════════════════════════════════════════════
+═══ CRITICAL RULES FOR CONTENT & ORIGINALITY ═══════════════════════════
+DO NOT write clichéd topics like "Why your brain is sabotaging you" or "Secret cafes in Melbourne/London". Generate a completely fresh, highly specific, and unique topic based on the category: ${selectedCategory}.
+
+The article must sound natural, modern, and engaging — like a real magazine piece, not a textbook.
+
+═══ STEP 1 — SEO STRATEGY ══════════════════════════════════════════════
 • Generate a specific, medium-tail "Focus Keyword" in English.
-  Good: "Netflix slang English B2", "remote work idioms UK"
+  Good: "Australian slang remote work B2", "UK idioms modern relationships B1"
   Bad: too broad ("English words") or too narrow ("the exact phrase from one TV show").
 
 • Generate TWO titles — they must describe the SAME article in the SAME format:
   - titleEn: A natural, compelling English title that accurately reflects the article content.
-             Example: "The Hidden Cafés You Must Visit in Melbourne"
   - titleJa: A beautiful, natural Japanese translation of titleEn — NOT an SEO-stuffed phrase.
              Translate the meaning faithfully; feel free to paraphrase for elegance.
-             ❌ Bad: "メルボルンの隠れカフェで学ぶ英語表現" (SEO-stuffed, unnatural)
-             ✅ Good: "メルボルンで絶対に訪れたい隠れ家カフェ" (faithful, natural translation)
+             ❌ Bad: "オーストラリア英語で学ぶリモートワーク表現" (SEO-stuffed, unnatural)
+             ✅ Good: "在宅勤務でよく使うオーストラリア英語の口癖" (faithful, natural)
              Max 30 Japanese characters.
 
 • CRITICAL — Title/Content format consistency:
@@ -77,17 +87,17 @@ Do NOT use boring textbook topics.
   that don't match the body format.
 
 • The slug must be URL-friendly lowercase English, max 60 chars.
-  Example: "silicon-valley-slang-b2", "remote-work-idioms-uk"
+  Example: "australian-slang-remote-work-b2", "uk-dating-idioms-b1"
 
-═══ STEP 3 — CONTENT RULES ═════════════════════════════════════════════
+═══ STEP 2 — CONTENT RULES ═════════════════════════════════════════════
 1. Word count: 250–350 words of English body text.
 2. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST precisely match ${level}.
-3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout.
+3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout — the dialect must be woven naturally into the content, not just mentioned once.
 4. Opening hook: The very first sentence must be a surprising fact, bold claim, or intriguing question.
 5. Style: Engaging magazine article — clear, accurate, enjoyable. Never mention CEFR levels, "English learners", or language study.
 
-═══ STEP 4 — VOCABULARY HIGHLIGHTS ════════════════════════════════════
-Select 5–7 key phrasal verbs, idioms, or collocations that are genuinely useful for ${level} learners.
+═══ STEP 3 — VOCABULARY HIGHLIGHTS ════════════════════════════════════
+Select exactly 5 phrasal verbs, idioms, or collocations that strongly reflect the ${variant} dialect and target ${level} learners.
 Wrap each one inside the article text in EXACTLY this span format:
 
   <span class="vocabulary-highlight" data-word="BASE_FORM" data-meaning="日本語訳" data-nuance="ニュアンス解説（1文）" data-example="Short new example sentence.">word as it appears in article</span>
@@ -100,22 +110,22 @@ Rules for spans:
   • Double quotes for ALL attribute values. Never use single quotes inside attributes.
   • Do NOT nest spans.
 
-═══ STEP 5 — JAPANESE TRANSLATION ═════════════════════════════════════
+═══ STEP 4 — JAPANESE TRANSLATION ═════════════════════════════════════
 Write a fluent, natural Japanese translation of the full article.
 Wrap each paragraph in <p>…</p> tags. Plain prose — no annotations, no vocabulary notes.
 
-═══ STEP 6 — CULTURAL TIP ══════════════════════════════════════════════
-Write a short Japanese cultural or linguistic tip (2–3 sentences) related to the article's topic or the ${variant} English variant.
-This is a "Did you know?" style insight that makes readers think "へぇ！" (Wow, I didn't know that!).
+═══ STEP 5 — CULTURAL TIP ══════════════════════════════════════════════
+Explain ONE specific word or cultural nuance used in the article that relates to the ${variant} dialect.
+This should make readers think "へぇ！そうなんだ！" (Wow, I didn't know that!).
 
-Good examples:
-  • "メルボルンは世界有数のコーヒーの街として知られ、バリスタ文化が非常に発達しています。'flat white'はオーストラリア発祥のコーヒーで、現在は世界中のカフェメニューに登場しています。"
-  • "'grab a seat'という表現は、アメリカ英語よりもイギリス・オーストラリア英語でより日常的に使われます。フォーマルな場でも自然に使える便利なフレーズです。"
-  • "シリコンバレーでは'pivot'（方向転換）という言葉がビジネス文化に深く根付いており、失敗を恥とせず方向転換する姿勢がスタートアップ文化の核心です。"
+Good examples (dialect-focused):
+  • "オーストラリアでは、'a lot'の代わりに'heaps'がよく使われます。「Heaps of people showed up」のように日常会話でごく自然に使われる表現です。"
+  • "イギリス英語では、'knackered'は「へとへとに疲れた」という意味で使われます。'tired'よりも感情がこもった表現で、ネイティブが日常的によく口にする言葉です。"
+  • "アメリカ英語の'reach out'は元々ビジネス用語でしたが、今では「連絡する」という意味で日常会話にも定着しています。"
 
 Rules:
   • Write in natural Japanese (not translated English).
-  • Focus on culture, regional language use, etymology, or surprising facts.
+  • Focus specifically on a ${variant} word, phrase, spelling difference, or cultural nuance from the article text.
   • 2–3 sentences only. No bullet points, no lists.
 
 ═══ OUTPUT FORMAT (STRICT JSON) ════════════════════════════════════════
@@ -125,7 +135,7 @@ Use <p>…</p> tags (not \\n) to separate paragraphs in HTML fields.
 
 {
   "keyword": "medium-tail SEO focus keyword in English",
-  "category": "Exact category name from the list in Step 1",
+  "category": "${selectedCategory}",
   "titleEn": "Natural English title matching the article format",
   "titleJa": "日本語SEOタイトル（最大30文字）",
   "slug": "seo-friendly-english-slug",
@@ -252,7 +262,8 @@ export async function generateCmsArticle(
     return { success: false, error: "ANTHROPIC_API_KEY が設定されていません" };
   }
 
-  const variant = pickVariant();
+  const variant          = pickVariant();
+  const selectedCategory = pickCategory();
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -261,7 +272,7 @@ export async function generateCmsArticle(
     const response = await anthropic.messages.create({
       model:      "claude-sonnet-4-6",
       max_tokens: 4096,
-      messages:   [{ role: "user", content: buildPrompt(level, variant) }],
+      messages:   [{ role: "user", content: buildPrompt(level, variant, selectedCategory) }],
     });
     raw = response.content[0].type === "text" ? response.content[0].text.trim() : "";
   } catch (err) {
