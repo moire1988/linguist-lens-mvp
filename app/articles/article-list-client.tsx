@@ -28,8 +28,55 @@ const VARIANT_LABEL: Record<EnglishVariant, string> = {
   US: "🇺🇸 US", UK: "🇬🇧 UK", AU: "🇦🇺 AU", common: "🌐 共通",
 };
 
+// カテゴリの短縮表示名
+const CATEGORY_SHORT: Record<string, string> = {
+  "Tech & Startup":              "Tech",
+  "Pop Culture & Entertainment": "Pop Culture",
+  "Lifehacks & Psychology":      "Lifehacks",
+  "Real Parenting & Family":     "Parenting",
+  "Local Travel Secrets":        "Travel",
+};
+
 const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
 const VARIANTS: EnglishVariant[] = ["US", "UK", "AU", "common"];
+
+// ─── Filter row ───────────────────────────────────────────────────────────────
+
+function FilterRow({
+  label,
+  options,
+  active,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  active: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-widest pt-1.5 w-12 shrink-0">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "px-2.5 py-1 rounded-lg text-xs font-medium transition-all",
+              active === opt.value
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ─── Article card ─────────────────────────────────────────────────────────────
 
@@ -39,7 +86,9 @@ function ArticleCard({ article }: { article: ArticleSummary }) {
     : null;
   const cefrStyle = CEFR_STYLE[article.level] ?? CEFR_STYLE.B2;
   const dateStr = article.publishedAt
-    ? new Date(article.publishedAt).toLocaleDateString("ja-JP", { year: "numeric", month: "numeric", day: "numeric" })
+    ? new Date(article.publishedAt).toLocaleDateString("ja-JP", {
+        year: "numeric", month: "numeric", day: "numeric",
+      })
     : "";
 
   return (
@@ -71,78 +120,61 @@ function ArticleCard({ article }: { article: ArticleSummary }) {
   );
 }
 
-// ─── Filter pills ─────────────────────────────────────────────────────────────
-
-function FilterPills<T extends string>({
-  options,
-  active,
-  onChange,
-}: {
-  options: { value: T; label: string; count: number }[];
-  active: T;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
-            active === opt.value
-              ? "bg-indigo-600 text-white border-indigo-600"
-              : "bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600"
-          )}
-        >
-          {opt.label}
-          <span className={cn("ml-1.5 font-bold", active === opt.value ? "text-indigo-200" : "text-slate-400")}>
-            {opt.count}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ArticleListClient({ articles }: { articles: ArticleSummary[] }) {
-  const [levelFilter, setLevelFilter] = useState<string>("all");
-  const [variantFilter, setVariantFilter] = useState<string>("all");
+  const [levelFilter, setLevelFilter]    = useState("all");
+  const [variantFilter, setVariantFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   const filtered = articles.filter((a) => {
-    if (levelFilter !== "all" && a.level !== levelFilter) return false;
-    if (variantFilter !== "all" && a.englishVariant !== variantFilter) return false;
+    if (levelFilter    !== "all" && a.level           !== levelFilter)    return false;
+    if (variantFilter  !== "all" && a.englishVariant  !== variantFilter)  return false;
+    if (categoryFilter !== "all" && (a.category ?? "") !== categoryFilter) return false;
     return true;
   });
 
-  const levelOptions = [
-    { value: "all", label: "すべて", count: articles.length },
-    ...LEVELS
-      .filter((l) => articles.some((a) => a.level === l))
-      .map((l) => ({ value: l, label: l, count: articles.filter((a) => a.level === l).length })),
-  ] as { value: string; label: string; count: number }[];
+  const hasFilter = levelFilter !== "all" || variantFilter !== "all" || categoryFilter !== "all";
 
-  const variantOptions = [
-    { value: "all", label: "すべて", count: articles.length },
-    ...VARIANTS
-      .filter((v) => articles.some((a) => a.englishVariant === v))
-      .map((v) => ({ value: v, label: VARIANT_LABEL[v], count: articles.filter((a) => a.englishVariant === v).length })),
-  ] as { value: string; label: string; count: number }[];
+  // 存在するカテゴリのみ表示
+  const existingCategories = Object.keys(CATEGORY_SHORT).filter((c) =>
+    articles.some((a) => a.category === c)
+  );
+
+  const levelOptions    = [{ value: "all", label: "すべて" }, ...LEVELS.filter((l) => articles.some((a) => a.level === l)).map((l) => ({ value: l, label: l }))];
+  const variantOptions  = [{ value: "all", label: "すべて" }, ...VARIANTS.filter((v) => articles.some((a) => a.englishVariant === v)).map((v) => ({ value: v, label: VARIANT_LABEL[v] }))];
+  const categoryOptions = [{ value: "all", label: "すべて" }, ...existingCategories.map((c) => ({ value: c, label: CATEGORY_SHORT[c] ?? c }))];
 
   return (
     <>
-      {/* Filters */}
-      <div className="space-y-3 mb-6">
-        <FilterPills options={levelOptions} active={levelFilter} onChange={setLevelFilter} />
-        <FilterPills options={variantOptions} active={variantFilter} onChange={setVariantFilter} />
+      {/* Filter panel */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 space-y-3">
+        <FilterRow label="レベル"   options={levelOptions}    active={levelFilter}    onChange={setLevelFilter}    />
+        <FilterRow label="言語"     options={variantOptions}  active={variantFilter}  onChange={setVariantFilter}  />
+        {existingCategories.length > 0 && (
+          <FilterRow label="カテゴリ" options={categoryOptions} active={categoryFilter} onChange={setCategoryFilter} />
+        )}
+
+        {/* Active filter count + reset */}
+        {hasFilter && (
+          <div className="pt-1 flex items-center justify-between">
+            <span className="text-[10px] font-mono text-slate-400">
+              {filtered.length} / {articles.length} 件
+            </span>
+            <button
+              onClick={() => { setLevelFilter("all"); setVariantFilter("all"); setCategoryFilter("all"); }}
+              className="text-[10px] font-mono text-indigo-400 hover:text-indigo-600 transition-colors underline underline-offset-2"
+            >
+              フィルターをリセット
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Count */}
-      <p className="text-[10px] font-mono text-slate-400 mb-3">
-        {filtered.length} / {articles.length} articles
-      </p>
+      {/* Count (no filter active) */}
+      {!hasFilter && (
+        <p className="text-[10px] font-mono text-slate-400 mb-3">{articles.length} articles</p>
+      )}
 
       {/* List */}
       {filtered.length === 0 ? (
