@@ -185,13 +185,21 @@ export default function AdminPage() {
           </div>
         }
         right={
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            トップへ
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/admin/approvals")}
+              className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
+            >
+              承認キュー
+            </button>
+            <button
+              onClick={() => router.push("/")}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 transition-colors"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              トップへ
+            </button>
+          </div>
         }
       />
 

@@ -90,6 +90,56 @@ export async function getAllPublishedArticles(): Promise<ArticleSummary[]> {
 }
 
 /**
+ * 関連記事: 同じレベルで現在記事を除いた公開済み記事を返す。
+ * 同カテゴリを優先して最大 limit 件返す。
+ */
+export async function getRelatedArticles(
+  currentSlug: string,
+  level: string,
+  category: string | undefined,
+  limit = 3
+): Promise<ArticleSummary[]> {
+  const { data, error } = await supabase
+    .from("articles")
+    .select("id, slug, title_en, title_ja, level, english_variant, keyword, category, published_at, created_at")
+    .eq("level", level)
+    .neq("slug", currentSlug)
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(12);
+
+  if (error || !data) return [];
+
+  const articles = (data as {
+    id: string; slug: string; title_en: string; title_ja: string | null;
+    level: string; english_variant: EnglishVariant; keyword: string | null; category: string | null;
+    published_at: string | null; created_at: string;
+  }[]).map((row) => ({
+    id:             row.id,
+    slug:           row.slug,
+    titleEn:        row.title_en,
+    titleJa:        row.title_ja ?? undefined,
+    level:          row.level,
+    englishVariant: row.english_variant ?? "common",
+    keyword:        row.keyword ?? undefined,
+    category:       row.category ?? undefined,
+    publishedAt:    row.published_at,
+    createdAt:      row.created_at,
+  }));
+
+  // 同カテゴリを先頭に
+  if (category) {
+    articles.sort((a, b) => {
+      const aMatch = a.category === category ? 0 : 1;
+      const bMatch = b.category === category ? 0 : 1;
+      return aMatch - bMatch;
+    });
+  }
+
+  return articles.slice(0, limit);
+}
+
+/**
  * サイトマップ用: 公開済み記事の slug / created_at 一覧を返す。
  */
 export async function getAllPublishedArticleSlugs(): Promise<

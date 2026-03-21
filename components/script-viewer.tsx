@@ -16,6 +16,7 @@ import { cn, getBestEnglishVoice } from "@/lib/utils";
 import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import type { PhraseResult } from "@/lib/types";
 import { translateTranscript } from "@/app/actions/translate";
+import { ProWaitlistModal } from "@/components/pro-waitlist-modal";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,8 @@ interface ScriptViewerProps {
   onSave: (phrase: PhraseResult) => void;
   /** Show "日本語に翻訳" button at the bottom of the transcript */
   showTranslate?: boolean;
+  /** Pro plan flag — false (default) shows the waitlist modal instead of calling the API */
+  isPro?: boolean;
 }
 
 // ─── Sanitizer ───────────────────────────────────────────────────────────────
@@ -109,12 +112,14 @@ export function ScriptViewer({
   savedExpressions,
   onSave,
   showTranslate = false,
+  isPro = false,
 }: ScriptViewerProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speed, setSpeed] = useState(1.0);
   const [collapsed, setCollapsed] = useState(false);
   const [translation, setTranslation] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
   const [tooltip, setTooltip] = useState<{
     phrase: PhraseResult;
     x: number;
@@ -176,13 +181,17 @@ export function ScriptViewer({
   // ─── Translation ───────────────────────────────────────────────────────
 
   const handleTranslate = useCallback(async () => {
+    if (!isPro) {
+      setShowProModal(true);
+      return;
+    }
     setIsTranslating(true);
     const result = await translateTranscript(ttsText);
     setIsTranslating(false);
     if (result.success && result.translation) {
       setTranslation(result.translation);
     }
-  }, [ttsText]);
+  }, [ttsText, isPro]);
 
   // ─── Tooltip via event delegation ──────────────────────────────────────
 
@@ -411,6 +420,11 @@ export function ScriptViewer({
           </>
         )}
       </div>
+
+      {/* Pro waitlist modal */}
+      {showProModal && (
+        <ProWaitlistModal onClose={() => setShowProModal(false)} />
+      )}
 
       {/* Hover tooltip (fixed position) */}
       {tooltip && (
