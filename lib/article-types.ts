@@ -14,7 +14,8 @@ export type EnglishVariant = "US" | "UK" | "AU" | "common";
 export interface Article {
   id:              string;
   slug:            string;
-  title:           string;
+  titleEn:         string;   // English title — displayed as <h1>
+  titleJa?:        string;   // Japanese SEO title — used in <title> tag and as subtitle
   level:           string;
   englishVariant:  EnglishVariant;
   keyword?:        string;   // SEO focus keyword (e.g. "Netflix slang English B2")

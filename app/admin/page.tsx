@@ -73,7 +73,7 @@ export default function AdminPage() {
       return;
     }
 
-    setGeneratedResult({ title: result.article.title, slug: result.article.slug });
+    setGeneratedResult({ title: result.article.titleEn, slug: result.article.slug });
     setArticles((prev) => [result.article, ...prev]);
     toast.success("記事を生成しました");
   };
@@ -104,7 +104,7 @@ export default function AdminPage() {
   // ── Delete ─────────────────────────────────────────────────────────────────
 
   const handleDelete = async (article: Article) => {
-    if (!confirm(`「${article.title}」を削除しますか？`)) return;
+    if (!confirm(`「${article.titleEn}」を削除しますか？`)) return;
     setLoadingId(article.id);
     const result = await deleteAdminArticle(article.id);
     setLoadingId(null);
@@ -277,9 +277,14 @@ export default function AdminPage() {
                             })}
                           </span>
                         </div>
-                        <p className="text-sm font-medium text-slate-800 leading-snug truncate">
-                          {article.title}
+                        <p className="text-sm font-medium text-slate-800 leading-snug truncate font-mono">
+                          {article.titleEn}
                         </p>
+                        {article.titleJa && (
+                          <p className="text-xs text-slate-500 leading-snug truncate mt-0.5">
+                            {article.titleJa}
+                          </p>
+                        )}
                         {(article.category || article.keyword) && (
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {article.category && (

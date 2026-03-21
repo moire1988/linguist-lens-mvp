@@ -8,7 +8,8 @@ import type { Article, ArticleVocabItem, EnglishVariant } from "@/lib/article-ty
 interface ArticleRow {
   id:               string;
   slug:             string;
-  title:            string;
+  title_en:         string;
+  title_ja:         string | null;
   level:            string;
   english_variant:  EnglishVariant;
   keyword:          string | null;
@@ -24,7 +25,8 @@ function rowToArticle(row: ArticleRow): Article {
   return {
     id:              row.id,
     slug:            row.slug,
-    title:           row.title,
+    titleEn:         row.title_en,
+    titleJa:         row.title_ja ?? undefined,
     level:           row.level,
     englishVariant:  row.english_variant ?? "common",
     keyword:         row.keyword ?? undefined,
@@ -44,7 +46,7 @@ export async function getAdminArticles(): Promise<Article[]> {
     const db = createAdminClient();
     const { data, error } = await db
       .from("articles")
-      .select("id, slug, title, level, english_variant, keyword, category, content_html, translation_html, vocabulary_json, published_at, created_at")
+      .select("id, slug, title_en, title_ja, level, english_variant, keyword, category, content_html, translation_html, vocabulary_json, published_at, created_at")
       .order("created_at", { ascending: false });
 
     if (error || !data) return [];
