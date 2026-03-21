@@ -7,7 +7,6 @@ import {
   Search,
   Youtube,
   Globe,
-  BookOpen,
   Sparkles,
   FileText,
   Loader2,
@@ -21,6 +20,10 @@ import {
   Save,
   Wand2,
 } from "lucide-react";
+import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
+import { insertDbAnalysis } from "@/lib/db/analyses";
+import { savePublicAnalysis } from "@/app/actions/save-public-analysis";
+import { Rocket, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -36,8 +39,9 @@ import { PremiumModal } from "@/components/premium-modal";
 import { PhraseCard } from "@/components/phrase-card";
 import { ScriptViewer } from "@/components/script-viewer";
 import { AdPlaceholder } from "@/components/ad-placeholder";
-import { MeshBackground } from "@/components/mesh-background";
 import { SettingsModal } from "@/components/settings-modal";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader, HeaderLogo } from "@/components/site-header";
 import { getSettings, DEV_TEST_URL } from "@/lib/settings";
 import {
   saveAnalysis,
@@ -152,11 +156,19 @@ export default function HomePage() {
   const [showPremium, setShowPremium] = useState(false);
   const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
+  const { isSignedIn, userId, getToken } = useAuth();
+  const { openSignIn } = useClerk();
   const [showSettings, setShowSettings] = useState(false);
   const [devMode, setDevMode] = useState(false);
   const [analysisSaved, setAnalysisSaved] = useState(false);
   const [savedAnalysisSlots, setSavedAnalysisSlots] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [publicSaveUrl, setPublicSaveUrl] = useState<string | null>(null);
+  const [isPublicSaving, setIsPublicSaving] = useState(false);
+
+  // 管理者かつ devMode ON の場合のみ公開保存ボタンを表示
+  const isAdmin = isSignedIn && userId === process.env.NEXT_PUBLIC_ADMIN_USER_ID;
+  const showPublicSaveButton = isAdmin && devMode;
 
   // 単語帳の件数・保存済みセット・残り回数、設定をロード
   useEffect(() => {
@@ -222,6 +234,7 @@ export default function HomePage() {
     setFromCache(false);
     setActiveFilter("all");
     setAnalysisSaved(false);
+    setPublicSaveUrl(null);
     setSourceUrl(inputMode === "url" ? url : undefined);
 
     // キャッシュチェック（URLモードのみ・devModeはスキップ）
@@ -265,6 +278,7 @@ export default function HomePage() {
       setFromCache(false);
       setActiveFilter("all");
       setAnalysisSaved(false);
+    setPublicSaveUrl(null);
       setSourceUrl(videoUrl);
 
       if (!devMode) {
@@ -344,24 +358,70 @@ export default function HomePage() {
   }, [results, sourceUrl, allSaved]);
 
   // 解析結果全体をストックに保存
-  const handleSaveAnalysis = useCallback(() => {
+  const handleSaveAnalysis = useCallback(async () => {
     if (!results || analysisSaved) return;
-    const res = saveAnalysis(results, inputMode, selectedLevel, sourceUrl);
-    if (res.success) {
-      setAnalysisSaved(true);
-      setSavedAnalysisSlots((c) => c + 1);
-      toast.success("解析結果を保存しました", {
-        description: "マイページからいつでも復元できます",
+
+    if (isSignedIn && userId) {
+      // ログイン済み → Supabase に保存（件数制限なし）
+      const token = await getToken({ template: "supabase" });
+      if (!token) return;
+      const id = await insertDbAnalysis(token, userId, {
+        data: results,
+        inputMode,
+        cefrLevel: selectedLevel,
+        sourceUrl,
       });
+      if (id) {
+        setAnalysisSaved(true);
+        toast.success("解析結果を保存しました", {
+          description: "マイページからいつでも復元できます",
+        });
+      }
+    } else {
+      // 未ログイン → localStorage に保存（3件制限あり）
+      const res = saveAnalysis(results, inputMode, selectedLevel, sourceUrl);
+      if (res.success) {
+        setAnalysisSaved(true);
+        setSavedAnalysisSlots((c) => c + 1);
+        toast.success("解析結果を保存しました", {
+          description: "マイページからいつでも復元できます",
+        });
+      }
     }
-  }, [results, analysisSaved, inputMode, selectedLevel, sourceUrl]);
+  }, [results, analysisSaved, inputMode, selectedLevel, sourceUrl, isSignedIn, userId, getToken]);
+
+  // 管理者専用: SEO用公開ページとして保存
+  const handleSavePublicAnalysis = useCallback(async () => {
+    if (!results || isPublicSaving) return;
+    setIsPublicSaving(true);
+    const res = await savePublicAnalysis({
+      data: results,
+      cefrLevel: selectedLevel,
+      sourceUrl,
+      inputMode,
+    });
+    setIsPublicSaving(false);
+    if (res.success) {
+      setPublicSaveUrl(res.shareUrl);
+      toast.success("公開ページを作成しました 🚀", {
+        description: res.shareUrl,
+        duration: 8000,
+        action: {
+          label: "開く",
+          onClick: () => window.open(res.shareUrl, "_blank"),
+        },
+      });
+    } else {
+      toast.error("公開保存に失敗しました", { description: res.error });
+    }
+  }, [results, isPublicSaving, selectedLevel, sourceUrl, inputMode]);
 
   // AI記事生成 → そのまま解析
   const handleGenerateAndAnalyze = useCallback(async () => {
     setIsGenerating(true);
     setError(null);
 
-    const genResult = await generateArticle(selectedLevel);
+    const genResult = await generateArticle(selectedLevel, getSettings().accent);
 
     if (!genResult.success) {
       setIsGenerating(false);
@@ -380,6 +440,7 @@ export default function HomePage() {
     setFromCache(false);
     setActiveFilter("all");
     setAnalysisSaved(false);
+    setPublicSaveUrl(null);
     setSourceUrl(undefined);
 
     startTransition(async () => {
@@ -431,8 +492,7 @@ export default function HomePage() {
   const hasContent = isPending || !!results || !!error;
 
   return (
-    <div className="min-h-screen relative" style={{ backgroundColor: "#f7f8ff" }}>
-      <MeshBackground />
+    <div className="min-h-screen relative">
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
       {showSettings && (
         <SettingsModal
@@ -444,21 +504,20 @@ export default function HomePage() {
           }}
         />
       )}
-      {/* ── Header ── */}
-      <header className="border-b border-slate-100 bg-white/70 backdrop-blur-sm sticky top-0 z-10 relative">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+      <SiteHeader
+        maxWidth="5xl"
+        left={
           <div className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-indigo-600" />
-            <span className="font-bold text-slate-800 tracking-tight">
-              LinguistLens
-            </span>
+            <HeaderLogo />
             {devMode && (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-600 border border-amber-200">
                 🛠️ DEV
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+        }
+        right={
+          <>
             <button
               onClick={() => setShowSettings((v) => !v)}
               className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
@@ -478,9 +537,19 @@ export default function HomePage() {
                 </span>
               )}
             </Link>
-          </div>
-        </div>
-      </header>
+            {isSignedIn ? (
+              <UserButton />
+            ) : (
+              <button
+                onClick={() => openSignIn()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors"
+              >
+                Sign In
+              </button>
+            )}
+          </>
+        }
+      />
 
       <main className="relative max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
         {/* ── Hero（常に表示） ── */}
@@ -492,7 +561,7 @@ export default function HomePage() {
             </span>
           </div>
           <h1 className={cn(
-            "font-extrabold text-slate-900 tracking-tight mb-4",
+            "font-black text-slate-900 tracking-tight mb-4",
             hasContent
               ? "text-2xl sm:text-3xl leading-snug"
               : "text-3xl sm:text-[2.75rem] leading-snug sm:leading-[1.35]"
@@ -519,7 +588,7 @@ export default function HomePage() {
             (isPending || results || error) && "mb-10"
           )}
         >
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-7">
+          <div className="bg-white rounded-2xl border border-purple-200/50 shadow-sm p-6 sm:p-7">
             {/* Mode toggle */}
             <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-5">
               <button
@@ -623,7 +692,7 @@ export default function HomePage() {
                   <button
                     onClick={handleGenerateAndAnalyze}
                     disabled={isGenerating || isPending}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-sm font-semibold shadow-sm hover:from-violet-600 hover:to-indigo-600 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-sm font-semibold shadow-sm hover:from-violet-600 hover:to-indigo-600 hover:shadow-[0_4px_18px_rgba(139,92,246,0.45)] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isGenerating ? (
                       <>
@@ -671,7 +740,7 @@ export default function HomePage() {
                       )}
                       <div
                         className={cn(
-                          "text-base font-extrabold leading-none mb-0.5",
+                          "text-base font-mono font-extrabold leading-none mb-0.5",
                           isSelected ? "text-indigo-700" : "text-slate-700"
                         )}
                       >
@@ -731,7 +800,7 @@ export default function HomePage() {
                 "w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl",
                 "font-semibold text-sm transition-all",
                 canSubmit && !isPending
-                  ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-md active:scale-[0.99]"
+                  ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)] active:scale-[0.99]"
                   : "bg-slate-100 text-slate-400 cursor-not-allowed"
               )}
             >
@@ -768,7 +837,7 @@ export default function HomePage() {
                 <Link
                   key={v.slug}
                   href={`/examples/${v.slug}`}
-                  className="flex flex-col items-center gap-1.5 p-3 bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/70 hover:shadow-sm transition-all text-center group"
+                  className="flex flex-col items-center gap-1.5 p-3 bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/60 hover:shadow-md hover:shadow-indigo-100/50 transition-all text-center group"
                 >
                   <span className="text-2xl leading-none">{v.emoji}</span>
                   <span className="text-xs font-semibold text-slate-700 group-hover:text-indigo-700 leading-tight transition-colors">
@@ -800,7 +869,7 @@ export default function HomePage() {
                 ) : (
                   <div
                     key={i}
-                    className="bg-white rounded-2xl border border-slate-200 p-5 animate-pulse"
+                    className="bg-white rounded-2xl border border-violet-100/60 p-5 animate-pulse"
                   >
                     <div className="flex gap-2 mb-3">
                       <div className="h-5 w-16 bg-slate-100 rounded-full" />
@@ -863,14 +932,14 @@ export default function HomePage() {
                 <div className="relative group">
                   <button
                     onClick={handleSaveAnalysis}
-                    disabled={analysisSaved || savedAnalysisSlots >= ANALYSIS_MAX_SLOTS}
+                    disabled={analysisSaved || (!isSignedIn && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS)}
                     className={cn(
                       "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
                       analysisSaved
                         ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                        : savedAnalysisSlots >= ANALYSIS_MAX_SLOTS
+                        : !isSignedIn && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS
                         ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
-                        : "bg-white text-slate-600 border-slate-200 hover:border-violet-200 hover:text-violet-600 hover:bg-violet-50"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50 hover:shadow-sm hover:shadow-violet-100"
                     )}
                   >
                     {analysisSaved ? (
@@ -882,20 +951,69 @@ export default function HomePage() {
                       <>
                         <Save className="h-4 w-4" />
                         この結果を保存
-                        <span className="text-[10px] font-bold opacity-60">
-                          {savedAnalysisSlots}/{ANALYSIS_MAX_SLOTS}
-                        </span>
+                        {!isSignedIn && (
+                          <span className="text-[10px] font-bold opacity-60">
+                            {savedAnalysisSlots}/{ANALYSIS_MAX_SLOTS}
+                          </span>
+                        )}
                       </>
                     )}
                   </button>
-                  {/* Tooltip when full */}
-                  {!analysisSaved && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS && (
+                  {/* Tooltip when full (未ログインのみ) */}
+                  {!isSignedIn && !analysisSaved && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS && (
                     <div className="absolute bottom-full right-0 mb-2 w-56 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 leading-snug">
                       保存枠がいっぱいです。マイページから削除してください
                       <div className="absolute top-full right-4 border-4 border-transparent border-t-slate-800" />
                     </div>
                   )}
                 </div>
+
+                {/* 管理者専用: SEO公開保存ボタン */}
+                {showPublicSaveButton && results && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handleSavePublicAnalysis}
+                      disabled={isPublicSaving || !!publicSaveUrl}
+                      className={cn(
+                        "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
+                        publicSaveUrl
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                          : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                      )}
+                    >
+                      {isPublicSaving ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                          </svg>
+                          保存中...
+                        </>
+                      ) : publicSaveUrl ? (
+                        <>
+                          <Check className="h-4 w-4" />
+                          公開済み
+                        </>
+                      ) : (
+                        <>
+                          <Rocket className="h-4 w-4" />
+                          SEO用公開ページとして保存
+                        </>
+                      )}
+                    </button>
+                    {publicSaveUrl && (
+                      <a
+                        href={publicSaveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-2 py-2 rounded-xl text-xs text-indigo-600 hover:bg-indigo-50 border border-indigo-100 transition-colors"
+                        title={publicSaveUrl}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
+                )}
 
                 {/* Save all to vocabulary */}
                 <button
@@ -905,7 +1023,7 @@ export default function HomePage() {
                     "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
                     allSaved
                       ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                      : "bg-white text-slate-600 border-slate-200 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm hover:shadow-indigo-100"
                   )}
                 >
                   {allSaved ? (
@@ -1012,8 +1130,8 @@ export default function HomePage() {
                     className={cn(
                       "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
                       activeFilter === opt.value
-                        ? "bg-indigo-600 text-white border-indigo-600"
-                        : "bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-200"
+                        : "bg-white text-slate-500 border-slate-200 hover:border-indigo-400 hover:text-indigo-700 hover:shadow-sm"
                     )}
                   >
                     {opt.label}
@@ -1060,13 +1178,7 @@ export default function HomePage() {
       </main>
 
       {/* ── Footer ── */}
-      {!hasContent && (
-        <footer className="border-t border-slate-100 py-6 mt-4">
-          <p className="text-center text-xs text-slate-400">
-            © 2024 LinguistLens · Powered by Claude AI
-          </p>
-        </footer>
-      )}
+      {!hasContent && <SiteFooter />}
     </div>
   );
 }

@@ -30,6 +30,7 @@ export function saveSettings(patch: Partial<UserSettings>): void {
   if (typeof window === "undefined") return;
   const current = getSettings();
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...current, ...patch }));
+  window.dispatchEvent(new CustomEvent("ll-settings-changed"));
 }
 
 export const ACCENT_LANG: Record<Accent, string> = {

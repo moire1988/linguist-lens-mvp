@@ -41,39 +41,12 @@
   }
 }
 
-/* ─── Mesh-gradient blob drift animations ────────────────────────────────── */
-/* Each blob translates in a different direction/speed — no scale, no origin  */
 
-@keyframes drift-1 {
-  0%,  100% { transform: translate(  0px,    0px); }
-  25%        { transform: translate(280px, -190px); }
-  50%        { transform: translate(-170px,  250px); }
-  75%        { transform: translate(210px,  140px); }
-}
-@keyframes drift-2 {
-  0%,  100% { transform: translate(  0px,   0px); }
-  33%        { transform: translate(-260px, 185px); }
-  66%        { transform: translate( 215px,-210px); }
-}
-@keyframes drift-3 {
-  0%,  100% { transform: translate(  0px,   0px); }
-  40%        { transform: translate( 195px, 220px); }
-  80%        { transform: translate(-230px,-155px); }
-}
-@keyframes drift-4 {
-  0%,  100% { transform: translate(  0px,   0px); }
-  30%        { transform: translate(-195px,-240px); }
-  70%        { transform: translate( 235px, 175px); }
-}
-
-.drift-1 { animation: drift-1 12s ease-in-out infinite; will-change: transform; }
-.drift-2 { animation: drift-2 16s ease-in-out infinite; will-change: transform; }
-.drift-3 { animation: drift-3 14s ease-in-out infinite; will-change: transform; }
-.drift-4 { animation: drift-4 18s ease-in-out infinite; will-change: transform; }
-
-.bg-dot-grid {
-  background-image: radial-gradient(circle, rgba(99, 102, 241, 0.07) 1px, transparent 1px);
-  background-size: 28px 28px;
+.bg-grid-pattern {
+  background-image:
+    linear-gradient(rgba(99, 102, 241, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.055) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 /* ─── Transcript highlight ───────────────────────────────────────────────── */

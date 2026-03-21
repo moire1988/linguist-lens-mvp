@@ -185,9 +185,11 @@ ${snippet}
       "expression": "表現の基本形（例: give it a shot, end up -ing, talk oneself out of）",
       "type": "phrasal_verb | idiom | collocation | grammar_pattern",
       "context": "テキスト内での使用箇所（前後の文脈を含む1〜2文。原文を正確に引用）",
+      "context_translation": "context フィールドの自然な日本語訳（直訳でなく意訳）",
       "meaning_ja": "この文脈での自然な日本語訳（直訳でなく意訳）",
       "nuance": "なぜこの場面でこの表現が選ばれたか、語感・ニュアンス・使用場面の解説（2〜3文）",
       "example": "別のシチュエーションでの自然な使用例文（英語）",
+      "example_translation": "example フィールドの自然な日本語訳",
       "cefr_level": "A1 | A2 | B1 | B2 | C1 | C2",
       "why_hard_for_japanese": "日本人学習者がこの表現を能動的に使いこなすのが難しい理由（1〜2文）"
     }

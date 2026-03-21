@@ -8,9 +8,11 @@ export interface PhraseResult {
   expression: string;
   type: ExpressionType;
   context: string;
+  context_translation?: string;
   meaning_ja: string;
   nuance: string;
   example: string;
+  example_translation?: string;
   cefr_level: string;
   why_hard_for_japanese: string;
 }

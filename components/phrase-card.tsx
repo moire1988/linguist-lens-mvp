@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
 import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import type { PhraseResult } from "@/lib/types";
+import { TranslationAccordion } from "@/components/translation-accordion";
 
 // ─── Web Speech API types ────────────────────────────────────────────────────
 
@@ -259,22 +260,22 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col">
+    <div className="bg-white rounded-2xl border border-violet-100/60 shadow-sm hover:shadow-md hover:shadow-violet-100/50 hover:border-violet-200/80 transition-all duration-200 overflow-hidden flex flex-col">
       {/* ── Header ── */}
       <div className="p-5 flex-1">
         {/* Badges */}
         <div className="flex items-center gap-2 flex-wrap mb-2.5">
-          <span className={cn("text-xs font-semibold px-2.5 py-0.5 rounded-full border", typeConfig.bg, typeConfig.text, typeConfig.border)}>
+          <span className={cn("text-xs font-mono font-semibold px-2.5 py-0.5 rounded-full border", typeConfig.bg, typeConfig.text, typeConfig.border)}>
             {typeConfig.label}
           </span>
-          <span className={cn("text-xs font-bold px-2.5 py-0.5 rounded-full", cefrConfig.bg, cefrConfig.text)}>
+          <span className={cn("text-xs font-mono font-bold px-2.5 py-0.5 rounded-full", cefrConfig.bg, cefrConfig.text)}>
             {phrase.cefr_level}
           </span>
         </div>
 
         {/* Expression + TTS */}
         <div className="flex items-start gap-2 mb-3">
-          <h3 className="text-[1.35rem] font-bold text-slate-900 tracking-tight leading-tight flex-1">
+          <h3 className="text-[1.35rem] font-extrabold text-slate-900 tracking-tight leading-tight flex-1">
             {phrase.expression}
           </h3>
           <button
@@ -294,7 +295,12 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
         {/* Context */}
         <div className="flex gap-2 bg-slate-50 border border-slate-100 rounded-xl p-3 mb-4">
           <Quote className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-slate-500 leading-relaxed italic">{phrase.context}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-slate-500 leading-relaxed italic">{phrase.context}</p>
+            {phrase.context_translation && (
+              <TranslationAccordion text={phrase.context_translation} variant="slate" />
+            )}
+          </div>
         </div>
 
         {/* Meaning */}
@@ -342,6 +348,10 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
           </div>
 
           <p className="text-sm text-indigo-900 font-medium leading-relaxed">{phrase.example}</p>
+
+          {phrase.example_translation && (
+            <TranslationAccordion text={phrase.example_translation} variant="indigo" />
+          )}
 
           {/* Listening indicator */}
           {isListening && (
@@ -396,7 +406,7 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
             "w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-medium transition-all",
             saved
               ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
-              : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
+              : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm"
           )}
         >
           {saved ? (
