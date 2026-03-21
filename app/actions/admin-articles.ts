@@ -14,6 +14,7 @@ interface ArticleRow {
   english_variant:  EnglishVariant;
   keyword:          string | null;
   category:         string | null;
+  cultural_tip:     string | null;
   content_html:     string;
   translation_html: string;
   vocabulary_json:  ArticleVocabItem[];
@@ -31,6 +32,7 @@ function rowToArticle(row: ArticleRow): Article {
     englishVariant:  row.english_variant ?? "common",
     keyword:         row.keyword ?? undefined,
     category:        row.category ?? undefined,
+    culturalTip:     row.cultural_tip ?? undefined,
     contentHtml:     row.content_html,
     translationHtml: row.translation_html,
     vocabularyList:  row.vocabulary_json,
@@ -46,7 +48,7 @@ export async function getAdminArticles(): Promise<Article[]> {
     const db = createAdminClient();
     const { data, error } = await db
       .from("articles")
-      .select("id, slug, title_en, title_ja, level, english_variant, keyword, category, content_html, translation_html, vocabulary_json, published_at, created_at")
+      .select("id, slug, title_en, title_ja, level, english_variant, keyword, category, cultural_tip, content_html, translation_html, vocabulary_json, published_at, created_at")
       .order("created_at", { ascending: false });
 
     if (error || !data) return [];

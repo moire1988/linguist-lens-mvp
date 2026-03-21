@@ -122,6 +122,16 @@ export default async function ArticlePage({
           </section>
         )}
 
+        {/* Cultural Tip */}
+        {article.culturalTip && (
+          <section className="mb-10 bg-violet-50 border border-violet-200 rounded-2xl p-5 sm:p-6">
+            <h2 className="text-base font-bold text-violet-700 mb-3 flex items-center gap-2">
+              💡 豆知識（Cultural Tip）
+            </h2>
+            <p className="text-sm text-slate-700 leading-relaxed">{article.culturalTip}</p>
+          </section>
+        )}
+
         {/* Japanese translation */}
         <section className="mb-12 bg-slate-50 rounded-2xl border border-slate-200 p-5 sm:p-6">
           <h2 className="text-base font-bold text-slate-700 mb-4">日本語訳</h2>
