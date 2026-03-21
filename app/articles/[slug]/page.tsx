@@ -24,24 +24,26 @@ export async function generateMetadata({
   const article = await getArticleBySlug(params.slug);
   if (!article) return { title: "ページが見つかりません" };
 
-  const title       = `${article.title} | LinguistLens`;
+  const seoTitle    = article.titleJa
+    ? `${article.titleJa} | LinguistLens`
+    : `${article.titleEn} | LinguistLens`;
   const description = `${article.level}レベルの英語学習記事。語彙ハイライト付きで重要表現を自然に身につけられます。日本語訳・単語リスト付き。`;
   const canonical   = `${SITE_URL}/articles/${article.slug}`;
 
   return {
-    title,
+    title: seoTitle,
     description,
     openGraph: {
       type:        "article",
       url:         canonical,
-      title,
+      title:       seoTitle,
       description,
       images: [{ url: "/og", width: 1200, height: 630 }],
       publishedTime: article.publishedAt ?? undefined,
     },
     twitter: {
       card:        "summary_large_image",
-      title,
+      title:       seoTitle,
       description,
       images:      ["/og"],
     },
@@ -73,10 +75,17 @@ export default async function ArticlePage({
           </span>
         </div>
 
-        {/* Title */}
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
-          {article.title}
-        </h1>
+        {/* Title block */}
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-extrabold font-mono text-slate-900 tracking-tight leading-tight">
+            {article.titleEn}
+          </h1>
+          {article.titleJa && (
+            <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              {article.titleJa}
+            </p>
+          )}
+        </div>
 
         {/* TTS（ログイン済みのみ表示） */}
         <ArticleTts contentHtml={article.contentHtml} englishVariant={article.englishVariant} />
@@ -85,7 +94,7 @@ export default async function ArticlePage({
         <ArticleBody
           contentHtml={article.contentHtml}
           articleLevel={article.level}
-          articleTitle={article.title}
+          articleTitle={article.titleEn}
           englishVariant={article.englishVariant}
         />
 
@@ -104,7 +113,7 @@ export default async function ArticlePage({
                   key={i}
                   item={item}
                   articleLevel={article.level}
-                  articleTitle={article.title}
+                  articleTitle={article.titleEn}
                   englishVariant={article.englishVariant}
                 />
               ))}

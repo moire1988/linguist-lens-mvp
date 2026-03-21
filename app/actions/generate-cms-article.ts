@@ -61,12 +61,21 @@ Do NOT use boring textbook topics.
   Good: "Netflix slang English B2", "remote work idioms UK"
   Bad: too broad ("English words") or too narrow ("the exact phrase from one TV show").
 
-• The title MUST be in Japanese, catchy, and naturally incorporate the keyword concept.
-  Example style: "Netflix好き必見！海外ドラマで頻出するネイティブのスラング5選"
-  Max 25 Japanese characters.
+• Generate TWO titles — they must describe the SAME article in the SAME format:
+  - titleEn: A natural, compelling English title that accurately reflects the article content.
+             Example: "The Secret Language of Silicon Valley"
+  - titleJa: A natural Japanese translation of titleEn, enhanced with the SEO keyword.
+             Example: "シリコンバレーの隠語から学ぶ！テック業界で使える英語表現"
+             Max 30 Japanese characters.
+
+• CRITICAL — Title/Content format consistency:
+  If the article is an essay or narrative, BOTH titles must be essay-style.
+  Listicle-style titles ("Top 5 phrases...", "〜表現5選") are ONLY allowed
+  if the article body IS actually a numbered list. Never use clickbait titles
+  that don't match the body format.
 
 • The slug must be URL-friendly lowercase English, max 60 chars.
-  Example: "netflix-slang-b2", "remote-work-idioms-uk"
+  Example: "silicon-valley-slang-b2", "remote-work-idioms-uk"
 
 ═══ STEP 3 — CONTENT RULES ═════════════════════════════════════════════
 1. Word count: 250–350 words of English body text.
@@ -101,7 +110,8 @@ Use <p>…</p> tags (not \\n) to separate paragraphs in HTML fields.
 {
   "keyword": "medium-tail SEO focus keyword in English",
   "category": "Exact category name from the list in Step 1",
-  "title": "日本語のキャッチーなタイトル（最大25文字）",
+  "titleEn": "Natural English title matching the article format",
+  "titleJa": "日本語SEOタイトル（最大30文字）",
   "slug": "seo-friendly-english-slug",
   "contentHtml": "<p>Article body with <span class=\\"vocabulary-highlight\\" data-word=\\"word\\" data-meaning=\\"意味\\" data-nuance=\\"ニュアンス\\" data-example=\\"Example sentence.\\">word</span> highlights.</p><p>Second paragraph...</p>",
   "translationHtml": "<p>第1段落の翻訳。</p><p>第2段落の翻訳。</p>",
@@ -156,7 +166,8 @@ async function ensureUniqueSlug(base: string): Promise<string> {
 interface RawArticleJson {
   keyword?:         string;
   category?:        string;
-  title?:           string;
+  titleEn?:         string;
+  titleJa?:         string;
   slug?:            string;
   contentHtml?:     string;
   translationHtml?: string;
@@ -172,7 +183,7 @@ function parseAiResponse(raw: string): RawArticleJson {
 // ─── Server Action ───────────────────────────────────────────────────────────
 
 const SELECT_COLS =
-  "id, slug, title, level, english_variant, keyword, category, content_html, translation_html, vocabulary_json, published_at, created_at";
+  "id, slug, title_en, title_ja, level, english_variant, keyword, category, content_html, translation_html, vocabulary_json, published_at, created_at";
 
 export async function generateCmsArticle(
   level: string,
@@ -216,14 +227,14 @@ export async function generateCmsArticle(
     };
   }
 
-  if (!parsed.title || !parsed.contentHtml || !parsed.translationHtml) {
+  if (!parsed.titleEn || !parsed.contentHtml || !parsed.translationHtml) {
     return {
       success: false,
-      error: "AI レスポンスに必須フィールド (title / contentHtml / translationHtml) がありません",
+      error: "AI レスポンスに必須フィールド (titleEn / contentHtml / translationHtml) がありません",
     };
   }
 
-  const rawSlug    = parsed.slug ?? parsed.title;
+  const rawSlug    = parsed.slug ?? parsed.titleEn;
   const uniqueSlug = await ensureUniqueSlug(rawSlug);
 
   let db;
@@ -238,7 +249,8 @@ export async function generateCmsArticle(
 
   const insertPayload = {
     slug:             uniqueSlug,
-    title:            parsed.title.trim(),
+    title_en:         parsed.titleEn.trim(),
+    title_ja:         parsed.titleJa?.trim() ?? null,
     level,
     english_variant:  variant,
     keyword:          parsed.keyword?.trim() ?? null,
@@ -265,7 +277,8 @@ export async function generateCmsArticle(
   const row = data as {
     id: string;
     slug: string;
-    title: string;
+    title_en: string;
+    title_ja: string | null;
     level: string;
     english_variant: EnglishVariant;
     keyword: string | null;
@@ -280,7 +293,8 @@ export async function generateCmsArticle(
   const article: Article = {
     id:              row.id,
     slug:            row.slug,
-    title:           row.title,
+    titleEn:         row.title_en,
+    titleJa:         row.title_ja ?? undefined,
     level:           row.level,
     englishVariant:  row.english_variant,
     keyword:         row.keyword ?? undefined,
