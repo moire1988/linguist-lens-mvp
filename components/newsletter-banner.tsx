@@ -83,7 +83,7 @@ export function NewsletterBanner({ variant = "default" }: { variant?: "default" 
       <div className="flex items-center gap-3 bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 rounded-2xl p-4">
         <Mail className="h-4 w-4 text-indigo-400 shrink-0" />
         <p className="text-sm text-slate-600 flex-1 leading-snug">
-          週1回、新着記事と英語表現をお届けします。
+          AIが解析した最新の英語コンテンツや、便利な新機能のお知らせをメールで受け取れます。
         </p>
         <SubscribeButton status={status} onClick={handleSubscribe} />
       </div>
