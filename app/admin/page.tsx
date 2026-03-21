@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { Wand2, RefreshCw, Globe, EyeOff, Trash2, ExternalLink, ChevronLeft, Loader2 } from "lucide-react";
+import { Wand2, RefreshCw, Globe, EyeOff, Trash2, ExternalLink, ChevronLeft, Loader2, Filter } from "lucide-react";
+import type { EnglishVariant } from "@/lib/article-types";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
 import { toast } from "sonner";
 import { generateCmsArticle } from "@/app/actions/generate-cms-article";
@@ -12,9 +13,15 @@ import type { Article } from "@/lib/article-types";
 import { VariantBadge } from "@/components/variant-badge";
 import { SiteFooter } from "@/components/site-footer";
 
-// ─── CEFR helpers ─────────────────────────────────────────────────────────────
+// ─── CEFR / Variant helpers ───────────────────────────────────────────────────
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
+const VARIANTS: { value: EnglishVariant; label: string }[] = [
+  { value: "US",     label: "🇺🇸 US"  },
+  { value: "UK",     label: "🇬🇧 UK"  },
+  { value: "AU",     label: "🇦🇺 AU"  },
+  { value: "common", label: "🌐 共通" },
+];
 
 const LEVEL_COLORS: Record<string, string> = {
   A1: "bg-slate-100 text-slate-600 border-slate-200",
@@ -43,6 +50,8 @@ export default function AdminPage() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [isLoadingArticles, setIsLoadingArticles] = useState(true);
   const [selectedLevel, setSelectedLevel] = useState<string>("B1");
+  const [filterLevel, setFilterLevel] = useState<string>("all");
+  const [filterVariant, setFilterVariant] = useState<string>("all");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedResult, setGeneratedResult] = useState<{ title: string; slug: string } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -224,6 +233,58 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {/* Filters */}
+          {!isLoadingArticles && articles.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {/* Level filter */}
+              <div className="flex flex-wrap gap-1.5">
+                {[{ value: "all", label: "すべて" }, ...LEVELS.map((l) => ({ value: l, label: l }))].map((opt) => {
+                  const count = opt.value === "all" ? articles.length : articles.filter((a) => a.level === opt.value).length;
+                  if (opt.value !== "all" && count === 0) return null;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setFilterLevel(opt.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                        filterLevel === opt.value
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600"
+                      }`}
+                    >
+                      {opt.label}
+                      <span className={`ml-1.5 font-bold ${filterLevel === opt.value ? "text-indigo-200" : "text-slate-400"}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Variant filter */}
+              <div className="flex flex-wrap gap-1.5">
+                {[{ value: "all", label: "すべて" }, ...VARIANTS].map((opt) => {
+                  const count = opt.value === "all" ? articles.length : articles.filter((a) => a.englishVariant === opt.value).length;
+                  if (opt.value !== "all" && count === 0) return null;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setFilterVariant(opt.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                        filterVariant === opt.value
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600"
+                      }`}
+                    >
+                      {opt.label}
+                      <span className={`ml-1.5 font-bold ${filterVariant === opt.value ? "text-indigo-200" : "text-slate-400"}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {isLoadingArticles ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -239,7 +300,11 @@ export default function AdminPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {articles.map((article) => {
+              {articles.filter((a) => {
+                if (filterLevel !== "all" && a.level !== filterLevel) return false;
+                if (filterVariant !== "all" && a.englishVariant !== filterVariant) return false;
+                return true;
+              }).map((article) => {
                 const isPublished = !!article.publishedAt;
                 const isThisLoading = loadingId === article.id;
 

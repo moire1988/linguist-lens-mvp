@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { BookMarked, ExternalLink, FileText, ChevronDown } from "lucide-react";
+import { BookMarked, ExternalLink, FileText, ChevronDown, Library, Settings } from "lucide-react";
+import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ExampleVideo } from "@/lib/examples-data";
@@ -14,6 +15,8 @@ import { PremiumModal } from "@/components/premium-modal";
 import { AdBanner } from "@/components/ad-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SettingsModal } from "@/components/settings-modal";
+import { getSettings, DEV_TEST_URL } from "@/lib/settings";
 
 const CEFR_RANK: Record<string, number> = { A1:1, A2:2, B1:3, B2:4, C1:5, C2:6 };
 const CEFR_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
@@ -60,12 +63,15 @@ function buildHighlightedHtml(transcript: string, phrases: PhraseResult[]): stri
 }
 
 export function ExamplePageContent({ example }: { example: ExampleVideo }) {
+  const { isSignedIn, isLoaded } = useAuth();
+  const { openSignIn } = useClerk();
   const [activeFilter, setActiveFilter] = useState<"all" | ExpressionType>("all");
   const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
   const [vocabCount, setVocabCount] = useState(0);
   const [showPremium, setShowPremium] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     setVocabCount(getVocabularyCount());
@@ -110,21 +116,53 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
     <div className="min-h-screen relative">
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
 
+      {showSettings && (
+        <SettingsModal onClose={() => setShowSettings(false)} />
+      )}
+
       <SiteHeader
         maxWidth="5xl"
         right={
-          <Link
-            href="/vocabulary"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-100 transition-colors"
-          >
-            <BookMarked className="h-3.5 w-3.5" />
-            マイ単語帳
-            {vocabCount > 0 && (
-              <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {vocabCount}
-              </span>
-            )}
-          </Link>
+          isLoaded ? (
+            <>
+              <Link
+                href="/articles"
+                className="flex items-center gap-1 text-xs font-mono font-medium text-slate-500 hover:text-indigo-600 transition-colors"
+              >
+                <Library className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Library</span>
+              </Link>
+              <button
+                onClick={() => setShowSettings((v) => !v)}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                title="設定"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+              <Link
+                href="/vocabulary"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-100 transition-colors"
+              >
+                <BookMarked className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">マイ単語帳</span>
+                {vocabCount > 0 && (
+                  <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    {vocabCount}
+                  </span>
+                )}
+              </Link>
+              {isSignedIn ? (
+                <UserButton />
+              ) : (
+                <button
+                  onClick={() => openSignIn()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors"
+                >
+                  登録 / ログイン
+                </button>
+              )}
+            </>
+          ) : null
         }
       />
 

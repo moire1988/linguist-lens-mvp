@@ -66,25 +66,26 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
 export async function getAllPublishedArticles(): Promise<ArticleSummary[]> {
   const { data, error } = await supabase
     .from("articles")
-    .select("id, slug, title_en, title_ja, level, keyword, category, published_at, created_at")
+    .select("id, slug, title_en, title_ja, level, english_variant, keyword, category, published_at, created_at")
     .not("published_at", "is", null)
     .order("published_at", { ascending: false });
 
   if (error || !data) return [];
   return (data as {
     id: string; slug: string; title_en: string; title_ja: string | null;
-    level: string; keyword: string | null; category: string | null;
+    level: string; english_variant: EnglishVariant; keyword: string | null; category: string | null;
     published_at: string | null; created_at: string;
   }[]).map((row) => ({
-    id:          row.id,
-    slug:        row.slug,
-    titleEn:     row.title_en,
-    titleJa:     row.title_ja ?? undefined,
-    level:       row.level,
-    keyword:     row.keyword ?? undefined,
-    category:    row.category ?? undefined,
-    publishedAt: row.published_at,
-    createdAt:   row.created_at,
+    id:             row.id,
+    slug:           row.slug,
+    titleEn:        row.title_en,
+    titleJa:        row.title_ja ?? undefined,
+    level:          row.level,
+    englishVariant: row.english_variant ?? "common",
+    keyword:        row.keyword ?? undefined,
+    category:       row.category ?? undefined,
+    publishedAt:    row.published_at,
+    createdAt:      row.created_at,
   }));
 }
 

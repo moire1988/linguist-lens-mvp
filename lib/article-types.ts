@@ -30,15 +30,16 @@ export interface Article {
 
 // 一覧ページ用の軽量型（content_html / translation_html を含まない）
 export interface ArticleSummary {
-  id:          string;
-  slug:        string;
-  titleEn:     string;
-  titleJa?:    string;
-  level:       string;
-  keyword?:    string;
-  category?:   string;
-  publishedAt: string | null;
-  createdAt:   string;
+  id:             string;
+  slug:           string;
+  titleEn:        string;
+  titleJa?:       string;
+  level:          string;
+  englishVariant: EnglishVariant;
+  keyword?:       string;
+  category?:      string;
+  publishedAt:    string | null;
+  createdAt:      string;
 }
 
 // generateCmsArticle の戻り値
