@@ -9,7 +9,7 @@ import type {
   GenerateCmsArticleResult,
 } from "@/lib/article-types";
 
-// ─── CEFR 記述 ───────────────────────────────────────────────────────────────
+// ─── CEFR descriptions ───────────────────────────────────────────────────────
 
 const LEVEL_DESCRIPTIONS: Record<string, string> = {
   A1: "complete beginner — very short sentences, present tense only, the 100 most common words",
@@ -35,64 +35,75 @@ function pickVariant(): EnglishVariant {
   return VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
 }
 
-// ─── プロンプト ───────────────────────────────────────────────────────────────
+// ─── Prompt ───────────────────────────────────────────────────────────────────
 
 function buildPrompt(level: string, variant: EnglishVariant): string {
   const levelDesc = LEVEL_DESCRIPTIONS[level] ?? "intermediate";
 
-  return `You are a professional English content writer creating educational magazine articles for Japanese learners.
+  return `You are an expert ESL teacher and a top-tier SEO copywriter. Your task is to generate an engaging English learning article for Japanese learners.
 
+[Parameters]
 Target CEFR Level: ${level} — ${levelDesc}
 English Variant: ${variant} — ${VARIANT_INSTRUCTIONS[variant]}
 
-═══ TASK ═══════════════════════════════════════════════════════════════
-Write ONE original, engaging, factual English article.
-Choose ANY topic that genuinely interests you from these categories:
-  • Surprising historical facts that changed the world
-  • Unusual cultural traditions from around the globe
-  • How a piece of everyday technology actually works
-  • Counterintuitive psychology or behavioural science
-  • Fascinating animal or nature discoveries
-  • Mind-bending geography or space facts
-  • Common health myths debunked by science
-  • Quirky economic phenomena that affect daily life
-  • Unexpected language or linguistics trivia
+═══ STEP 1 — CATEGORY & TOPIC SELECTION (Randomize) ═══════════════════
+Pick EXACTLY ONE category, then invent a specific, highly engaging topic within it.
+Do NOT use boring textbook topics.
 
-═══ CONTENT RULES ══════════════════════════════════════════════════════
-1. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST match ${level} level precisely.
-2. English variant: Consistently apply the ${variant} English rules above — spelling, vocabulary, idioms.
-3. Opening hook: The very first sentence must be a surprising fact or intriguing question.
-4. Article length: 200–400 words of English body text.
-5. Style: Engaging magazine article — clear, accurate, enjoyable. Facts that make readers say "I had no idea!"
-6. NEVER mention CEFR, language learning, English learner, or the reader's level.
+• Tech & Startup             (e.g., Silicon Valley jargon, remote work culture, AI buzzwords)
+• Pop Culture & Entertainment (e.g., Netflix slang, music festival vibes, streaming wars)
+• Lifehacks & Psychology      (e.g., productivity myths, cognitive biases, sleep science)
+• Real Parenting & Family     (e.g., modern parenting in the UK/US, screen time battles)
+• Local Travel Secrets        (e.g., hidden cafés in Melbourne, pub etiquette in London)
 
-═══ VOCABULARY HIGHLIGHTS ══════════════════════════════════════════════
-Select 5–8 key vocabulary items from your article that are valuable for ${level} learners.
-Wrap each one in EXACTLY this span format (copy-paste the structure):
+═══ STEP 2 — SEO STRATEGY ══════════════════════════════════════════════
+• Generate a specific, medium-tail "Focus Keyword" in English.
+  Good: "Netflix slang English B2", "remote work idioms UK"
+  Bad: too broad ("English words") or too narrow ("the exact phrase from one TV show").
 
-  <span class="vocabulary-highlight" data-word="BASE_FORM" data-meaning="日本語訳" data-nuance="ニュアンス解説（1文）" data-example="Short new example sentence.">word as it appears</span>
+• The title MUST be in Japanese, catchy, and naturally incorporate the keyword concept.
+  Example style: "Netflix好き必見！海外ドラマで頻出するネイティブのスラング5選"
+  Max 25 Japanese characters.
+
+• The slug must be URL-friendly lowercase English, max 60 chars.
+  Example: "netflix-slang-b2", "remote-work-idioms-uk"
+
+═══ STEP 3 — CONTENT RULES ═════════════════════════════════════════════
+1. Word count: 250–350 words of English body text.
+2. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST precisely match ${level}.
+3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout.
+4. Opening hook: The very first sentence must be a surprising fact, bold claim, or intriguing question.
+5. Style: Engaging magazine article — clear, accurate, enjoyable. Never mention CEFR levels, "English learners", or language study.
+
+═══ STEP 4 — VOCABULARY HIGHLIGHTS ════════════════════════════════════
+Select 5–7 key phrasal verbs, idioms, or collocations that are genuinely useful for ${level} learners.
+Wrap each one inside the article text in EXACTLY this span format:
+
+  <span class="vocabulary-highlight" data-word="BASE_FORM" data-meaning="日本語訳" data-nuance="ニュアンス解説（1文）" data-example="Short new example sentence.">word as it appears in article</span>
 
 Rules for spans:
-  • data-word    → always the dictionary base form (e.g., "set off" not "set off early")
+  • data-word    → always the dictionary base form (e.g., "burn out" not "burning out")
   • data-meaning → concise Japanese meaning, max 15 characters
-  • data-nuance  → brief Japanese nuance note (usage tip, connotation, or register), max 40 characters
-  • data-example → a NEW short sentence (different from the article text)
-  • Use double quotes for ALL attribute values. Never use single quotes inside attributes.
+  • data-nuance  → brief Japanese nuance/usage tip, max 40 characters
+  • data-example → a NEW short sentence different from the article text
+  • Double quotes for ALL attribute values. Never use single quotes inside attributes.
   • Do NOT nest spans.
 
-═══ JAPANESE TRANSLATION ════════════════════════════════════════════════
-Write a natural, fluent Japanese translation of the full article.
-Wrap each paragraph in <p>…</p> tags. Plain prose — no annotations, no vocabulary explanations.
+═══ STEP 5 — JAPANESE TRANSLATION ═════════════════════════════════════
+Write a fluent, natural Japanese translation of the full article.
+Wrap each paragraph in <p>…</p> tags. Plain prose — no annotations, no vocabulary notes.
 
-═══ OUTPUT FORMAT ═══════════════════════════════════════════════════════
-Return ONLY valid JSON — no markdown fences, no preamble, absolutely nothing else.
+═══ OUTPUT FORMAT (STRICT JSON) ════════════════════════════════════════
+Return ONLY a valid JSON object — no markdown fences, no preamble, absolutely nothing else.
 CRITICAL: All string values must be on a single line — use NO raw newlines inside JSON strings.
 Use <p>…</p> tags (not \\n) to separate paragraphs in HTML fields.
 
 {
-  "title": "Catchy, specific title — max 12 words",
-  "slug": "url-friendly-lowercase-hyphenated-slug-max-60-chars",
-  "contentHtml": "<p>First paragraph with a <span class=\\"vocabulary-highlight\\" data-word=\\"word\\" data-meaning=\\"意味\\" data-nuance=\\"ニュアンス\\" data-example=\\"Example sentence.\\">word</span>.</p><p>Second paragraph...</p>",
+  "keyword": "medium-tail SEO focus keyword in English",
+  "category": "Exact category name from the list in Step 1",
+  "title": "日本語のキャッチーなタイトル（最大25文字）",
+  "slug": "seo-friendly-english-slug",
+  "contentHtml": "<p>Article body with <span class=\\"vocabulary-highlight\\" data-word=\\"word\\" data-meaning=\\"意味\\" data-nuance=\\"ニュアンス\\" data-example=\\"Example sentence.\\">word</span> highlights.</p><p>Second paragraph...</p>",
   "translationHtml": "<p>第1段落の翻訳。</p><p>第2段落の翻訳。</p>",
   "vocabularyList": [
     {
@@ -120,25 +131,31 @@ function sanitizeSlug(raw: string): string {
 }
 
 async function ensureUniqueSlug(base: string): Promise<string> {
-  const db = createAdminClient();
-  let slug = sanitizeSlug(base);
-  let suffix = 0;
-
-  while (true) {
-    const candidate = suffix === 0 ? slug : `${slug}-${suffix}`;
-    const { data } = await db
-      .from("articles")
-      .select("id")
-      .eq("slug", candidate)
-      .maybeSingle();
-    if (!data) return candidate;
-    suffix++;
+  const slug = sanitizeSlug(base);
+  try {
+    const db = createAdminClient();
+    let suffix = 0;
+    while (true) {
+      const candidate = suffix === 0 ? slug : `${slug}-${suffix}`;
+      const { data } = await db
+        .from("articles")
+        .select("id")
+        .eq("slug", candidate)
+        .maybeSingle();
+      if (!data) return candidate;
+      suffix++;
+    }
+  } catch {
+    // DB 接続不可の場合は timestamp サフィックスで一意性を確保
+    return `${slug}-${Date.now()}`;
   }
 }
 
 // ─── AI レスポンスのパース ────────────────────────────────────────────────────
 
 interface RawArticleJson {
+  keyword?:         string;
+  category?:        string;
   title?:           string;
   slug?:            string;
   contentHtml?:     string;
@@ -147,7 +164,6 @@ interface RawArticleJson {
 }
 
 function parseAiResponse(raw: string): RawArticleJson {
-  // JSON ブロックを抽出（markdown fences が混入した場合にも対応）
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("AI レスポンスに JSON が見つかりませんでした");
   return JSON.parse(match[0]) as RawArticleJson;
@@ -155,11 +171,13 @@ function parseAiResponse(raw: string): RawArticleJson {
 
 // ─── Server Action ───────────────────────────────────────────────────────────
 
+const SELECT_COLS =
+  "id, slug, title, level, english_variant, keyword, category, content_html, translation_html, vocabulary_json, published_at, created_at";
+
 export async function generateCmsArticle(
   level: string,
   publishImmediately = true
 ): Promise<GenerateCmsArticleResult> {
-  // ── Validate level
   const validLevels = ["A1", "A2", "B1", "B2", "C1", "C2"];
   if (!validLevels.includes(level)) {
     return { success: false, error: `無効な CEFR レベルです: ${level}` };
@@ -169,10 +187,8 @@ export async function generateCmsArticle(
     return { success: false, error: "ANTHROPIC_API_KEY が設定されていません" };
   }
 
-  // ── Pick English variant randomly
   const variant = pickVariant();
 
-  // ── Call Claude
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   let raw: string;
@@ -190,7 +206,6 @@ export async function generateCmsArticle(
     };
   }
 
-  // ── Parse JSON
   let parsed: RawArticleJson;
   try {
     parsed = parseAiResponse(raw);
@@ -201,7 +216,6 @@ export async function generateCmsArticle(
     };
   }
 
-  // ── Validate required fields
   if (!parsed.title || !parsed.contentHtml || !parsed.translationHtml) {
     return {
       success: false,
@@ -209,17 +223,26 @@ export async function generateCmsArticle(
     };
   }
 
-  // ── Slug: AI 生成をベースに重複回避
-  const rawSlug  = parsed.slug ?? parsed.title;
+  const rawSlug    = parsed.slug ?? parsed.title;
   const uniqueSlug = await ensureUniqueSlug(rawSlug);
 
-  // ── Insert into Supabase
-  const db = createAdminClient();
+  let db;
+  try {
+    db = createAdminClient();
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Supabase 接続に失敗しました（環境変数を確認してください）",
+    };
+  }
+
   const insertPayload = {
     slug:             uniqueSlug,
     title:            parsed.title.trim(),
     level,
     english_variant:  variant,
+    keyword:          parsed.keyword?.trim() ?? null,
+    category:         parsed.category?.trim() ?? null,
     content_html:     parsed.contentHtml.trim(),
     translation_html: parsed.translationHtml.trim(),
     vocabulary_json:  parsed.vocabularyList ?? [],
@@ -229,7 +252,7 @@ export async function generateCmsArticle(
   const { data, error } = await db
     .from("articles")
     .insert(insertPayload)
-    .select("id, slug, title, level, english_variant, content_html, translation_html, vocabulary_json, published_at, created_at")
+    .select(SELECT_COLS)
     .single();
 
   if (error || !data) {
@@ -245,6 +268,8 @@ export async function generateCmsArticle(
     title: string;
     level: string;
     english_variant: EnglishVariant;
+    keyword: string | null;
+    category: string | null;
     content_html: string;
     translation_html: string;
     vocabulary_json: ArticleVocabItem[];
@@ -258,6 +283,8 @@ export async function generateCmsArticle(
     title:           row.title,
     level:           row.level,
     englishVariant:  row.english_variant,
+    keyword:         row.keyword ?? undefined,
+    category:        row.category ?? undefined,
     contentHtml:     row.content_html,
     translationHtml: row.translation_html,
     vocabularyList:  row.vocabulary_json,

@@ -9,6 +9,8 @@ interface ArticleRow {
   title:            string;
   level:            string;
   english_variant:  EnglishVariant;
+  keyword:          string | null;
+  category:         string | null;
   content_html:     string;
   translation_html: string;
   vocabulary_json:  ArticleVocabItem[];
@@ -23,6 +25,8 @@ function rowToArticle(row: ArticleRow): Article {
     title:           row.title,
     level:           row.level,
     englishVariant:  row.english_variant ?? "common",
+    keyword:         row.keyword ?? undefined,
+    category:        row.category ?? undefined,
     contentHtml:     row.content_html,
     translationHtml: row.translation_html,
     vocabularyList:  row.vocabulary_json,
@@ -32,7 +36,7 @@ function rowToArticle(row: ArticleRow): Article {
 }
 
 const SELECT_COLS =
-  "id, slug, title, level, english_variant, content_html, translation_html, vocabulary_json, published_at, created_at";
+  "id, slug, title, level, english_variant, keyword, category, content_html, translation_html, vocabulary_json, published_at, created_at";
 
 // ─── Public queries (no auth required) ───────────────────────────────────────
 

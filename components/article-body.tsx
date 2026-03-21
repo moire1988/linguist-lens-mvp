@@ -13,6 +13,7 @@ import { TranslationAccordion } from "@/components/translation-accordion";
 import {
   savePhrase, getVocabulary, getDailyRemaining, FREE_DAILY_LIMIT,
 } from "@/lib/vocabulary";
+import { openLoginPrompt } from "@/lib/login-prompt-store";
 import type { ArticleVocabItem, EnglishVariant } from "@/lib/article-types";
 
 // ─── Speech recognition types ────────────────────────────────────────────────
@@ -435,6 +436,10 @@ export function ArticleVocabCard({
   }, [item.dynamicExample, englishVariant]);
 
   const handlePractice = useCallback(() => {
+    if (!isSignedIn) {
+      openLoginPrompt("practice");
+      return;
+    }
     const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!SR) { toast.error("音声認識はChrome / Edgeでご利用ください"); return; }
     if (isListening) { recRef.current?.stop(); return; }
@@ -451,6 +456,10 @@ export function ArticleVocabCard({
 
   const handleSave = useCallback(() => {
     if (isSaved) return;
+    if (!isSignedIn) {
+      openLoginPrompt("save");
+      return;
+    }
     const result = savePhrase({
       expression: item.word,
       type: item.partOfSpeech === "phrasal verb" ? "phrasal_verb" : "collocation",
@@ -566,37 +575,35 @@ export function ArticleVocabCard({
         )}
       </div>
 
-      {/* 単語帳に保存（ログイン済みのみ） */}
-      {isSignedIn && (
-        <div className="px-5 pb-4 pt-1 border-t border-slate-100 bg-slate-50/50">
-          <button
-            onClick={handleSave}
-            disabled={isSaved || dailyRemaining === 0}
-            className={cn(
-              "w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-medium transition-all",
-              isSaved
-                ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
-                : dailyRemaining === 0
-                ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-                : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
-            )}
-          >
-            {isSaved ? (
-              <><Check className="h-3.5 w-3.5" /> 単語帳に保存済み</>
-            ) : (
-              <>
-                <BookmarkPlus className="h-3.5 w-3.5" /> 単語帳に保存
-                {dailyRemaining <= 2 && dailyRemaining > 0 && (
-                  <span className="ml-auto text-[10px] text-amber-500 font-semibold">本日あと{dailyRemaining}件</span>
-                )}
-                {dailyRemaining === 0 && (
-                  <span className="ml-auto text-[10px] text-rose-400 font-semibold">上限に達しました</span>
-                )}
-              </>
-            )}
-          </button>
-        </div>
-      )}
+      {/* 単語帳に保存 */}
+      <div className="px-5 pb-4 pt-1 border-t border-slate-100 bg-slate-50/50">
+        <button
+          onClick={handleSave}
+          disabled={isSaved || (isSignedIn && dailyRemaining === 0)}
+          className={cn(
+            "w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-medium transition-all",
+            isSaved
+              ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
+              : isSignedIn && dailyRemaining === 0
+              ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+              : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
+          )}
+        >
+          {isSaved ? (
+            <><Check className="h-3.5 w-3.5" /> 単語帳に保存済み</>
+          ) : (
+            <>
+              <BookmarkPlus className="h-3.5 w-3.5" /> 単語帳に保存
+              {isSignedIn && dailyRemaining <= 2 && dailyRemaining > 0 && (
+                <span className="ml-auto text-[10px] text-amber-500 font-semibold">本日あと{dailyRemaining}件</span>
+              )}
+              {isSignedIn && dailyRemaining === 0 && (
+                <span className="ml-auto text-[10px] text-rose-400 font-semibold">上限に達しました</span>
+              )}
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }

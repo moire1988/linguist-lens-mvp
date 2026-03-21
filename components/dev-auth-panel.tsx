@@ -1,10 +1,11 @@
 "use client";
 
 // ─── DevAuthPanel ─────────────────────────────────────────────────────────────
-// DevモードがONの時のみ右下に固定表示されるデバッグパネル。
-// 3つの認証状態（+ 実際の状態）をラジオボタンで切り替えられる。
+// DevモードがONの時のみ表示されるデバッグパネル。
+// ドラッグで移動可能、ヘッダークリックで折りたたみ可能。
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSettings } from "@/lib/settings";
 import {
@@ -18,12 +19,12 @@ import {
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 type Option = {
-  value:  MockAuthState | "real";
-  label:  string;
+  value:    MockAuthState | "real";
+  label:    string;
   sublabel: string;
-  dot:    string;   // Tailwind bg-* class for the radio dot
-  ring:   string;   // Tailwind ring/border class when active
-  bg:     string;   // Tailwind bg class when active
+  dot:      string;
+  ring:     string;
+  bg:       string;
 };
 
 const OPTIONS: Option[] = [
@@ -64,8 +65,20 @@ const OPTIONS: Option[] = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function DevAuthPanel() {
-  const [devMode,    setDevMode]    = useState(false);
-  const [mockState,  setMockState]  = useState<MockAuthState | null>(null);
+  const [devMode,   setDevMode]   = useState(false);
+  const [mockState, setMockState] = useState<MockAuthState | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+
+  // null = デフォルト位置（bottom-4 right-4）、セット後はtop/leftで制御
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  const dragRef  = useRef<{
+    startX:    number;
+    startY:    number;
+    startPosX: number;
+    startPosY: number;
+  } | null>(null);
 
   // 初期値を読み込む
   useEffect(() => {
@@ -73,12 +86,10 @@ export function DevAuthPanel() {
     setMockState(getMockAuthState());
   }, []);
 
-  // モック状態変化を購読（他コンポーネントが setMockAuthState を呼んだ場合も対応）
   useEffect(() => {
     return subscribeMockAuth(() => setMockState(getMockAuthState()));
   }, []);
 
-  // DevMode設定の変化を購読（設定モーダルでOFF→モックをクリア）
   useEffect(() => {
     const handler = () => {
       const settings = getSettings();
@@ -87,6 +98,44 @@ export function DevAuthPanel() {
     };
     window.addEventListener("ll-settings-changed", handler);
     return () => window.removeEventListener("ll-settings-changed", handler);
+  }, []);
+
+  // ── ドラッグ ──────────────────────────────────────────────────────────────
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // ヘッダー内のボタンはドラッグ開始しない
+    if ((e.target as HTMLElement).closest("button")) return;
+    e.preventDefault();
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    // 初回ドラッグ時にデフォルト位置を確定
+    if (!pos) setPos({ x: rect.left, y: rect.top });
+    dragRef.current = {
+      startX:    e.clientX,
+      startY:    e.clientY,
+      startPosX: rect.left,
+      startPosY: rect.top,
+    };
+  };
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragRef.current) return;
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+      setPos({
+        x: dragRef.current.startPosX + dx,
+        y: dragRef.current.startPosY + dy,
+      });
+    };
+    const onUp = () => { dragRef.current = null; };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup",   onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup",   onUp);
+    };
   }, []);
 
   if (!devMode) return null;
@@ -101,67 +150,92 @@ export function DevAuthPanel() {
     }
   };
 
+  const activeOpt = OPTIONS.find((o) => o.value === currentValue);
+
   return (
     <div
-      className="fixed bottom-4 right-4 z-[9998] w-60 rounded-2xl border border-violet-200 bg-white shadow-2xl overflow-hidden"
-      style={{ boxShadow: "0 8px 32px rgba(109,40,217,0.18)" }}
+      ref={panelRef}
+      className={cn(
+        "fixed z-[9998] w-56 rounded-2xl border border-violet-200 bg-white shadow-2xl overflow-hidden select-none",
+        !pos && "bottom-4 right-4",
+      )}
+      style={{
+        boxShadow: "0 8px 32px rgba(109,40,217,0.18)",
+        ...(pos ? { left: pos.x, top: pos.y } : {}),
+      }}
     >
-      {/* Header */}
-      <div className="bg-violet-600 px-4 py-2 flex items-center gap-2">
-        <span className="text-[9px] font-mono font-bold tracking-[0.15em] text-violet-200 uppercase">
+      {/* Header — ドラッグハンドル兼 折りたたみトグル */}
+      <div
+        onMouseDown={handleMouseDown}
+        className="bg-violet-600 px-3 py-2 flex items-center gap-2 cursor-grab active:cursor-grabbing"
+      >
+        <span className="text-[9px] font-mono font-bold tracking-[0.15em] text-violet-200 uppercase flex-1">
           🛠 Dev Auth Mock
         </span>
+        {/* 現在のモック状態をミニ表示（折りたたみ時のみ） */}
+        {collapsed && activeOpt && (
+          <span className={cn("text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-md",
+            activeOpt.dot === "bg-violet-500" ? "bg-violet-700 text-violet-200"
+            : activeOpt.dot === "bg-blue-500"  ? "bg-blue-700 text-blue-200"
+            : "bg-slate-700 text-slate-300"
+          )}>
+            {activeOpt.label}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex-shrink-0 p-0.5 rounded hover:bg-violet-500 text-violet-300 hover:text-white transition-colors"
+          title={collapsed ? "展開" : "折りたたむ"}
+        >
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-150", collapsed && "rotate-180")} />
+        </button>
       </div>
 
-      {/* Options */}
-      <div className="p-2.5 space-y-1.5">
-        {OPTIONS.map((opt) => {
-          const isActive = currentValue === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => handleSelect(opt.value)}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all duration-150",
-                isActive
-                  ? `${opt.bg} ${opt.ring} ring-1`
-                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-              )}
-            >
-              {/* Radio dot */}
-              <span
-                className={cn(
-                  "flex-shrink-0 w-3 h-3 rounded-full border-2 transition-all",
-                  isActive
-                    ? `${opt.dot} border-transparent`
-                    : "border-slate-300 bg-white"
-                )}
-              />
-              <div className="min-w-0 flex-1">
-                <p
+      {/* Options — 折りたたみ時は非表示 */}
+      {!collapsed && (
+        <>
+          <div className="p-2.5 space-y-1.5">
+            {OPTIONS.map((opt) => {
+              const isActive = currentValue === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleSelect(opt.value)}
                   className={cn(
-                    "text-xs font-semibold leading-tight",
-                    isActive ? "text-slate-800" : "text-slate-600"
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all duration-150",
+                    isActive
+                      ? `${opt.bg} ${opt.ring} ring-1`
+                      : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                   )}
                 >
-                  {opt.label}
-                </p>
-                <p className="text-[9px] font-mono text-slate-400 leading-tight mt-0.5 truncate">
-                  {opt.sublabel}
-                </p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+                  <span
+                    className={cn(
+                      "flex-shrink-0 w-3 h-3 rounded-full border-2 transition-all",
+                      isActive ? `${opt.dot} border-transparent` : "border-slate-300 bg-white"
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("text-xs font-semibold leading-tight", isActive ? "text-slate-800" : "text-slate-600")}>
+                      {opt.label}
+                    </p>
+                    <p className="text-[9px] font-mono text-slate-400 leading-tight mt-0.5 truncate">
+                      {opt.sublabel}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
-      {/* Footer */}
-      <div className="px-3 pb-2.5 pt-0.5">
-        <p className="text-[9px] text-center font-mono text-slate-300">
-          devMode ON · useAppAuth() mock
-        </p>
-      </div>
+          <div className="px-3 pb-2.5 pt-0.5">
+            <p className="text-[9px] text-center font-mono text-slate-300">
+              devMode ON · useAppAuth() mock
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -280,6 +280,20 @@ export default function AdminPage() {
                         <p className="text-sm font-medium text-slate-800 leading-snug truncate">
                           {article.title}
                         </p>
+                        {(article.category || article.keyword) && (
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            {article.category && (
+                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 truncate max-w-[140px]">
+                                {article.category}
+                              </span>
+                            )}
+                            {article.keyword && (
+                              <span className="text-[9px] font-mono text-slate-400 truncate max-w-[180px]">
+                                🔑 {article.keyword}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <p className="text-[11px] text-slate-400 mt-0.5 truncate">
                           /articles/{article.slug}
                         </p>

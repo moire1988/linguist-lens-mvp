@@ -16,6 +16,8 @@ import { cn, getBestEnglishVoice } from "@/lib/utils";
 import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import type { PhraseResult } from "@/lib/types";
 import { TranslationAccordion } from "@/components/translation-accordion";
+import { useAppAuth } from "@/hooks/useAppAuth";
+import { openLoginPrompt } from "@/lib/login-prompt-store";
 
 // ─── Web Speech API types ────────────────────────────────────────────────────
 
@@ -160,6 +162,7 @@ interface PhraseCardProps {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }: PhraseCardProps) {
+  const { isSignedIn } = useAppAuth();
   const [isSpeaking,   setIsSpeaking]   = useState(false);
   const [showDetail,   setShowDetail]   = useState(false);
   const [isListening,  setIsListening]  = useState(false);
@@ -215,6 +218,11 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
   // ─── 音読練習 ─────────────────────────────────────────────────────────
 
   const handlePractice = useCallback(() => {
+    if (!isSignedIn) {
+      openLoginPrompt("practice");
+      return;
+    }
+
     const SpeechRecognition =
       window.SpeechRecognition ?? window.webkitSpeechRecognition;
 
@@ -254,8 +262,12 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
 
   const handleSave = useCallback(() => {
     if (saved) return;
+    if (!isSignedIn) {
+      openLoginPrompt("save");
+      return;
+    }
     onSave(phrase);
-  }, [saved, phrase, onSave]);
+  }, [saved, isSignedIn, phrase, onSave]);
 
   // ─── Render ───────────────────────────────────────────────────────────
 
