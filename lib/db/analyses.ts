@@ -139,6 +139,42 @@ export async function getPublicAnalysis(id: string): Promise<PublicAnalysis | nu
   };
 }
 
+// ─── 公開フィード用（最新N件）──────────────────────────────────────────────
+
+export interface RecentPublicAnalysis {
+  id: string;
+  title: string | null;
+  url: string | null;
+  level: string;
+  phrases: import("@/lib/types").PhraseResult[];
+  createdAt: string;
+}
+
+/**
+ * トップページ用: is_public = true の最新 N 件を取得する。
+ * anon クライアント使用（RLS: anon_select_public_analyses）。
+ */
+export async function getRecentPublicAnalyses(
+  limit = 6
+): Promise<RecentPublicAnalysis[]> {
+  const { data, error } = await supabase
+    .from("saved_analyses")
+    .select("id, title, url, level, result_json, created_at")
+    .eq("is_public", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) return [];
+  return (data as AnalysisRow[]).map((row) => ({
+    id: row.id,
+    title: row.title,
+    url: row.url,
+    level: row.level,
+    phrases: (row.result_json?.phrases ?? []).slice(0, 3),
+    createdAt: row.created_at,
+  }));
+}
+
 /**
  * サイトマップ用: is_public = true の全行 (id, created_at のみ) を取得する。
  */

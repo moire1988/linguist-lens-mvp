@@ -56,6 +56,10 @@ import {
   getGuestExtractionCount,
   incrementGuestExtraction,
 } from "@/lib/login-prompt-store";
+import {
+  getRecentPublicAnalysesAction,
+  type RecentPublicAnalysis,
+} from "@/app/actions/public-analyses";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -172,6 +176,7 @@ export default function HomePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [publicSaveUrl, setPublicSaveUrl] = useState<string | null>(null);
   const [isPublicSaving, setIsPublicSaving] = useState(false);
+  const [recentPublicAnalyses, setRecentPublicAnalyses] = useState<RecentPublicAnalysis[]>([]);
 
   // 管理者かつ devMode ON の場合のみ公開保存ボタンを表示
   const isAdmin = isSignedIn && userId === process.env.NEXT_PUBLIC_ADMIN_USER_ID;
@@ -205,6 +210,9 @@ export default function HomePage() {
         setAnalysisSaved(true);
       }
     }
+
+    // 公開済み解析フィードを取得
+    getRecentPublicAnalysesAction(6).then(setRecentPublicAnalyses);
   }, []);
 
   const [isPending, startTransition] = useTransition();
@@ -1137,6 +1145,7 @@ export default function HomePage() {
                 savedExpressions={savedExpressions}
                 onSave={handleSavePhrase}
                 showTranslate={inputMode === "url"}
+                isPro={false}
               />
             )}
 
@@ -1210,6 +1219,77 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10">
           <NewsletterBanner />
         </div>
+      )}
+
+      {/* ── Recent Public Parses（コンテンツなし時のみ） ── */}
+      {!hasContent && recentPublicAnalyses.length > 0 && (
+        <section className="bg-slate-950 py-10 px-4 sm:px-6">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest mb-5">
+              みんなの最新の解析{" "}
+              <span className="text-slate-600">/ Recent Public Parses</span>
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {recentPublicAnalyses.map((item) => (
+                <a
+                  key={item.id}
+                  href={`/share/${item.id}`}
+                  className="group block bg-slate-900 border border-slate-700/50 hover:border-indigo-500/60 rounded-xl p-4 transition-all"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span
+                      className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-bold font-mono border",
+                        {
+                          "bg-slate-800 text-slate-400 border-slate-700": item.level === "A1",
+                          "bg-green-950 text-green-400 border-green-900": item.level === "A2",
+                          "bg-blue-950 text-blue-400 border-blue-900": item.level === "B1",
+                          "bg-indigo-950 text-indigo-400 border-indigo-900": item.level === "B2",
+                          "bg-purple-950 text-purple-400 border-purple-900": item.level === "C1",
+                          "bg-rose-950 text-rose-400 border-rose-900": item.level === "C2",
+                        }
+                      )}
+                    >
+                      {item.level}
+                    </span>
+                    <span className="text-[10px] text-slate-600 ml-auto font-mono">
+                      {new Date(item.createdAt).toLocaleDateString("ja-JP", {
+                        year: "numeric",
+                        month: "numeric",
+                        day: "numeric",
+                      })}
+                    </span>
+                  </div>
+
+                  {item.title && (
+                    <p className="text-slate-200 font-mono text-xs font-medium truncate mb-2 leading-snug">
+                      {item.title}
+                    </p>
+                  )}
+
+                  <div className="space-y-0.5 mb-3">
+                    {item.phrases.slice(0, 2).map((phrase, i) => (
+                      <p key={i} className="text-indigo-400 font-mono text-xs truncate">
+                        {phrase.expression}
+                      </p>
+                    ))}
+                    {item.phrases.length > 2 && (
+                      <p className="text-slate-600 font-mono text-xs">
+                        +{item.phrases.length - 2} more
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end">
+                    <span className="text-[10px] font-mono text-slate-600 group-hover:text-indigo-400 transition-colors">
+                      →
+                    </span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
       )}
 
       {/* ── Footer ── */}
