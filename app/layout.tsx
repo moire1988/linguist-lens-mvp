@@ -8,6 +8,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { FeedbackModal } from "@/components/feedback-modal";
 import { MeshBackground } from "@/components/mesh-background";
 import { DevAuthPanel } from "@/components/dev-auth-panel";
+import { LoginPromptModal } from "@/components/login-prompt-modal";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -64,6 +65,7 @@ export default function RootLayout({
           <MeshBackground />
           {children}
           <FeedbackModal />
+          <LoginPromptModal />
           <DevAuthPanel />
           <Toaster richColors position="bottom-right" />
           <Analytics />

@@ -17,6 +17,8 @@ export interface Article {
   title:           string;
   level:           string;
   englishVariant:  EnglishVariant;
+  keyword?:        string;   // SEO focus keyword (e.g. "Netflix slang English B2")
+  category?:       string;   // Content category (e.g. "Pop Culture & Entertainment")
   contentHtml:     string;
   translationHtml: string;
   vocabularyList:  ArticleVocabItem[];

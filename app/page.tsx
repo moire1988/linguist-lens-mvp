@@ -49,6 +49,11 @@ import {
   getPendingRestore,
   ANALYSIS_MAX_SLOTS,
 } from "@/lib/saved-analyses";
+import {
+  openLoginPrompt,
+  getGuestExtractionCount,
+  incrementGuestExtraction,
+} from "@/lib/login-prompt-store";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -237,12 +242,22 @@ export default function HomePage() {
     setPublicSaveUrl(null);
     setSourceUrl(inputMode === "url" ? url : undefined);
 
+    // ゲスト解析制限チェック（1回まで無料）
+    if (!isSignedIn && !devMode) {
+      const guestCount = getGuestExtractionCount();
+      if (guestCount >= 1) {
+        openLoginPrompt("extraction");
+        return;
+      }
+    }
+
     // キャッシュチェック（URLモードのみ・devModeはスキップ）
     if (inputMode === "url" && url.trim() && !devMode) {
       const cached = getCachedResult(url.trim(), selectedLevel);
       if (cached) {
         setResults(cached);
         setFromCache(true);
+        if (!isSignedIn) incrementGuestExtraction();
         toast.success("キャッシュから読み込みました", {
           description: "API呼び出しをスキップしました（7日間有効）",
         });
@@ -254,6 +269,7 @@ export default function HomePage() {
       const result = await analyzeContent(inputValue, selectedLevel, inputMode, devMode);
       if (result.success) {
         setResults(result.data);
+        if (!isSignedIn && !devMode) incrementGuestExtraction();
         // URLモードの結果をキャッシュ保存（devModeはスキップ）
         if (inputMode === "url" && url.trim() && !devMode) {
           setCachedResult(url.trim(), selectedLevel, result.data);
@@ -318,6 +334,10 @@ export default function HomePage() {
   // 全件を単語帳に保存
   const handleSaveAll = useCallback(() => {
     if (!results || allSaved) return;
+    if (!isSignedIn) {
+      openLoginPrompt("save");
+      return;
+    }
     let count = 0;
     const newKeys: string[] = [];
     for (const phrase of results.phrases) {
