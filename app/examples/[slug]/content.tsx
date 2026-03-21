@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { BookMarked, ExternalLink, FileText, ChevronDown, Library, Settings } from "lucide-react";
+import { BookMarked, ExternalLink, Library, Settings } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ import type { PhraseResult } from "@/lib/types";
 import type { ExpressionType } from "@/app/actions/analyze";
 import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
 import { PhraseCard } from "@/components/phrase-card";
+import { ScriptViewer } from "@/components/script-viewer";
 import { PremiumModal } from "@/components/premium-modal";
 import { AdBanner } from "@/components/ad-banner";
 import { SiteFooter } from "@/components/site-footer";
@@ -36,31 +37,6 @@ const FILTER_OPTIONS: { value: "all" | ExpressionType; label: string }[] = [
   { value: "grammar_pattern", label: "文法パターン" },
 ];
 
-/** Build HTML string with extracted expressions highlighted via <mark> tags. */
-function buildHighlightedHtml(transcript: string, phrases: PhraseResult[]): string {
-  const paras = transcript
-    .split(/\n\n+/)
-    .map((p) =>
-      p
-        .trim()
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\n/g, "<br/>")
-    );
-
-  let html = paras.map((p) => `<p>${p}</p>`).join("\n");
-
-  // Longest expression first to avoid partial matches
-  const sorted = [...phrases].sort((a, b) => b.expression.length - a.expression.length);
-  for (const phrase of sorted) {
-    const escaped = phrase.expression.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`\\b(${escaped})\\b`, "gi");
-    html = html.replace(regex, "<mark>$1</mark>");
-  }
-
-  return html;
-}
 
 export function ExamplePageContent({ example }: { example: ExampleVideo }) {
   const { isSignedIn, isLoaded } = useAuth();
@@ -70,7 +46,6 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
   const [vocabCount, setVocabCount] = useState(0);
   const [showPremium, setShowPremium] = useState(false);
-  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -235,49 +210,15 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
         {/* ── Ad ── */}
         <AdBanner className="mb-8" />
 
-        {/* ── Full transcript (accordion) ── */}
+        {/* ── Full transcript ── */}
         <div className="mb-8">
-          <button
-            onClick={() => setTranscriptOpen(!transcriptOpen)}
-            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm hover:bg-white hover:border-indigo-200 transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <FileText className="h-4 w-4 text-indigo-500" />
-              <span className="text-sm font-semibold text-slate-700">全文スクリプト</span>
-              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full hidden sm:inline">
-                抽出された表現をハイライト表示
-              </span>
-            </div>
-            <ChevronDown
-              className={cn(
-                "h-4 w-4 text-slate-400 transition-transform duration-200 flex-shrink-0",
-                transcriptOpen && "rotate-180"
-              )}
-            />
-          </button>
-
-          {transcriptOpen && (
-            <div className="mt-2 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
-              {/* Legend */}
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-                <span
-                  className="inline-block text-xs font-semibold px-2 py-0.5 rounded"
-                  style={{ backgroundColor: "rgba(199,210,254,0.65)", color: "#3730a3" }}
-                >
-                  highlight
-                </span>
-                <span className="text-xs text-slate-500">= このページで紹介した表現</span>
-              </div>
-
-              {/* Transcript with highlights */}
-              <div
-                className="transcript-content text-sm text-slate-700 leading-relaxed max-h-[420px] overflow-y-auto pr-1"
-                dangerouslySetInnerHTML={{
-                  __html: buildHighlightedHtml(example.transcript, example.phrases),
-                }}
-              />
-            </div>
-          )}
+          <ScriptViewer
+            text={example.transcript}
+            phrases={example.phrases}
+            savedExpressions={savedExpressions}
+            onSave={handleSave}
+            showTranslate
+          />
         </div>
 
         {/* ── Results header ── */}

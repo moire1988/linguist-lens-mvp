@@ -8,10 +8,14 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Loader2,
+  Languages,
+  X,
 } from "lucide-react";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
 import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import type { PhraseResult } from "@/lib/types";
+import { translateTranscript } from "@/app/actions/translate";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -23,6 +27,8 @@ interface ScriptViewerProps {
   highlightedHtml?: string;
   savedExpressions: Set<string>;
   onSave: (phrase: PhraseResult) => void;
+  /** Show "日本語に翻訳" button at the bottom of the transcript */
+  showTranslate?: boolean;
 }
 
 // ─── Sanitizer ───────────────────────────────────────────────────────────────
@@ -102,10 +108,13 @@ export function ScriptViewer({
   highlightedHtml,
   savedExpressions,
   onSave,
+  showTranslate = false,
 }: ScriptViewerProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speed, setSpeed] = useState(1.0);
   const [collapsed, setCollapsed] = useState(false);
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [tooltip, setTooltip] = useState<{
     phrase: PhraseResult;
     x: number;
@@ -163,6 +172,17 @@ export function ScriptViewer({
     },
     [isSpeaking]
   );
+
+  // ─── Translation ───────────────────────────────────────────────────────
+
+  const handleTranslate = useCallback(async () => {
+    setIsTranslating(true);
+    const result = await translateTranscript(ttsText);
+    setIsTranslating(false);
+    if (result.success && result.translation) {
+      setTranslation(result.translation);
+    }
+  }, [ttsText]);
 
   // ─── Tooltip via event delegation ──────────────────────────────────────
 
@@ -339,15 +359,55 @@ export function ScriptViewer({
               </div>
             )}
 
-            {/* Legend */}
-            <div className="px-5 pb-3 flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                ハイライト = 抽出表現
-              </span>
-              <span className="text-[10px] text-slate-400">
-                ホバーで意味・保存ボタンを表示
-              </span>
+            {/* Legend + translate button */}
+            <div className="px-5 pb-3 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                  ハイライト = 抽出表現
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  ホバーで意味・保存ボタンを表示
+                </span>
+              </div>
+
+              {/* Translate button */}
+              {showTranslate && !translation && !isTranslating && (
+                <button
+                  onClick={handleTranslate}
+                  className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-600 transition-colors underline underline-offset-2"
+                >
+                  <Languages className="h-3 w-3" />
+                  日本語に翻訳
+                </button>
+              )}
+              {showTranslate && isTranslating && (
+                <span className="flex items-center gap-1 text-[11px] text-slate-400">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  翻訳中...
+                </span>
+              )}
             </div>
+
+            {/* Translation result */}
+            {showTranslate && translation && (
+              <div className="mx-5 mb-4 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1">
+                    <Languages className="h-3 w-3" />
+                    日本語訳
+                  </span>
+                  <button
+                    onClick={() => setTranslation(null)}
+                    className="text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                  {translation}
+                </p>
+              </div>
+            )}
           </>
         )}
       </div>

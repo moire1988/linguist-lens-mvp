@@ -1136,6 +1136,7 @@ export default function HomePage() {
                 highlightedHtml={results.full_script_with_highlight}
                 savedExpressions={savedExpressions}
                 onSave={handleSavePhrase}
+                showTranslate={inputMode === "url"}
               />
             )}
 
