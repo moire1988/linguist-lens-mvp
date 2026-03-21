@@ -22,7 +22,7 @@ import {
   Library,
 } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
-import { insertDbAnalysis } from "@/lib/db/analyses";
+import { saveAnalysisAction } from "@/app/actions/save-analysis";
 import { savePublicAnalysis } from "@/app/actions/save-public-analysis";
 import { Rocket, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -163,7 +163,7 @@ export default function HomePage() {
   const [showPremium, setShowPremium] = useState(false);
   const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
-  const { isSignedIn, userId, getToken } = useAuth();
+  const { isSignedIn, userId } = useAuth();
   const { openSignIn } = useClerk();
   const [showSettings, setShowSettings] = useState(false);
   const [devMode, setDevMode] = useState(false);
@@ -384,16 +384,14 @@ export default function HomePage() {
     if (!results || analysisSaved) return;
 
     if (isSignedIn && userId) {
-      // ログイン済み → Supabase に保存（件数制限なし）
-      const token = await getToken({ template: "supabase" });
-      if (!token) return;
-      const id = await insertDbAnalysis(token, userId, {
+      // ログイン済み → Server Action 経由でサービスロールキーを使って保存
+      const result = await saveAnalysisAction({
         data: results,
         inputMode,
         cefrLevel: selectedLevel,
         sourceUrl,
       });
-      if (id) {
+      if (result.success) {
         setAnalysisSaved(true);
         toast.success("解析結果を保存しました", {
           description: "マイページからいつでも復元できます",
@@ -410,7 +408,7 @@ export default function HomePage() {
         });
       }
     }
-  }, [results, analysisSaved, inputMode, selectedLevel, sourceUrl, isSignedIn, userId, getToken]);
+  }, [results, analysisSaved, inputMode, selectedLevel, sourceUrl, isSignedIn, userId]);
 
   // 管理者専用: SEO用公開ページとして保存
   const handleSavePublicAnalysis = useCallback(async () => {
