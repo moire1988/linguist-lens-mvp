@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
-    "@clerk/nextjs": "^7.0.6",
+    "@clerk/nextjs": "^6",
     "@next/third-parties": "^16.2.0",
     "@notionhq/client": "^5.13.0",
     "@supabase/supabase-js": "^2.99.3",
