@@ -8,6 +8,7 @@ import { AdBanner } from "@/components/ad-banner";
 import { ArticleTts } from "@/components/article-tts";
 import { ArticleBody, ArticleVocabCard } from "@/components/article-body";
 import { ArticleHeader } from "@/components/article-header";
+import { NewsletterBanner } from "@/components/newsletter-banner";
 import { SiteFooter } from "@/components/site-footer";
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
@@ -129,6 +130,11 @@ export default async function ArticlePage({
             dangerouslySetInnerHTML={{ __html: article.translationHtml }}
           />
         </section>
+
+        {/* Newsletter */}
+        <div className="mb-8">
+          <NewsletterBanner variant="compact" />
+        </div>
 
         {/* CTA */}
         <div className="bg-gradient-to-br from-indigo-600 to-violet-600 rounded-3xl p-8 text-center text-white">

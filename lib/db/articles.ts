@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import type { Article, ArticleVocabItem, EnglishVariant } from "@/lib/article-types";
+import type { Article, ArticleSummary, ArticleVocabItem, EnglishVariant } from "@/lib/article-types";
 
 // ─── DB row shape ─────────────────────────────────────────────────────────────
 
@@ -56,6 +56,34 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
 
   if (error || !data) return null;
   return rowToArticle(data as ArticleRow);
+}
+
+/**
+ * 記事一覧ページ用: 公開済み記事を新しい順で全件返す（本文HTMLは含まない）。
+ */
+export async function getAllPublishedArticles(): Promise<ArticleSummary[]> {
+  const { data, error } = await supabase
+    .from("articles")
+    .select("id, slug, title_en, title_ja, level, keyword, category, published_at, created_at")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false });
+
+  if (error || !data) return [];
+  return (data as {
+    id: string; slug: string; title_en: string; title_ja: string | null;
+    level: string; keyword: string | null; category: string | null;
+    published_at: string | null; created_at: string;
+  }[]).map((row) => ({
+    id:          row.id,
+    slug:        row.slug,
+    titleEn:     row.title_en,
+    titleJa:     row.title_ja ?? undefined,
+    level:       row.level,
+    keyword:     row.keyword ?? undefined,
+    category:    row.category ?? undefined,
+    publishedAt: row.published_at,
+    createdAt:   row.created_at,
+  }));
 }
 
 /**
