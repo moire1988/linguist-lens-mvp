@@ -4,6 +4,10 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { Analytics } from "@vercel/analytics/next";
+import { ClerkProvider } from "@clerk/nextjs";
+import { FeedbackModal } from "@/components/feedback-modal";
+import { MeshBackground } from "@/components/mesh-background";
+import { DevAuthPanel } from "@/components/dev-auth-panel";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -52,13 +56,19 @@ export default function RootLayout({
   const gtmId = process.env.NEXT_PUBLIC_GTM_ID ?? "GTM-TJX8DZFD";
 
   return (
-    <html lang="ja">
-      <GoogleTagManager gtmId={gtmId} />
-      <body className={inter.className}>
-        {children}
-        <Toaster richColors position="bottom-right" />
-        <Analytics />
-      </body>
-    </html>
+    <ClerkProvider afterSignOutUrl="/">
+
+      <html lang="ja">
+        <GoogleTagManager gtmId={gtmId} />
+        <body className={inter.className} style={{ backgroundColor: "#f7f8ff" }}>
+          <MeshBackground />
+          {children}
+          <FeedbackModal />
+          <DevAuthPanel />
+          <Toaster richColors position="bottom-right" />
+          <Analytics />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

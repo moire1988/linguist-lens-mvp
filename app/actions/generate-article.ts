@@ -19,10 +19,19 @@ const LEVEL_DESCRIPTIONS: Record<string, string> = {
   C2: "near-native — full vocabulary range, subtle nuance, literary style acceptable",
 };
 
+// ─── Accent / English variant instructions ───────────────────────────────────
+
+const ACCENT_INSTRUCTIONS: Record<string, string> = {
+  US: "Use American English throughout: spelling (color, favorite, analyze, center), vocabulary (apartment, elevator, vacation, trash, soccer, gas station, freeway), and idioms typical in American daily life.",
+  UK: "Use British English throughout: spelling (colour, favourite, analyse, centre), vocabulary (flat, lift, holiday, rubbish, football, petrol station, motorway), and idioms typical in British daily life.",
+  AU: "Use Australian English throughout: spelling (colour, favourite, analyse, centre), vocabulary and idioms typical in Australian daily life (arvo, biscuit, footpath, servo, ute, heaps, reckon).",
+};
+
 // ─── Server Action ───────────────────────────────────────────────────────────
 
 export async function generateArticle(
-  cefrLevel: string
+  cefrLevel: string,
+  accent: string = "US"
 ): Promise<GenerateArticleResult> {
   if (!process.env.ANTHROPIC_API_KEY) {
     return { success: false, error: "APIキーが設定されていません" };
@@ -31,10 +40,12 @@ export async function generateArticle(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const levelDesc = LEVEL_DESCRIPTIONS[cefrLevel] ?? "intermediate";
+  const accentInstruction = ACCENT_INSTRUCTIONS[accent] ?? ACCENT_INSTRUCTIONS.US;
 
   const prompt = `You are a creative English writer producing short magazine-style articles for language learners.
 
 Target level: ${cefrLevel} — ${levelDesc}
+English variant: ${accent} — ${accentInstruction}
 
 Task: Write ONE engaging, educational English article on a topic of your choosing.
 
@@ -51,10 +62,11 @@ Topic must come from one of these categories (pick whichever inspires you):
 
 Hard rules:
 1. Vocabulary, sentence length, and grammar complexity MUST strictly match ${cefrLevel} level.
-2. Hook the reader in the very first sentence with a surprising fact or question.
-3. Body length: 200–400 words.
-4. Writing style: engaging short magazine article — facts that make people say "I had no idea!"
-5. NEVER mention "CEFR", "language learning", "English learner", or the reader's language level.
+2. Apply ${accent} English spelling, vocabulary, and idioms consistently throughout the article.
+3. Hook the reader in the very first sentence with a surprising fact or question.
+4. Body length: 200–400 words.
+5. Writing style: engaging short magazine article — facts that make people say "I had no idea!"
+6. NEVER mention "CEFR", "language learning", "English learner", or the reader's language level.
 
 Output ONLY valid JSON — no markdown fences, no explanation, nothing else:
 {"title": "catchy title (max 10 words)", "body": "full article body"}`;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { BookOpen, BookMarked, ExternalLink, FileText, ChevronDown } from "lucide-react";
+import { BookMarked, ExternalLink, FileText, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ExampleVideo } from "@/lib/examples-data";
@@ -11,7 +11,9 @@ import type { ExpressionType } from "@/app/actions/analyze";
 import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
 import { PhraseCard } from "@/components/phrase-card";
 import { PremiumModal } from "@/components/premium-modal";
-import { MeshBackground } from "@/components/mesh-background";
+import { AdBanner } from "@/components/ad-banner";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 
 const CEFR_RANK: Record<string, number> = { A1:1, A2:2, B1:3, B2:4, C1:5, C2:6 };
 const CEFR_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
@@ -105,19 +107,12 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
   const gap = (CEFR_RANK[example.overallLevel] ?? 0) - CEFR_RANK["B2"];
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#f7f8ff" }}>
+    <div className="min-h-screen relative">
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
 
-      {/* ── Animated SVG mesh background ── */}
-      <MeshBackground />
-
-      {/* ── Header ── */}
-      <header className="border-b border-slate-100 bg-white/70 backdrop-blur-sm sticky top-0 z-10 relative">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <BookOpen className="h-5 w-5 text-indigo-600" />
-            <span className="font-bold text-slate-800 tracking-tight">LinguistLens</span>
-          </Link>
+      <SiteHeader
+        maxWidth="5xl"
+        right={
           <Link
             href="/vocabulary"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-100 transition-colors"
@@ -130,8 +125,8 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
               </span>
             )}
           </Link>
-        </div>
-      </header>
+        }
+      />
 
       <main className="relative max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
 
@@ -198,6 +193,9 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
             )}
           </div>
         </div>
+
+        {/* ── Ad ── */}
+        <AdBanner className="mb-8" />
 
         {/* ── Full transcript (accordion) ── */}
         <div className="mb-8">
@@ -316,6 +314,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
           </div>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

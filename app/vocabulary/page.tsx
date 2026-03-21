@@ -36,7 +36,10 @@ import {
   exportToMarkdown,
   type SavedPhrase,
 } from "@/lib/vocabulary";
+import { useAuth } from "@clerk/nextjs";
 import { AdPlaceholder } from "@/components/ad-placeholder";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 import { CoachModal } from "@/components/coach-modal";
 import {
   getSavedAnalyses,
@@ -45,6 +48,7 @@ import {
   ANALYSIS_MAX_SLOTS,
   type SavedAnalysis,
 } from "@/lib/saved-analyses";
+import { getDbAnalyses, deleteDbAnalysis } from "@/lib/db/analyses";
 
 const MIN_COACH_PHRASES = 5;
 
@@ -514,8 +518,10 @@ function FlashCard({
 
 export default function VocabularyPage() {
   const router = useRouter();
+  const { isSignedIn, userId, getToken } = useAuth();
   const [vocabulary, setVocabulary] = useState<SavedPhrase[]>([]);
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
+  const [loadingAnalyses, setLoadingAnalyses] = useState(false);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [cefrFilter, setCefrFilter] = useState<string>("all");
@@ -523,11 +529,27 @@ export default function VocabularyPage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showCoach, setShowCoach] = useState(false);
 
-  // Load from localStorage after mount
+  // 単語帳は常に localStorage から
   useEffect(() => {
     setVocabulary(getVocabulary());
-    setSavedAnalyses(getSavedAnalyses());
   }, []);
+
+  // 解析履歴: ログイン済みは Supabase、未ログインは localStorage
+  useEffect(() => {
+    if (isSignedIn === undefined) return; // Clerk 初期化待ち
+    if (isSignedIn && userId) {
+      setLoadingAnalyses(true);
+      (async () => {
+        const token = await getToken({ template: "supabase" });
+        if (!token) { setLoadingAnalyses(false); return; }
+        const analyses = await getDbAnalyses(token, userId);
+        setSavedAnalyses(analyses);
+        setLoadingAnalyses(false);
+      })();
+    } else {
+      setSavedAnalyses(getSavedAnalyses());
+    }
+  }, [isSignedIn, userId, getToken]);
 
   // Filtered vocabulary
   const filtered = useMemo(() => {
@@ -564,11 +586,18 @@ export default function VocabularyPage() {
     toast.success("単語帳をすべて削除しました");
   }, []);
 
-  const handleDeleteAnalysis = useCallback((id: string) => {
-    deleteSavedAnalysis(id);
-    setSavedAnalyses(getSavedAnalyses());
+  const handleDeleteAnalysis = useCallback(async (id: string) => {
+    if (isSignedIn && userId) {
+      const token = await getToken({ template: "supabase" });
+      if (!token) return;
+      await deleteDbAnalysis(token, userId, id);
+      setSavedAnalyses((prev) => prev.filter((a) => a.id !== id));
+    } else {
+      deleteSavedAnalysis(id);
+      setSavedAnalyses(getSavedAnalyses());
+    }
     toast.success("保存した解析結果を削除しました");
-  }, []);
+  }, [isSignedIn, userId, getToken]);
 
   const handleRestoreAnalysis = useCallback((id: string) => {
     setPendingRestore(id);
@@ -596,7 +625,7 @@ export default function VocabularyPage() {
   }, [vocabulary]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50/50">
+    <div className="min-h-screen relative">
       {/* Flashcard overlay */}
       {showFlashcard && vocabulary.length > 0 && (
         <FlashCard
@@ -613,14 +642,10 @@ export default function VocabularyPage() {
         />
       )}
 
-      {/* Header */}
-      <header className="border-b border-slate-100 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <BookOpen className="h-5 w-5 text-indigo-600" />
-            <span className="font-bold text-slate-800 tracking-tight">LinguistLens</span>
-          </Link>
-          <div className="flex items-center gap-3">
+      <SiteHeader
+        maxWidth="5xl"
+        right={
+          <>
             <Link
               href="/"
               className="text-xs text-slate-500 hover:text-indigo-600 transition-colors hidden sm:block"
@@ -631,9 +656,9 @@ export default function VocabularyPage() {
               <BookMarked className="h-3 w-3 inline mr-1" />
               {vocabulary.length}語
             </span>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {/* Page title + actions */}
@@ -710,15 +735,23 @@ export default function VocabularyPage() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-bold text-slate-700">保存した解析結果</h2>
             <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-              {savedAnalyses.length} / {ANALYSIS_MAX_SLOTS} 枠
+              {loadingAnalyses ? "読み込み中…" : isSignedIn
+                ? `${savedAnalyses.length} 件`
+                : `${savedAnalyses.length} / ${ANALYSIS_MAX_SLOTS} 枠`}
             </span>
           </div>
 
-          {savedAnalyses.length === 0 ? (
+          {loadingAnalyses ? (
+            <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl px-6 py-8 text-center">
+              <p className="text-sm text-slate-400">読み込み中...</p>
+            </div>
+          ) : savedAnalyses.length === 0 ? (
             <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl px-6 py-8 text-center">
               <p className="text-sm text-slate-400">保存された解析結果はありません</p>
               <p className="text-xs text-slate-300 mt-1">
-                解析結果画面の「この結果を保存」ボタンで最大3件保存できます
+                {isSignedIn
+                  ? "解析結果画面の「この結果を保存」ボタンで保存できます"
+                  : "解析結果画面の「この結果を保存」ボタンで最大3件保存できます"}
               </p>
             </div>
           ) : (
@@ -955,11 +988,7 @@ export default function VocabularyPage() {
         </div>
       )}
 
-      <footer className="border-t border-slate-100 py-6 mt-8">
-        <p className="text-center text-xs text-slate-400">
-          © 2024 LinguistLens · データはこのブラウザにのみ保存されます
-        </p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

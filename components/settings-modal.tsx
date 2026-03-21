@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -9,6 +10,7 @@ import {
   type Accent,
   type CefrLevel,
 } from "@/lib/settings";
+import { getDbPreferences, upsertDbPreferences } from "@/lib/db/preferences";
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -32,6 +34,7 @@ const CEFR_LABELS: Record<CefrLevel, string> = {
 };
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
+  const { isSignedIn, userId, getToken } = useAuth();
   const initial = getSettings();
   const [accent, setAccent] = useState<Accent>(initial.accent);
   const [defaultLevel, setDefaultLevel] = useState<CefrLevel>(initial.defaultLevel);
@@ -40,14 +43,38 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [versionClicks, setVersionClicks] = useState(0);
   const [lastClickTime, setLastClickTime] = useState(0);
 
-  const handleAccentChange = (a: Accent) => {
+  // ログイン済みなら Supabase から設定を読み込む
+  useEffect(() => {
+    if (!isSignedIn || !userId) return;
+    (async () => {
+      const token = await getToken({ template: "supabase" });
+      if (!token) return;
+      const prefs = await getDbPreferences(token, userId);
+      if (prefs) {
+        setAccent(prefs.accent);
+        setDefaultLevel(prefs.defaultLevel);
+        // localStorage にも同期しておく（TTS などのローカル読み取り用）
+        saveSettings({ accent: prefs.accent, defaultLevel: prefs.defaultLevel });
+      }
+    })();
+  }, [isSignedIn, userId, getToken]);
+
+  const handleAccentChange = async (a: Accent) => {
     setAccent(a);
     saveSettings({ accent: a });
+    if (isSignedIn && userId) {
+      const token = await getToken({ template: "supabase" });
+      if (token) await upsertDbPreferences(token, userId, { accent: a });
+    }
   };
 
-  const handleLevelChange = (l: CefrLevel) => {
+  const handleLevelChange = async (l: CefrLevel) => {
     setDefaultLevel(l);
     saveSettings({ defaultLevel: l });
+    if (isSignedIn && userId) {
+      const token = await getToken({ template: "supabase" });
+      if (token) await upsertDbPreferences(token, userId, { defaultLevel: l });
+    }
   };
 
   const handleDevModeToggle = () => {
