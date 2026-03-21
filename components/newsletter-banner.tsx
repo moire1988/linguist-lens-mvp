@@ -108,12 +108,10 @@ export function NewsletterBanner({ variant = "default" }: { variant?: "default" 
           </span>
         </div>
         <h3 className="text-lg sm:text-xl font-bold text-white mb-2 leading-snug">
-          週1回、AIが抽出したリアルな英語表現と<br className="hidden sm:inline" />
-          新着記事をお届けします。
+          LinguistLens Updates 🚀
         </h3>
         <p className="text-sm text-indigo-200 mb-5 leading-relaxed">
-          YouTubeやネイティブコンテンツから抽出した生きた表現を、
-          あなたのCEFRレベルに合わせて毎週配信。
+          AIが解析した最新の英語コンテンツや、便利な新機能のお知らせをメールで受け取れます。
         </p>
         <SubscribeButton status={status} onClick={handleSubscribe} dark />
       </div>
