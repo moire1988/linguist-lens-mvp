@@ -139,6 +139,14 @@ export default async function ArticlePage({
         <div className="flex items-center gap-2 flex-wrap mb-4">
           <CefrBadge level={article.level} />
           <VariantBadge variant={article.englishVariant} />
+          {article.category && (
+            <span className={cn(
+              "text-[10px] font-mono px-1.5 py-0.5 rounded border",
+              CATEGORY_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200"
+            )}>
+              {article.category}
+            </span>
+          )}
           <span className="text-xs text-slate-400">
             {new Date(article.publishedAt!).toLocaleDateString("ja-JP")}
           </span>
