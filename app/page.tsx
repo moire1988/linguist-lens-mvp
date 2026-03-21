@@ -19,6 +19,7 @@ import {
   Settings,
   Save,
   Wand2,
+  Library,
 } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { insertDbAnalysis } from "@/lib/db/analyses";
@@ -41,6 +42,7 @@ import { ScriptViewer } from "@/components/script-viewer";
 import { AdPlaceholder } from "@/components/ad-placeholder";
 import { SettingsModal } from "@/components/settings-modal";
 import { SiteFooter } from "@/components/site-footer";
+import { NewsletterBanner } from "@/components/newsletter-banner";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
 import { getSettings, DEV_TEST_URL } from "@/lib/settings";
 import {
@@ -538,6 +540,13 @@ export default function HomePage() {
         }
         right={
           <>
+            <Link
+              href="/articles"
+              className="flex items-center gap-1 text-xs font-mono font-medium text-slate-500 hover:text-indigo-600 transition-colors"
+            >
+              <Library className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Library</span>
+            </Link>
             <button
               onClick={() => setShowSettings((v) => !v)}
               className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
@@ -1196,6 +1205,13 @@ export default function HomePage() {
           </div>
         )}
       </main>
+
+      {/* ── Newsletter（コンテンツなし時のみ） ── */}
+      {!hasContent && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10">
+          <NewsletterBanner />
+        </div>
+      )}
 
       {/* ── Footer ── */}
       {!hasContent && <SiteFooter />}
