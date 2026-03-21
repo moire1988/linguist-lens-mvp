@@ -9,6 +9,7 @@ const isPublicRoute = createRouteMatcher([
   "/robots.txt",
   "/og",
   "/icon.svg",
+  "/articles",
   "/articles/(.*)",
 ]);
 
