@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useAuth, useClerk } from "@clerk/nextjs";
+import { useClerk } from "@clerk/nextjs";
+import { useEffectiveAuth } from "@/lib/dev-auth";
 import {
   Volume2, VolumeX, BookmarkPlus, Check,
   Mic, MicOff, Lock,
@@ -101,7 +102,7 @@ export function PhrasePopup({
   phrase, isSaved, dailyRemaining, top, left,
   onSave, onMouseEnter, onMouseLeave,
 }: PhrasePopupProps) {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn } = useEffectiveAuth();
   const { openSignIn } = useClerk();
   const [isSpeakingWord, setIsSpeakingWord] = useState(false);
   const [isListening,    setIsListening]    = useState(false);

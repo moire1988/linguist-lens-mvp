@@ -10,6 +10,7 @@ import type { ExampleVideo } from "@/lib/examples-data";
 import type { PhraseResult } from "@/lib/types";
 import type { ExpressionType } from "@/app/actions/analyze";
 import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
+import { useEffectiveAuth } from "@/lib/dev-auth";
 import { PhraseCard } from "@/components/phrase-card";
 import { ScriptViewer } from "@/components/script-viewer";
 import { PremiumModal } from "@/components/premium-modal";
@@ -46,6 +47,7 @@ const FILTER_OPTIONS: { value: "all" | ExpressionType; label: string }[] = [
 export function ExamplePageContent({ example }: { example: ExampleVideo }) {
   const { isSignedIn, isLoaded } = useAuth();
   const { openSignIn } = useClerk();
+  const { isPro } = useEffectiveAuth();
   const [activeFilter, setActiveFilter] = useState<"all" | ExpressionType>("all");
   const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
@@ -232,6 +234,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
             savedExpressions={savedExpressions}
             onSave={handleSave}
             showTranslate
+            isPro={isPro}
             dailyRemaining={dailyRemaining}
           />
         </div>

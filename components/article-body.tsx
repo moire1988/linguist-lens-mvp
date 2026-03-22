@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useEffectiveAuth } from "@/lib/dev-auth";
 import {
   Volume2, VolumeX, BookmarkPlus, Check,
   Mic, MicOff, ChevronDown, Lock,
@@ -273,7 +274,8 @@ export function ArticleBody({
 }: {
   contentHtml: string; articleLevel: string; articleTitle: string; englishVariant: EnglishVariant;
 }) {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isLoaded } = useAuth();
+  const { isSignedIn } = useEffectiveAuth();
   const containerRef   = useRef<HTMLDivElement>(null);
   const hideTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [popup, setPopup]               = useState<PopupData | null>(null);

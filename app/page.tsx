@@ -21,6 +21,7 @@ import {
   Library,
 } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
+import { useEffectiveAuth } from "@/lib/dev-auth";
 import { saveAnalysisAction } from "@/app/actions/save-analysis";
 import { savePublicAnalysis } from "@/app/actions/save-public-analysis";
 import { Rocket, ExternalLink } from "lucide-react";
@@ -168,6 +169,7 @@ export default function HomePage() {
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
   const { isSignedIn, userId } = useAuth();
   const { openSignIn } = useClerk();
+  const { isPro } = useEffectiveAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [devMode, setDevMode] = useState(false);
   const [analysisSaved, setAnalysisSaved] = useState(false);
@@ -1114,7 +1116,7 @@ export default function HomePage() {
                 savedExpressions={savedExpressions}
                 onSave={handleSavePhrase}
                 showTranslate={inputMode === "url"}
-                isPro={false}
+                isPro={isPro}
                 dailyRemaining={dailyRemaining}
               />
             )}

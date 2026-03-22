@@ -1,10 +1,12 @@
 export type Accent = "US" | "UK" | "AU";
 export type CefrLevel = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
+export type DevAuthState = "real" | "guest" | "free" | "pro";
 
 export interface UserSettings {
   accent: Accent;
   defaultLevel: CefrLevel;
   devMode: boolean;
+  devAuthState: DevAuthState;
 }
 
 const SETTINGS_KEY = "ll_settings";
@@ -13,6 +15,7 @@ const DEFAULTS: UserSettings = {
   accent: "US",
   defaultLevel: "B2",
   devMode: false,
+  devAuthState: "real",
 };
 
 export function getSettings(): UserSettings {
