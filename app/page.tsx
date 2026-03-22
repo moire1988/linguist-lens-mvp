@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback } from "react";
+import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -46,7 +46,7 @@ import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
 import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
-import { getSettings, DEV_TEST_URL } from "@/lib/settings";
+import { getSettings, DEV_TEST_URL, type DevAuthState } from "@/lib/settings";
 import {
   saveAnalysis,
   getSavedAnalyses,
@@ -62,6 +62,7 @@ import {
   getRecentPublicAnalysesAction,
   type RecentPublicAnalysis,
 } from "@/app/actions/public-analyses";
+import { RECOMMENDED_VIDEOS } from "@/lib/recommended-videos-data";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -136,6 +137,12 @@ const SOURCE_LABELS = {
   text: { label: "テキスト入力", icon: "📄" },
 };
 
+/** `recommended-videos-data` から YouTube 視聴 URL の候補を生成 */
+function getRecommendedVideoUrlCandidates(): string[] {
+  return RECOMMENDED_VIDEOS.filter((v) => v.youtubeId.trim().length > 0).map(
+    (v) => `https://www.youtube.com/watch?v=${v.youtubeId.trim()}`
+  );
+}
 
 const CEFR_RANK: Record<string, number> = {
   A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6,
@@ -173,12 +180,17 @@ export default function HomePage() {
   const { isPro } = useEffectiveAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [devMode, setDevMode] = useState(false);
+  const [devAuthState, setDevAuthState] = useState<DevAuthState>("real");
   const [analysisSaved, setAnalysisSaved] = useState(false);
+  const [isSavingAnalysis, setIsSavingAnalysis] = useState(false);
   const [savedAnalysisSlots, setSavedAnalysisSlots] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [publicSaveUrl, setPublicSaveUrl] = useState<string | null>(null);
   const [isPublicSaving, setIsPublicSaving] = useState(false);
   const [recentPublicAnalyses, setRecentPublicAnalyses] = useState<RecentPublicAnalysis[]>([]);
+  const [urlInputGlow, setUrlInputGlow] = useState(false);
+  const [isUrlTyping, setIsUrlTyping] = useState(false);
+  const urlTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 管理者かつ devMode ON の場合のみ公開保存ボタンを表示
   const isAdmin = isSignedIn && userId === process.env.NEXT_PUBLIC_ADMIN_USER_ID;
@@ -192,6 +204,7 @@ export default function HomePage() {
     const s = getSettings();
     setSelectedLevel(s.defaultLevel);
     setDevMode(s.devMode);
+    setDevAuthState(s.devAuthState);
     if (s.devMode) setUrl(DEV_TEST_URL);
 
     // 解析結果ストックの件数を読み込む
@@ -216,6 +229,51 @@ export default function HomePage() {
     // 公開済み解析フィードを取得
     getRecentPublicAnalysesAction(6).then(setRecentPublicAnalyses);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (urlTypingTimerRef.current !== null) {
+        clearTimeout(urlTypingTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearUrlTypingTimer = useCallback(() => {
+    if (urlTypingTimerRef.current !== null) {
+      clearTimeout(urlTypingTimerRef.current);
+      urlTypingTimerRef.current = null;
+    }
+    setIsUrlTyping(false);
+  }, []);
+
+  /** 推奨動画リストからランダムな URL をタイピング風に入力（解析は開始しない） */
+  const fillRandomRecommendedUrl = useCallback(() => {
+    clearUrlTypingTimer();
+    const pool = getRecommendedVideoUrlCandidates();
+    if (pool.length === 0) return;
+    const target = pool[Math.floor(Math.random() * pool.length)]!;
+    setError(null);
+    setInputMode("url");
+    setUrl("");
+    setIsUrlTyping(true);
+    let i = 0;
+    const step = () => {
+      i += 1;
+      setUrl(target.slice(0, i));
+      if (i < target.length) {
+        const delay = 8 + Math.floor(Math.random() * 10);
+        urlTypingTimerRef.current = setTimeout(step, delay);
+      } else {
+        setIsUrlTyping(false);
+        setUrlInputGlow(true);
+        urlTypingTimerRef.current = setTimeout(() => {
+          setUrlInputGlow(false);
+          urlTypingTimerRef.current = null;
+        }, 480);
+      }
+    };
+    urlTypingTimerRef.current = setTimeout(step, 40);
+  }, [clearUrlTypingTimer]);
 
   const [isPending, startTransition] = useTransition();
 
@@ -295,48 +353,6 @@ export default function HomePage() {
     });
   }, [inputValue, url, selectedLevel, inputMode, devMode]);
 
-  // Sample video quick-submit (URL is passed directly, bypasses state timing)
-  const handleQuickSubmit = useCallback(
-    (videoUrl: string) => {
-      setUrl(videoUrl);
-      setInputMode("url");
-      setError(null);
-      setResults(null);
-      setAllSaved(false);
-      setFromCache(false);
-      setActiveFilter("all");
-      setAnalysisSaved(false);
-    setPublicSaveUrl(null);
-      setSourceUrl(videoUrl);
-
-      if (!devMode) {
-        const cached = getCachedResult(videoUrl, selectedLevel);
-        if (cached) {
-          setResults(cached);
-          setFromCache(true);
-          toast.success("キャッシュから読み込みました", {
-            description: "API呼び出しをスキップしました（7日間有効）",
-          });
-          return;
-        }
-      }
-
-      startTransition(async () => {
-        const result = await analyzeContent(videoUrl, selectedLevel, "url", devMode);
-        if (result.success) {
-          setResults(result.data);
-          if (!devMode) setCachedResult(videoUrl, selectedLevel, result.data);
-          if (result.data.total_count === 0) {
-            setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
-          }
-        } else {
-          setError(result.error);
-        }
-      });
-    },
-    [selectedLevel, devMode]
-  );
-
   // Filtered results
   const filteredPhrases =
     results?.phrases.filter(
@@ -391,34 +407,60 @@ export default function HomePage() {
 
   // 解析結果全体をストックに保存
   const handleSaveAnalysis = useCallback(async () => {
-    if (!results || analysisSaved) return;
+    if (!results || analysisSaved || isSavingAnalysis) return;
 
-    if (isSignedIn && userId) {
-      // ログイン済み → Server Action 経由でサービスロールキーを使って保存
-      const result = await saveAnalysisAction({
-        data: results,
-        inputMode,
-        cefrLevel: selectedLevel,
-        sourceUrl,
+    setIsSavingAnalysis(true);
+    try {
+      // クライアントの userId はロード遅延があり得るため、ログイン判定は isSignedIn のみ。
+      // 実際の user 検証は saveAnalysisAction 内の auth() で行う。
+      if (isSignedIn) {
+        const result = await saveAnalysisAction({
+          data: results,
+          inputMode,
+          cefrLevel: selectedLevel,
+          sourceUrl,
+        });
+        if (result.success) {
+          setAnalysisSaved(true);
+          toast.success("解析結果を保存しました", {
+            description: "マイページからいつでも復元できます",
+          });
+        } else {
+          toast.error("解析結果を保存できませんでした", {
+            description: result.error,
+          });
+        }
+      } else {
+        // 未ログイン → localStorage に保存（3件制限あり）
+        const res = saveAnalysis(results, inputMode, selectedLevel, sourceUrl);
+        if (res.success) {
+          setAnalysisSaved(true);
+          setSavedAnalysisSlots((c) => c + 1);
+          toast.success("解析結果を保存しました", {
+            description: "マイページからいつでも復元できます",
+          });
+        } else if (res.reason === "full") {
+          toast.error("保存枠がいっぱいです", {
+            description: `未ログイン時は最大${ANALYSIS_MAX_SLOTS}件までです。ログインするか、マイページから古い保存を削除してください。`,
+          });
+        }
+      }
+    } catch (e) {
+      toast.error("保存中にエラーが発生しました", {
+        description: e instanceof Error ? e.message : undefined,
       });
-      if (result.success) {
-        setAnalysisSaved(true);
-        toast.success("解析結果を保存しました", {
-          description: "マイページからいつでも復元できます",
-        });
-      }
-    } else {
-      // 未ログイン → localStorage に保存（3件制限あり）
-      const res = saveAnalysis(results, inputMode, selectedLevel, sourceUrl);
-      if (res.success) {
-        setAnalysisSaved(true);
-        setSavedAnalysisSlots((c) => c + 1);
-        toast.success("解析結果を保存しました", {
-          description: "マイページからいつでも復元できます",
-        });
-      }
+    } finally {
+      setIsSavingAnalysis(false);
     }
-  }, [results, analysisSaved, inputMode, selectedLevel, sourceUrl, isSignedIn, userId]);
+  }, [
+    results,
+    analysisSaved,
+    isSavingAnalysis,
+    inputMode,
+    selectedLevel,
+    sourceUrl,
+    isSignedIn,
+  ]);
 
   // 管理者専用: SEO用公開ページとして保存
   const handleSavePublicAnalysis = useCallback(async () => {
@@ -530,6 +572,7 @@ export default function HomePage() {
             setShowSettings(false);
             const s = getSettings();
             setDevMode(s.devMode);
+            setDevAuthState(s.devAuthState);
             if (s.devMode) setUrl(DEV_TEST_URL);
           }}
         />
@@ -540,8 +583,11 @@ export default function HomePage() {
           <div className="flex items-center gap-2">
             <HeaderLogo />
             {devMode && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-600 border border-amber-200">
-                🛠️ DEV
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-600 border border-amber-200">
+                <span className="text-[10px] font-bold">🛠️ DEV</span>
+                {devAuthState !== "real" && (
+                  <span className="text-[9px] font-mono opacity-70">{devAuthState}</span>
+                )}
               </span>
             )}
           </div>
@@ -657,9 +703,34 @@ export default function HomePage() {
             {/* URL input */}
             {inputMode === "url" && (
               <div className="mb-5">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">
-                  URLを入力
-                </label>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3 mb-2">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
+                    <label className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      YouTube / Web URL
+                    </label>
+                    <span
+                      className="inline-flex w-fit max-w-full items-center rounded-md border border-slate-200/90 bg-slate-50 px-2 py-1 text-[9px] font-mono leading-tight text-slate-500 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)]"
+                      title="How it works"
+                    >
+                      URLを貼り付けるとAIが使える表現を抽出します ✨
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fillRandomRecommendedUrl}
+                    disabled={isPending || isUrlTyping}
+                    className={cn(
+                      "shrink-0 rounded-lg border px-2.5 py-1 text-[10px] font-mono font-medium transition-colors",
+                      "border-violet-400 bg-violet-500 text-white",
+                      "hover:bg-violet-600 hover:border-violet-500",
+                      "disabled:cursor-not-allowed disabled:opacity-50"
+                    )}
+                    title="Insert a random URL from the curated list (typing animation)"
+                  >
+                    {isUrlTyping ? "入力中…" : "💡 おすすめURLを入力"}
+                  </button>
+                </div>
+
                 <div className="relative">
                   <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                     {urlType === "youtube" ? (
@@ -673,12 +744,16 @@ export default function HomePage() {
                   <input
                     type="url"
                     value={url}
+                    readOnly={isUrlTyping}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://www.youtube.com/watch?v=...  または記事URL"
+                    placeholder="https://www.youtube.com/watch?v=... または記事URL"
                     className={cn(
-                      "w-full pl-10 pr-4 py-3 rounded-xl border text-sm transition-colors outline-none",
+                      "w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all duration-300 outline-none",
                       "placeholder:text-slate-400 text-slate-800",
                       "focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50",
+                      isUrlTyping && "cursor-wait bg-slate-50/80",
+                      urlInputGlow &&
+                        "ring-2 ring-indigo-300/50 shadow-[0_0_0_1px_rgba(129,140,248,0.25)] border-indigo-200/80",
                       urlType === "youtube"
                         ? "border-red-200 bg-red-50/40"
                         : urlType === "web"
@@ -687,17 +762,20 @@ export default function HomePage() {
                     )}
                   />
                 </div>
+                <p className="mt-1.5 text-[9px] font-mono text-slate-400">
+                  YouTube: 英語字幕あり動画 · Web: 英語記事のURL · 学習効率を高めるため冒頭を抜粋して解析します
+                </p>
                 {urlType && (
-                  <p className="mt-1.5 text-xs text-slate-400 flex items-center gap-1">
+                  <p className="mt-1 text-[11px] text-slate-500 flex items-center gap-1.5">
                     {urlType === "youtube" ? (
                       <>
-                        <Youtube className="h-3 w-3 text-red-400" />
-                        YouTube動画の字幕を自動取得します
+                        <Youtube className="h-3 w-3 text-red-400 shrink-0" />
+                        <span>字幕を取得して解析</span>
                       </>
                     ) : (
                       <>
-                        <Globe className="h-3 w-3 text-indigo-400" />
-                        Web記事のテキストを抽出します
+                        <Globe className="h-3 w-3 text-indigo-400 shrink-0" />
+                        <span>本文を抽出して解析</span>
                       </>
                     )}
                   </p>
@@ -938,21 +1016,31 @@ export default function HomePage() {
                 {/* Save analysis result */}
                 <div className="relative group">
                   <button
-                    onClick={handleSaveAnalysis}
-                    disabled={analysisSaved || (!isSignedIn && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS)}
+                    type="button"
+                    onClick={() => void handleSaveAnalysis()}
+                    disabled={
+                      analysisSaved ||
+                      isSavingAnalysis ||
+                      (!isSignedIn && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS)
+                    }
                     className={cn(
                       "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
                       analysisSaved
                         ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                         : !isSignedIn && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS
                         ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
-                        : "bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50 hover:shadow-sm hover:shadow-violet-100"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50 hover:shadow-sm hover:shadow-violet-100 disabled:opacity-70"
                     )}
                   >
                     {analysisSaved ? (
                       <>
                         <Check className="h-4 w-4" />
                         結果を保存済み
+                      </>
+                    ) : isSavingAnalysis ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        保存中...
                       </>
                     ) : (
                       <>
@@ -1022,29 +1110,48 @@ export default function HomePage() {
                   </div>
                 )}
 
-                {/* Save all to vocabulary */}
-                <button
-                  onClick={handleSaveAll}
-                  disabled={allSaved}
-                  className={cn(
-                    "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
-                    allSaved
-                      ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                      : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm hover:shadow-indigo-100"
-                  )}
-                >
-                  {allSaved ? (
-                    <>
-                      <Check className="h-4 w-4" />
-                      全て保存済み
-                    </>
-                  ) : (
-                    <>
-                      <BookmarkPlus className="h-4 w-4" />
-                      単語帳に全て保存
-                    </>
-                  )}
-                </button>
+                {/* 一括保存はプレミアムのみ（無料は1日の保存上限が少ないため） */}
+                {isPro ? (
+                  <button
+                    type="button"
+                    onClick={handleSaveAll}
+                    disabled={allSaved}
+                    className={cn(
+                      "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
+                      allSaved
+                        ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm hover:shadow-indigo-100"
+                    )}
+                  >
+                    {allSaved ? (
+                      <>
+                        <Check className="h-4 w-4" />
+                        全て保存済み
+                      </>
+                    ) : (
+                      <>
+                        <BookmarkPlus className="h-4 w-4" />
+                        単語帳に全て保存
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <div className="flex flex-col items-end sm:items-start gap-1 max-w-[220px] text-right sm:text-left">
+                    <p className="text-[10px] leading-snug text-slate-400 font-mono">
+                      一括保存はプレミアムのみ
+                    </p>
+                    <p className="text-[9px] leading-relaxed text-slate-400">
+                      無料プランは1日あたりの保存上限が小さいため、カードから個別に保存してください。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowPremium(true)}
+                      className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
+                    >
+                      プレミアムを見る
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 

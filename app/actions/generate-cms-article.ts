@@ -32,11 +32,20 @@ function pickVariant(): EnglishVariant {
   return VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
 }
 
+/** 英語本文の目標語数（A1/A2 は読む負荷を抑える） */
+function getArticleBodyWordCountRange(level: string): string {
+  if (level === "A1") return "90–130";
+  if (level === "A2") return "130–200";
+  return "250–350";
+}
+
 // ─── Prompt ───────────────────────────────────────────────────────────────────
 
 function buildPrompt(level: string, variant: EnglishVariant, selectedCategory: string): string {
   const levelDesc = LEVEL_DESCRIPTIONS[level] ?? "intermediate";
+  const wordRange = getArticleBodyWordCountRange(level);
   const isGrammar = isGrammarMasterclassCategory(selectedCategory);
+  const isBeginnerLevel = level === "A1" || level === "A2";
 
   const grammarModeBlock = isGrammar
     ? `
@@ -59,13 +68,15 @@ Pick a REAL, slightly niche angle that makes Japanese readers think "I had no id
     : "";
 
   const step2Rules = isGrammar
-    ? `1. Word count: 250–350 words of English body text (the grammar lesson lives here — all explanations stay in English).
+    ? `1. Word count: ${wordRange} words of English body text (the grammar lesson lives here — all explanations stay in English).
+${isBeginnerLevel ? `   • A1/A2: Keep the lesson TIGHT — one focused insight only; do not pad. Shorter text is intentional for reading stamina.` : ""}
 2. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST precisely match ${level}.
 3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout — woven into the essay, not bolted on.
 4. Opening hook: The very first sentence must grab attention with a bold claim or question about grammar, usage, or native "feel" — never a travel or café hook.
 5. The body must read as ONE coherent English essay; do not switch to Japanese to teach rules inside the article.
 6. Never mention CEFR levels, "English learners", or language study as meta.`
-    : `1. Word count: 250–350 words of English body text.
+    : `1. Word count: ${wordRange} words of English body text.
+${isBeginnerLevel ? `   • A1/A2: Brevity is a feature — prioritize clarity and one memorable takeaway; avoid long paragraphs that exhaust beginners.` : ""}
 2. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST precisely match ${level}.
 3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout — the dialect must be woven naturally into the content, not just mentioned once.
 4. Opening hook: The very first sentence must be a surprising fact, bold claim, or intriguing question (culture, trend, or daily life — never a bland tourism teaser).
@@ -107,6 +118,7 @@ English Dialect/Variant: ${variant} (US, UK, AU, or common)
 
 ═══ REQUIRED (NON-NEGOTIABLE) ═════════════════════════════════════════
 • Japanese learners must get a genuine "Aha!" moment: specific, fresh, a little nerdy or insider — still readable at ${level}.
+${isBeginnerLevel ? `• A1/A2 reading load: Target English body length is ${wordRange} words (see STEP 2). Do NOT exceed this — beginners rarely have stamina for long texts; the Japanese translation should stay comfortably under ~1,000 characters unless the English is already at the top of the range.` : ""}
 • The ${variant} parameter controls spelling, idioms, slang, and lexical choices — NOT where the story is "set". Do not force Sydney/London/New York scenery unless the topic truly needs it.
 ${grammarModeBlock}${nonGrammarModeBlock}
 ═══ CRITICAL RULES FOR DIALECT (${variant}) ════════════════════════════

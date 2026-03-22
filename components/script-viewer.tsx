@@ -69,6 +69,27 @@ function sanitizeHighlight(html: string): string {
  * AI highlight が空だった場合のクライアント側フォールバック。
  * phrases をテキスト内で検索し <b data-expr="..."> で囲む。
  */
+
+/**
+ * be 動詞の活用・先頭動詞の規則変化（-s/-ed/-ing）に対応した正規表現を生成する。
+ * - "be" → (?:be|is|are|was|were|been|being)
+ * - 先頭の単語（be 以外）→ 末尾に (?:s|d|ed|ing)? を付加（規則変化のみ）
+ */
+function buildFlexibleRegex(searchTerm: string): RegExp {
+  const words = searchTerm.trim().split(/\s+/);
+  const parts = words.map((word, i) => {
+    if (word.toLowerCase() === "be") {
+      return "(?:be|is|are|was|were|been|being)";
+    }
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (i === 0) {
+      return escaped + "(?:s|d|ed|ing)?";
+    }
+    return escaped;
+  });
+  return new RegExp(parts.join("\\s+"), "gi");
+}
+
 function buildClientHighlight(text: string, phrases: PhraseResult[]): string {
   if (!phrases.length) return escapeHtml(text);
 
@@ -76,11 +97,17 @@ function buildClientHighlight(text: string, phrases: PhraseResult[]): string {
   const spans: Span[] = [];
 
   // 長い表現を優先してマッチ（短い表現が長いものの一部に重複しないよう）
-  const sorted = [...phrases].sort((a, b) => b.expression.length - a.expression.length);
+  // transcriptHighlight が指定されている場合はその文字列で検索し、
+  // data-expr には元の expression を使ってカードとの紐付けを維持する。
+  const sorted = [...phrases].sort((a, b) => {
+    const aLen = (a.transcriptHighlight ?? a.expression).length;
+    const bLen = (b.transcriptHighlight ?? b.expression).length;
+    return bLen - aLen;
+  });
 
   for (const p of sorted) {
-    const escaped = p.expression.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(escaped, "gi");
+    const searchTerm = p.transcriptHighlight ?? p.expression;
+    const re = buildFlexibleRegex(searchTerm);
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) {
       const start = m.index;
@@ -262,7 +289,7 @@ export function ScriptViewer({
           {/* Row 1: title + badge (left) / collapse toggle (right) */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <h2 className="text-sm font-bold text-slate-700">全文スクリプト</h2>
+              <h2 className="text-sm font-bold text-slate-700">スクリプト抜粋</h2>
               <span className="text-[11px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 font-medium">
                 {phrases.length} 語ハイライト済み
               </span>
@@ -388,6 +415,9 @@ export function ScriptViewer({
                 </span>
                 <span className="text-[10px] text-slate-400">
                   ホバーで意味・保存ボタンを表示
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  ※ 学習効率を高めるため、重要フレーズを含む箇所を中心に抜粋しています
                 </span>
               </div>
 

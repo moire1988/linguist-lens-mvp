@@ -15,6 +15,13 @@ export interface PhraseResult {
   example_translation?: string;
   cefr_level: string;
   why_hard_for_japanese: string;
+  /**
+   * transcript 内でハイライトする際に実際に検索する文字列。
+   * 動詞の活用・類義表現など expression と異なる形がテキストに現れる場合に指定する。
+   * 未指定時は expression をそのまま検索する。
+   * data-expr には常に expression が入り、カードとの紐付けは変わらない。
+   */
+  transcriptHighlight?: string;
 }
 
 export interface AnalysisResult {
