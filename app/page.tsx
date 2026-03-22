@@ -1115,6 +1115,7 @@ export default function HomePage() {
                 onSave={handleSavePhrase}
                 showTranslate={inputMode === "url"}
                 isPro={false}
+                dailyRemaining={dailyRemaining}
               />
             )}
 

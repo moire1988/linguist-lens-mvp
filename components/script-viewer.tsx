@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   Volume2,
   VolumeX,
-  BookmarkPlus,
-  Check,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -17,6 +15,7 @@ import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import type { PhraseResult } from "@/lib/types";
 import { translateTranscript } from "@/app/actions/translate";
 import { ProWaitlistModal } from "@/components/pro-waitlist-modal";
+import { PhrasePopup } from "@/components/phrase-popup";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -32,6 +31,8 @@ interface ScriptViewerProps {
   showTranslate?: boolean;
   /** Pro plan flag — false (default) shows the waitlist modal instead of calling the API */
   isPro?: boolean;
+  /** Remaining daily saves — passed to popup save button */
+  dailyRemaining?: number;
 }
 
 // ─── Sanitizer ───────────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ export function ScriptViewer({
   onSave,
   showTranslate = false,
   isPro = false,
+  dailyRemaining = 0,
 }: ScriptViewerProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speed, setSpeed] = useState(1.0);
@@ -120,12 +122,19 @@ export function ScriptViewer({
   const [translation, setTranslation] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
-  const [tooltip, setTooltip] = useState<{
+  const [popup, setPopup] = useState<{
     phrase: PhraseResult;
-    x: number;
-    y: number;
+    top: number;
+    left: number;
   } | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  // Close popup on scroll
+  useEffect(() => {
+    const close = () => setPopup(null);
+    window.addEventListener("scroll", close, { passive: true });
+    return () => window.removeEventListener("scroll", close);
+  }, []);
 
   // Sanitized HTML (memoized)
   // If AI highlight has no <b> tags (e.g. web scrape text too messy for verbatim copy),
@@ -194,10 +203,10 @@ export function ScriptViewer({
     }
   }, [ttsText, isPro]);
 
-  // ─── Tooltip via event delegation ──────────────────────────────────────
+  // ─── Popup via event delegation ────────────────────────────────────────
 
   const scheduleHide = useCallback(() => {
-    hideTimer.current = setTimeout(() => setTooltip(null), 180);
+    hideTimer.current = setTimeout(() => setPopup(null), 220);
   }, []);
 
   const cancelHide = useCallback(() => {
@@ -216,7 +225,7 @@ export function ScriptViewer({
       if (!phrase) return;
       clearTimeout(hideTimer.current);
       const rect = target.getBoundingClientRect();
-      setTooltip({ phrase, x: rect.left, y: rect.bottom + 6 });
+      setPopup({ phrase, top: rect.bottom + 8, left: rect.left });
     },
     [phrases]
   );
@@ -224,12 +233,14 @@ export function ScriptViewer({
   const handleMouseOut = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === "B") scheduleHide();
+      if (target.tagName !== "B") return;
+      if ((e.relatedTarget as HTMLElement | null)?.closest("[data-phrase-popup]")) return;
+      scheduleHide();
     },
     [scheduleHide]
   );
 
-  // ─── Save from tooltip ─────────────────────────────────────────────────
+  // ─── Save from popup ───────────────────────────────────────────────────
 
   const handleSave = useCallback(
     (phrase: PhraseResult) => {
@@ -427,48 +438,18 @@ export function ScriptViewer({
         <ProWaitlistModal onClose={() => setShowProModal(false)} />
       )}
 
-      {/* Hover tooltip (fixed position) */}
-      {tooltip && (
-        <div
-          className="fixed z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-3 w-56"
-          style={{
-            left: Math.min(
-              tooltip.x,
-              typeof window !== "undefined" ? window.innerWidth - 240 : 560
-            ),
-            top: tooltip.y,
-          }}
+      {/* Phrase popup (fixed position) */}
+      {popup && (
+        <PhrasePopup
+          phrase={popup.phrase}
+          isSaved={savedExpressions.has(popup.phrase.expression.toLowerCase())}
+          dailyRemaining={dailyRemaining}
+          top={popup.top}
+          left={popup.left}
+          onSave={() => handleSave(popup.phrase)}
           onMouseEnter={cancelHide}
-          onMouseLeave={() => setTooltip(null)}
-        >
-          <p className="text-xs font-bold text-slate-800 mb-0.5">
-            {tooltip.phrase.expression}
-          </p>
-          <p className="text-xs text-slate-500 mb-2.5 leading-relaxed">
-            {tooltip.phrase.meaning_ja}
-          </p>
-          <button
-            onClick={() => handleSave(tooltip.phrase)}
-            className={cn(
-              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg w-full justify-center font-medium transition-all",
-              savedExpressions.has(tooltip.phrase.expression.toLowerCase())
-                ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
-                : "bg-indigo-600 text-white hover:bg-indigo-700"
-            )}
-          >
-            {savedExpressions.has(tooltip.phrase.expression.toLowerCase()) ? (
-              <>
-                <Check className="h-3 w-3" />
-                保存済み
-              </>
-            ) : (
-              <>
-                <BookmarkPlus className="h-3 w-3" />
-                単語帳に保存
-              </>
-            )}
-          </button>
-        </div>
+          onMouseLeave={scheduleHide}
+        />
       )}
     </>
   );

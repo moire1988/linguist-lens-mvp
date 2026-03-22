@@ -232,6 +232,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
             savedExpressions={savedExpressions}
             onSave={handleSave}
             showTranslate
+            dailyRemaining={dailyRemaining}
           />
         </div>
 
