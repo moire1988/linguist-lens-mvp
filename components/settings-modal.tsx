@@ -9,6 +9,7 @@ import {
   saveSettings,
   type Accent,
   type CefrLevel,
+  type DevAuthState,
 } from "@/lib/settings";
 import { getDbPreferences, upsertDbPreferences } from "@/lib/db/preferences";
 
@@ -39,6 +40,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [accent, setAccent] = useState<Accent>(initial.accent);
   const [defaultLevel, setDefaultLevel] = useState<CefrLevel>(initial.defaultLevel);
   const [devMode, setDevMode] = useState(initial.devMode);
+  const [devAuthState, setDevAuthState] = useState<DevAuthState>(initial.devAuthState);
   const [devUnlocked, setDevUnlocked] = useState(initial.devMode);
   const [versionClicks, setVersionClicks] = useState(0);
   const [lastClickTime, setLastClickTime] = useState(0);
@@ -81,6 +83,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     const next = !devMode;
     setDevMode(next);
     saveSettings({ devMode: next });
+    window.location.reload();
+  };
+
+  const handleDevAuthStateChange = (state: DevAuthState) => {
+    setDevAuthState(state);
+    saveSettings({ devAuthState: state });
+    window.location.reload();
   };
 
   const handleVersionClick = () => {
@@ -190,35 +199,85 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
             {/* ── Dev Mode (hidden until unlocked) ── */}
             {devUnlocked && (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-700">
-                      🛠️ Developer (Demo) Mode
+              <div className="space-y-3">
+                {/* Dev mode toggle */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-700">
+                        🛠️ Developer (Demo) Mode
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                        YouTube APIをスキップし、固定デモスクリプトでClaudeをテスト
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleDevModeToggle}
+                      className={cn(
+                        "flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                        devMode ? "bg-indigo-600" : "bg-slate-300"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform",
+                          devMode ? "translate-x-[18px]" : "translate-x-[2px]"
+                        )}
+                      />
+                    </button>
+                  </div>
+                  {devMode && (
+                    <p className="mt-2 text-[10px] text-indigo-500 font-medium">
+                      ON：次の解析はデモスクリプトを使用します
                     </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
-                      YouTube APIをスキップし、固定デモスクリプトでClaudeをテスト
+                  )}
+                </div>
+
+                {/* Auth mock (only when devMode ON) */}
+                {devMode && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5">
+                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2.5">
+                      🔐 Auth Mock State
+                    </p>
+                    <div className="space-y-2">
+                      {(
+                        [
+                          { value: "real",  label: "Real",      desc: "実際のClerk認証を使用" },
+                          { value: "guest", label: "Guest",     desc: "未ログイン状態をシミュレート" },
+                          { value: "free",  label: "Free User", desc: "ログイン済み・無料プラン" },
+                          { value: "pro",   label: "Pro User",  desc: "ログイン済み・有料プラン" },
+                        ] as { value: DevAuthState; label: string; desc: string }[]
+                      ).map((opt) => (
+                        <label
+                          key={opt.value}
+                          className="flex items-center gap-2.5 cursor-pointer group"
+                        >
+                          <input
+                            type="radio"
+                            name="devAuthState"
+                            value={opt.value}
+                            checked={devAuthState === opt.value}
+                            onChange={() => handleDevAuthStateChange(opt.value)}
+                            className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <span className={cn(
+                              "text-xs font-semibold",
+                              devAuthState === opt.value ? "text-indigo-700" : "text-slate-700"
+                            )}>
+                              {opt.label}
+                            </span>
+                            <span className="text-[10px] text-slate-400 ml-1.5">
+                              {opt.desc}
+                            </span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-2.5 text-[10px] text-amber-600 font-medium">
+                      ※ 変更すると即座にリロードされます
                     </p>
                   </div>
-                  <button
-                    onClick={handleDevModeToggle}
-                    className={cn(
-                      "flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                      devMode ? "bg-indigo-600" : "bg-slate-300"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform",
-                        devMode ? "translate-x-[18px]" : "translate-x-[2px]"
-                      )}
-                    />
-                  </button>
-                </div>
-                {devMode && (
-                  <p className="mt-2 text-[10px] text-indigo-500 font-medium">
-                    ON：次の解析はデモスクリプトを使用します
-                  </p>
                 )}
               </div>
             )}

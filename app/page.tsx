@@ -21,6 +21,7 @@ import {
   Library,
 } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
+import { useEffectiveAuth } from "@/lib/dev-auth";
 import { saveAnalysisAction } from "@/app/actions/save-analysis";
 import { savePublicAnalysis } from "@/app/actions/save-public-analysis";
 import { Rocket, ExternalLink } from "lucide-react";
@@ -43,6 +44,7 @@ import { SettingsModal } from "@/components/settings-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
+import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
 import { getSettings, DEV_TEST_URL } from "@/lib/settings";
 import {
@@ -168,6 +170,7 @@ export default function HomePage() {
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
   const { isSignedIn, userId } = useAuth();
   const { openSignIn } = useClerk();
+  const { isPro } = useEffectiveAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [devMode, setDevMode] = useState(false);
   const [analysisSaved, setAnalysisSaved] = useState(false);
@@ -1114,7 +1117,8 @@ export default function HomePage() {
                 savedExpressions={savedExpressions}
                 onSave={handleSavePhrase}
                 showTranslate={inputMode === "url"}
-                isPro={false}
+                isPro={isPro}
+                dailyRemaining={dailyRemaining}
               />
             )}
 
@@ -1192,6 +1196,9 @@ export default function HomePage() {
 
       {/* ── Recommended Carousel（コンテンツなし時のみ） ── */}
       {!hasContent && <RecommendedCarousel />}
+
+      {/* ── Latest Articles Carousel（コンテンツなし時のみ） ── */}
+      {!hasContent && <LatestArticlesCarousel />}
 
       {/* ── Recent Public Parses（コンテンツなし時のみ） ── */}
       {!hasContent && recentPublicAnalyses.length > 0 && (
