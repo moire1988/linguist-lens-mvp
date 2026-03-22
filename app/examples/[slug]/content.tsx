@@ -19,6 +19,11 @@ import { SiteHeader } from "@/components/site-header";
 import { SettingsModal } from "@/components/settings-modal";
 import { getSettings, DEV_TEST_URL } from "@/lib/settings";
 
+function getYouTubeId(url: string): string | null {
+  const m = url.match(/[?&]v=([^&]{11})/);
+  return m ? m[1] : null;
+}
+
 const CEFR_RANK: Record<string, number> = { A1:1, A2:2, B1:3, B2:4, C1:5, C2:6 };
 const CEFR_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
   A1: { label:"入門",   bg:"bg-slate-100",  text:"text-slate-700",  border:"border-slate-200"  },
@@ -86,6 +91,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
 
   const meta = CEFR_META[example.overallLevel];
   const gap = (CEFR_RANK[example.overallLevel] ?? 0) - CEFR_RANK["B2"];
+  const youtubeId = getYouTubeId(example.url);
 
   return (
     <div className="min-h-screen relative">
@@ -147,7 +153,15 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-4xl leading-none flex-shrink-0">{example.emoji}</span>
+              {youtubeId ? (
+                <img
+                  src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
+                  alt={example.title}
+                  className="w-[120px] h-[68px] object-cover rounded-xl flex-shrink-0 shadow-sm"
+                />
+              ) : (
+                <span className="text-4xl leading-none flex-shrink-0">{example.emoji}</span>
+              )}
               <div className="min-w-0">
                 <h1 className="text-xl font-extrabold text-slate-900 leading-tight truncate">
                   {example.title}
