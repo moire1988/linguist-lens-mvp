@@ -1,6 +1,7 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { isGrammarMasterclassCategory, pickArticleCategory } from "@/lib/article-categories";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -41,31 +42,37 @@ export async function generateArticle(
 
   const levelDesc = LEVEL_DESCRIPTIONS[cefrLevel] ?? "intermediate";
   const accentInstruction = ACCENT_INSTRUCTIONS[accent] ?? ACCENT_INSTRUCTIONS.US;
+  const selectedCategory = pickArticleCategory();
+  const grammarMode = isGrammarMasterclassCategory(selectedCategory);
 
-  const prompt = `You are a creative English writer producing short magazine-style articles for language learners.
+  const grammarBlock = grammarMode
+    ? `
+This run is GRAMMAR MASTERCLASS mode: write the ENTIRE body as a compelling English essay that teaches ONE deep grammar or usage topic (why natives pick this tense, modal, or pattern; subtle differences between near-synonyms). Explain in English only in the body.`
+    : `
+This run is culture / trend / daily-life mode: pick a topic that fits the category below — real, slightly niche, "Aha!" for Japanese readers.`;
+
+  const hookInstruction = grammarMode
+    ? "a provocative question or bold claim about grammar, usage, or what natives feel when they choose a form"
+    : "a surprising fact or question about culture, trend, or daily survival — never a tourism or café-list teaser";
+
+  const prompt = `You are a creative English writer producing short magazine-style articles for Japanese learners.
+
+Assigned category (follow this — do not choose another): ${selectedCategory}
+${grammarBlock}
 
 Target level: ${cefrLevel} — ${levelDesc}
 English variant: ${accent} — ${accentInstruction}
 
-Task: Write ONE engaging, educational English article on a topic of your choosing.
+STRICTLY FORBIDDEN: tourist-guide fluff ("best cafés", sightseeing lists), generic self-help ("your brain is sabotaging you"), or bland encyclopedia summaries.
 
-Topic must come from one of these categories (pick whichever inspires you):
-- Surprising historical facts that changed the world
-- Unusual cultural traditions from around the globe
-- How a piece of everyday technology actually works
-- Counterintuitive psychology or behaviour science
-- Fascinating animal or nature discoveries
-- Mind-bending geography or space facts
-- Common health myths debunked by science
-- Quirky economic phenomena that affect daily life
-- Unexpected language or linguistics trivia
+REQUIRED: ${accent} English must feel natural — spelling, idioms, and vocabulary consistent with that variant. The dialect controls language, not the setting (do not force London/Sydney/New York unless the topic truly needs it).
 
 Hard rules:
 1. Vocabulary, sentence length, and grammar complexity MUST strictly match ${cefrLevel} level.
 2. Apply ${accent} English spelling, vocabulary, and idioms consistently throughout the article.
-3. Hook the reader in the very first sentence with a surprising fact or question.
+3. Hook the reader in the very first sentence with ${hookInstruction}.
 4. Body length: 200–400 words.
-5. Writing style: engaging short magazine article — facts that make people say "I had no idea!"
+5. Writing style: sharp magazine piece — ${grammarMode ? "deep grammar or usage insight" : "fresh cultural or trend insight"} that makes readers think "I had no idea!"
 6. NEVER mention "CEFR", "language learning", "English learner", or the reader's language level.
 
 Output ONLY valid JSON — no markdown fences, no explanation, nothing else:

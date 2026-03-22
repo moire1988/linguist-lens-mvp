@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { generateCmsArticle } from "@/app/actions/generate-cms-article";
 import { getAdminArticles, updateArticlePublish, deleteAdminArticle } from "@/app/actions/admin-articles";
 import type { Article } from "@/lib/article-types";
+import { ARTICLE_CATEGORY_SHORT_LABEL } from "@/lib/article-categories";
 import { VariantBadge } from "@/components/variant-badge";
 import { SiteFooter } from "@/components/site-footer";
 
@@ -23,14 +24,6 @@ const VARIANTS: { value: EnglishVariant; label: string }[] = [
   { value: "AU",     label: "🇦🇺 AU"  },
   { value: "common", label: "🌐 共通" },
 ];
-const CATEGORY_SHORT: Record<string, string> = {
-  "Tech & Startup":              "Tech",
-  "Pop Culture & Entertainment": "Pop Culture",
-  "Lifehacks & Psychology":      "Lifehacks",
-  "Real Parenting & Family":     "Parenting",
-  "Local Travel Secrets":        "Travel",
-};
-
 function AdminFilterRow({ label, options, active, onChange }: {
   label: string;
   options: { value: string; label: string }[];
@@ -283,12 +276,18 @@ export default function AdminPage() {
 
           {/* Filters */}
           {!isLoadingArticles && articles.length > 0 && (() => {
-            const existingCategories = Object.keys(CATEGORY_SHORT).filter((c) =>
-              articles.some((a) => a.category === c)
-            );
+            const existingCategories = Array.from(
+              new Set(articles.map((a) => a.category).filter((c): c is string => Boolean(c)))
+            ).sort();
             const levelOpts    = [{ value: "all", label: "すべて" }, ...LEVELS.filter((l) => articles.some((a) => a.level === l)).map((l) => ({ value: l, label: l }))];
             const variantOpts  = [{ value: "all", label: "すべて" }, ...VARIANTS.filter((v) => articles.some((a) => a.englishVariant === v.value)).map((v) => ({ value: v.value, label: v.label }))];
-            const categoryOpts = [{ value: "all", label: "すべて" }, ...existingCategories.map((c) => ({ value: c, label: CATEGORY_SHORT[c] ?? c }))];
+            const categoryOpts = [
+              { value: "all", label: "すべて" },
+              ...existingCategories.map((c) => ({
+                value: c,
+                label: ARTICLE_CATEGORY_SHORT_LABEL[c] ?? c,
+              })),
+            ];
             const hasFilter = filterLevel !== "all" || filterVariant !== "all" || filterCategory !== "all";
             return (
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 space-y-2.5">
