@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getLatestArticlesAction } from "@/app/actions/articles";
 import type { ArticleSummary } from "@/lib/article-types";
+import { ARTICLE_CATEGORY_BADGE_STYLE } from "@/lib/article-categories";
 
 // ─── Style maps ──────────────────────────────────────────────────────────────
 
@@ -16,14 +17,6 @@ const LEVEL_STYLES: Record<string, string> = {
   B2: "bg-indigo-50 text-indigo-700 border-indigo-200",
   C1: "bg-purple-50 text-purple-700 border-purple-200",
   C2: "bg-rose-50   text-rose-700   border-rose-200",
-};
-
-const CATEGORY_STYLES: Record<string, string> = {
-  "Tech & Startup":              "bg-sky-50     text-sky-700     border-sky-200",
-  "Pop Culture & Entertainment": "bg-pink-50    text-pink-700    border-pink-200",
-  "Lifehacks & Psychology":      "bg-amber-50   text-amber-700   border-amber-200",
-  "Real Parenting & Family":     "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "Local Travel Secrets":        "bg-violet-50  text-violet-700  border-violet-200",
 };
 
 const CARD_W = 256;
@@ -94,7 +87,7 @@ export function LatestArticlesCarousel() {
         >
           {articles.map((article) => {
             const catStyle = article.category
-              ? (CATEGORY_STYLES[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200")
+              ? (ARTICLE_CATEGORY_BADGE_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200")
               : null;
 
             return (

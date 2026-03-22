@@ -12,6 +12,7 @@ import { NewsletterBanner } from "@/components/newsletter-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { Breadcrumb } from "@/components/breadcrumb";
 import type { ArticleSummary } from "@/lib/article-types";
+import { ARTICLE_CATEGORY_BADGE_STYLE } from "@/lib/article-categories";
 import { cn } from "@/lib/utils";
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
@@ -27,20 +28,12 @@ const CEFR_STYLE: Record<string, string> = {
   C2: "bg-rose-100   text-rose-700   border-rose-200",
 };
 
-const CATEGORY_STYLE: Record<string, string> = {
-  "Tech & Startup":              "bg-sky-50    text-sky-700    border-sky-200",
-  "Pop Culture & Entertainment": "bg-pink-50   text-pink-700   border-pink-200",
-  "Lifehacks & Psychology":      "bg-amber-50  text-amber-700  border-amber-200",
-  "Real Parenting & Family":     "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "Local Travel Secrets":        "bg-violet-50 text-violet-700 border-violet-200",
-};
-
 // ─── Related article card ─────────────────────────────────────────────────────
 
 function RelatedArticleCard({ article }: { article: ArticleSummary }) {
   const cefrStyle  = CEFR_STYLE[article.level]    ?? CEFR_STYLE.B2;
   const catStyle   = article.category
-    ? (CATEGORY_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200")
+    ? (ARTICLE_CATEGORY_BADGE_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200")
     : null;
 
   return (
@@ -142,7 +135,7 @@ export default async function ArticlePage({
           {article.category && (
             <span className={cn(
               "text-[10px] font-mono px-1.5 py-0.5 rounded border",
-              CATEGORY_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200"
+              ARTICLE_CATEGORY_BADGE_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200"
             )}>
               {article.category}
             </span>

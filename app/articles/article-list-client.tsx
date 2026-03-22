@@ -3,17 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { ArticleSummary, EnglishVariant } from "@/lib/article-types";
+import {
+  ARTICLE_CATEGORY_BADGE_STYLE,
+  ARTICLE_CATEGORY_SHORT_LABEL,
+} from "@/lib/article-categories";
 import { cn } from "@/lib/utils";
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-
-const CATEGORY_STYLE: Record<string, string> = {
-  "Tech & Startup":              "bg-sky-50    text-sky-700    border-sky-200",
-  "Pop Culture & Entertainment": "bg-pink-50   text-pink-700   border-pink-200",
-  "Lifehacks & Psychology":      "bg-amber-50  text-amber-700  border-amber-200",
-  "Real Parenting & Family":     "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "Local Travel Secrets":        "bg-violet-50 text-violet-700 border-violet-200",
-};
 
 const CEFR_STYLE: Record<string, string> = {
   A1: "bg-slate-100  text-slate-600  border-slate-200",
@@ -26,15 +22,6 @@ const CEFR_STYLE: Record<string, string> = {
 
 const VARIANT_LABEL: Record<EnglishVariant, string> = {
   US: "🇺🇸 US", UK: "🇬🇧 UK", AU: "🇦🇺 AU", common: "🌐 共通",
-};
-
-// カテゴリの短縮表示名
-const CATEGORY_SHORT: Record<string, string> = {
-  "Tech & Startup":              "Tech",
-  "Pop Culture & Entertainment": "Pop Culture",
-  "Lifehacks & Psychology":      "Lifehacks",
-  "Real Parenting & Family":     "Parenting",
-  "Local Travel Secrets":        "Travel",
 };
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
@@ -82,7 +69,7 @@ function FilterRow({
 
 function ArticleCard({ article }: { article: ArticleSummary }) {
   const catStyle = article.category
-    ? (CATEGORY_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200")
+    ? (ARTICLE_CATEGORY_BADGE_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200")
     : null;
   const cefrStyle = CEFR_STYLE[article.level] ?? CEFR_STYLE.B2;
   const dateStr = article.publishedAt
@@ -136,14 +123,20 @@ export function ArticleListClient({ articles }: { articles: ArticleSummary[] }) 
 
   const hasFilter = levelFilter !== "all" || variantFilter !== "all" || categoryFilter !== "all";
 
-  // 存在するカテゴリのみ表示
-  const existingCategories = Object.keys(CATEGORY_SHORT).filter((c) =>
-    articles.some((a) => a.category === c)
-  );
+  // 存在するカテゴリのみ表示（過去データのラベルも拾う）
+  const existingCategories = Array.from(
+    new Set(articles.map((a) => a.category).filter((c): c is string => Boolean(c)))
+  ).sort();
 
   const levelOptions    = [{ value: "all", label: "すべて" }, ...LEVELS.filter((l) => articles.some((a) => a.level === l)).map((l) => ({ value: l, label: l }))];
   const variantOptions  = [{ value: "all", label: "すべて" }, ...VARIANTS.filter((v) => articles.some((a) => a.englishVariant === v)).map((v) => ({ value: v, label: VARIANT_LABEL[v] }))];
-  const categoryOptions = [{ value: "all", label: "すべて" }, ...existingCategories.map((c) => ({ value: c, label: CATEGORY_SHORT[c] ?? c }))];
+  const categoryOptions = [
+    { value: "all", label: "すべて" },
+    ...existingCategories.map((c) => ({
+      value: c,
+      label: ARTICLE_CATEGORY_SHORT_LABEL[c] ?? c,
+    })),
+  ];
 
   return (
     <>

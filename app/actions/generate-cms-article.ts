@@ -8,6 +8,10 @@ import type {
   EnglishVariant,
   GenerateCmsArticleResult,
 } from "@/lib/article-types";
+import {
+  isGrammarMasterclassCategory,
+  pickArticleCategory,
+} from "@/lib/article-categories";
 
 // ─── CEFR descriptions ───────────────────────────────────────────────────────
 
@@ -19,20 +23,6 @@ const LEVEL_DESCRIPTIONS: Record<string, string> = {
   C1: "advanced — sophisticated vocabulary, nuanced expression, complex grammar, idiomatic usage",
   C2: "near-native — full vocabulary range, subtle nuance, literary style acceptable",
 };
-
-// ─── Categories (picked by TypeScript, not AI) ───────────────────────────────
-
-const CATEGORIES = [
-  "Tech & Startup Culture (e.g., remote work, AI tools, silicon valley trends)",
-  "Pop Culture & Entertainment (e.g., movies, music, internet slang)",
-  "Psychology & Human Behavior (e.g., motivation, habits, communication)",
-  "Modern Daily Life & Relationships (e.g., dating, family dynamics, friendships)",
-  "Health, Wellness & Food (e.g., diet trends, mental health, workouts)",
-];
-
-function pickCategory(): string {
-  return CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-}
 
 // ─── English variant ─────────────────────────────────────────────────────────
 
@@ -46,26 +36,91 @@ function pickVariant(): EnglishVariant {
 
 function buildPrompt(level: string, variant: EnglishVariant, selectedCategory: string): string {
   const levelDesc = LEVEL_DESCRIPTIONS[level] ?? "intermediate";
+  const isGrammar = isGrammarMasterclassCategory(selectedCategory);
+
+  const grammarModeBlock = isGrammar
+    ? `
+═══ MODE: ENGLISH GRAMMAR & NUANCE MASTERCLASS (MANDATORY) ═════════════
+This category is NOT a culture story. Write the ENTIRE English body as a compelling magazine-style ESSAY in English that teaches ONE deep grammar or usage topic (e.g. why natives reach for this tense, not another; subtle differences between two similar-looking phrases; the "feel" of an aspect or modal in real contexts).
+• All explanations, contrasts, and insights in the article body must be in ENGLISH (this is the lesson).
+• Still obey ${level} constraints: vocabulary and sentence complexity must match the level.
+• Pick one focused angle — avoid shallow lists of rules; aim for "I never thought of it that way!" depth.
+• Naturally weave in ${variant}-appropriate vocabulary, spelling, and idioms while discussing grammar.
+`
+    : "";
+
+  const nonGrammarModeBlock = !isGrammar
+    ? `
+═══ MODE: CULTURE / TREND / DAILY LIFE (MANDATORY) ═════════════════════
+Pick a REAL, slightly niche angle that makes Japanese readers think "I had no idea — I want to tell someone!" — not generic advice.
+• Lean into the spirit of: ${selectedCategory}
+• Naturally mix in vocabulary, idioms, and spelling that feel authentic to ${variant}.
+`
+    : "";
+
+  const step2Rules = isGrammar
+    ? `1. Word count: 250–350 words of English body text (the grammar lesson lives here — all explanations stay in English).
+2. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST precisely match ${level}.
+3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout — woven into the essay, not bolted on.
+4. Opening hook: The very first sentence must grab attention with a bold claim or question about grammar, usage, or native "feel" — never a travel or café hook.
+5. The body must read as ONE coherent English essay; do not switch to Japanese to teach rules inside the article.
+6. Never mention CEFR levels, "English learners", or language study as meta.`
+    : `1. Word count: 250–350 words of English body text.
+2. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST precisely match ${level}.
+3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout — the dialect must be woven naturally into the content, not just mentioned once.
+4. Opening hook: The very first sentence must be a surprising fact, bold claim, or intriguing question (culture, trend, or daily life — never a bland tourism teaser).
+5. Style: Engaging magazine article — clear, accurate, enjoyable. Never mention CEFR levels, "English learners", or language study.`;
+
+  const step3SelectionRule = isGrammar
+    ? `Select exactly 5 items: phrasal verbs, idioms, collocations, OR compact grammatical chunks worth noticing (e.g. a tricky modal stack, a natural collocation) — each must strongly reflect the ${variant} dialect and suit ${level} learners.`
+    : `Select exactly 5 phrasal verbs, idioms, or collocations that strongly reflect the ${variant} dialect and target ${level} learners.`;
+
+  const step5Lead = isGrammar
+    ? `Explain ONE deep grammar or usage insight from the English essay — in natural Japanese — so readers think "へぇ！そうなんだ！" (Wow, I didn't know that!). Tie it to how ${variant} speakers feel or choose forms.`
+    : `Explain ONE specific word or cultural nuance used in the article that relates to the ${variant} dialect.
+This should make readers think "へぇ！そうなんだ！" (Wow, I didn't know that!).`;
+
+  const step5GoodExamples = isGrammar
+    ? `Good examples (grammar-focused):
+  • "このエッセイで出てきた'would have been'は、過去の事実に対する仮定の話し手の距離感を表すときに選ばれます。日本語の「〜だっただろう」とは少しニュアンスが違い、話し手が『もし〜だったら』という世界線を想像している感じが強いです。"
+  • "現在完了形と単純過去の違いは、『結果が今も続いているか』だけでなく、話し手が出来事をどう心に置いているかでも変わります。"`
+    : `Good examples (dialect-focused):
+  • "オーストラリアでは、'a lot'の代わりに'heaps'がよく使われます。「Heaps of people showed up」のように日常会話でごく自然に使われる表現です。"
+  • "イギリス英語では、'knackered'は「へとへとに疲れた」という意味で使われます。'tired'よりも感情がこもった表現で、ネイティブが日常的によく口にする言葉です。"
+  • "アメリカ英語の'reach out'は元々ビジネス用語でしたが、今では「連絡する」という意味で日常会話にも定着しています。"`;
+
+  const step5FocusRule = isGrammar
+    ? `  • Focus on one grammar/usage insight grounded in the English article text (not generic theory).`
+    : `  • Focus specifically on a ${variant} word, phrase, spelling difference, or cultural nuance from the article text.`;
 
   return `You are an expert ESL teacher and a creative editor. Generate a highly engaging English learning article for Japanese learners.
 
 [Parameters]
 Category/Topic: ${selectedCategory}
 Target CEFR Level: ${level} — ${levelDesc}
-English Dialect/Variant: ${variant} (US, UK, or AU)
+English Dialect/Variant: ${variant} (US, UK, AU, or common)
 
+═══ STRICTLY FORBIDDEN (ZERO TOLERANCE) ════════════════════════════════
+• Boring tourist-guide content: "best cafés to visit", "hidden gems in [city]", sightseeing tips, restaurant reviews as the main topic.
+• Generic self-help clichés: "your brain is sabotaging you", vague motivation without cultural bite, empty positivity.
+• Anything that feels like a textbook appendix or a Wikipedia summary with no personality.
+
+═══ REQUIRED (NON-NEGOTIABLE) ═════════════════════════════════════════
+• Japanese learners must get a genuine "Aha!" moment: specific, fresh, a little nerdy or insider — still readable at ${level}.
+• The ${variant} parameter controls spelling, idioms, slang, and lexical choices — NOT where the story is "set". Do not force Sydney/London/New York scenery unless the topic truly needs it.
+${grammarModeBlock}${nonGrammarModeBlock}
 ═══ CRITICAL RULES FOR DIALECT (${variant}) ════════════════════════════
 The ${variant} parameter dictates the vocabulary, spelling, idioms, and slang — NOT the geographical setting.
 
-${variant === "AU" ? `Since AU is selected: the story does NOT need to be about Sydney or kangaroos. It can be about ANY topic in ${selectedCategory}, but MUST use Australian vocabulary (e.g., "mate", "heaps", "reckon", "arvo", "flat white" instead of latte) and AU/UK spelling (e.g., "colour", "realise").` : ""}
-${variant === "UK" ? `Since UK is selected: use words like "cheers", "mate", "rubbish", "queue", "knackered", "chuffed", "brilliant" etc. Use British spelling (e.g., "colour", "favourite", "realise"). The topic can be about anything — it does NOT have to be set in the UK.` : ""}
-${variant === "US" ? `Since US is selected: use standard American English vocabulary and spelling (e.g., "color", "favorite", "apartment", "trash", "vacation"). The topic can be about anything.` : ""}
-${variant === "common" ? `Since common is selected: use internationally neutral English with no strong regional bias. Avoid clearly American, British, or Australian slang.` : ""}
+${variant === "AU" ? `Since AU is selected: the piece does NOT need to be about Australia. It must use Australian English patterns (e.g., "mate", "heaps", "reckon", "arvo") and AU/UK spelling (e.g., "colour", "realise") where natural.` : ""}
+${variant === "UK" ? `Since UK is selected: use British English — "cheers", "mate", "rubbish", "queue", "knackered", "chuffed", "brilliant", British spelling (e.g., "colour", "favourite", "realise"). Setting can be anywhere.` : ""}
+${variant === "US" ? `Since US is selected: use American English spelling and vocabulary (e.g., "color", "favorite", "apartment", "trash", "vacation"). Setting can be anywhere.` : ""}
+${variant === "common" ? `Since common is selected: use internationally neutral English with no strong regional slang; keep wording clear and widely understood.` : ""}
 
 ═══ CRITICAL RULES FOR CONTENT & ORIGINALITY ═══════════════════════════
-DO NOT write clichéd topics like "Why your brain is sabotaging you" or "Secret cafes in Melbourne/London". Generate a completely fresh, highly specific, and unique topic based on the category: ${selectedCategory}.
+Generate a completely fresh, highly specific angle from the category: ${selectedCategory}. No recycled "café in Melbourne" or "brain hacks" templates.
 
-The article must sound natural, modern, and engaging — like a real magazine piece, not a textbook.
+The article must sound natural, modern, and engaging — like a sharp magazine piece, not a textbook.
 
 ═══ STEP 1 — SEO STRATEGY ══════════════════════════════════════════════
 • Generate a specific, medium-tail "Focus Keyword" in English.
@@ -90,14 +145,10 @@ The article must sound natural, modern, and engaging — like a real magazine pi
   Example: "australian-slang-remote-work-b2", "uk-dating-idioms-b1"
 
 ═══ STEP 2 — CONTENT RULES ═════════════════════════════════════════════
-1. Word count: 250–350 words of English body text.
-2. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST precisely match ${level}.
-3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout — the dialect must be woven naturally into the content, not just mentioned once.
-4. Opening hook: The very first sentence must be a surprising fact, bold claim, or intriguing question.
-5. Style: Engaging magazine article — clear, accurate, enjoyable. Never mention CEFR levels, "English learners", or language study.
+${step2Rules}
 
 ═══ STEP 3 — VOCABULARY HIGHLIGHTS ════════════════════════════════════
-Select exactly 5 phrasal verbs, idioms, or collocations that strongly reflect the ${variant} dialect and target ${level} learners.
+${step3SelectionRule}
 Wrap each one inside the article text in EXACTLY this span format:
 
   <span class="vocabulary-highlight" data-word="BASE_FORM" data-meaning="日本語訳" data-nuance="ニュアンス解説（1文）" data-example="Short new example sentence.">word as it appears in article</span>
@@ -114,18 +165,14 @@ Rules for spans:
 Write a fluent, natural Japanese translation of the full article.
 Wrap each paragraph in <p>…</p> tags. Plain prose — no annotations, no vocabulary notes.
 
-═══ STEP 5 — CULTURAL TIP ══════════════════════════════════════════════
-Explain ONE specific word or cultural nuance used in the article that relates to the ${variant} dialect.
-This should make readers think "へぇ！そうなんだ！" (Wow, I didn't know that!).
+═══ STEP 5 — CULTURAL / GRAMMAR TIP (JAPANESE) ═════════════════════════
+${step5Lead}
 
-Good examples (dialect-focused):
-  • "オーストラリアでは、'a lot'の代わりに'heaps'がよく使われます。「Heaps of people showed up」のように日常会話でごく自然に使われる表現です。"
-  • "イギリス英語では、'knackered'は「へとへとに疲れた」という意味で使われます。'tired'よりも感情がこもった表現で、ネイティブが日常的によく口にする言葉です。"
-  • "アメリカ英語の'reach out'は元々ビジネス用語でしたが、今では「連絡する」という意味で日常会話にも定着しています。"
+${step5GoodExamples}
 
 Rules:
   • Write in natural Japanese (not translated English).
-  • Focus specifically on a ${variant} word, phrase, spelling difference, or cultural nuance from the article text.
+${step5FocusRule}
   • 2–3 sentences only. No bullet points, no lists.
 
 ═══ OUTPUT FORMAT (STRICT JSON) ════════════════════════════════════════
@@ -263,7 +310,7 @@ export async function generateCmsArticle(
   }
 
   const variant          = pickVariant();
-  const selectedCategory = pickCategory();
+  const selectedCategory = pickArticleCategory();
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
