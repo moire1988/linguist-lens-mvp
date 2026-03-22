@@ -44,6 +44,7 @@ import { SettingsModal } from "@/components/settings-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
+import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
 import { getSettings, DEV_TEST_URL } from "@/lib/settings";
 import {
@@ -1195,6 +1196,9 @@ export default function HomePage() {
 
       {/* ── Recommended Carousel（コンテンツなし時のみ） ── */}
       {!hasContent && <RecommendedCarousel />}
+
+      {/* ── Latest Articles Carousel（コンテンツなし時のみ） ── */}
+      {!hasContent && <LatestArticlesCarousel />}
 
       {/* ── Recent Public Parses（コンテンツなし時のみ） ── */}
       {!hasContent && recentPublicAnalyses.length > 0 && (
