@@ -67,3 +67,13 @@
 .transcript-content p:last-child {
   margin-bottom: 0;
 }
+
+/* ─── Scrollbar hide ─────────────────────────────────────────────────────── */
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

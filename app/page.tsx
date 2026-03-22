@@ -2,7 +2,6 @@
 
 import { useState, useTransition, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { EXAMPLES } from "@/lib/examples-data";
 import {
   Search,
   Youtube,
@@ -43,6 +42,7 @@ import { AdPlaceholder } from "@/components/ad-placeholder";
 import { SettingsModal } from "@/components/settings-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { NewsletterBanner } from "@/components/newsletter-banner";
+import { RecommendedCarousel } from "@/components/recommended-carousel";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
 import { getSettings, DEV_TEST_URL } from "@/lib/settings";
 import {
@@ -134,7 +134,6 @@ const SOURCE_LABELS = {
   text: { label: "テキスト入力", icon: "📄" },
 };
 
-// SAMPLE_VIDEOS は lib/examples-data.ts の EXAMPLES を使用
 
 const CEFR_RANK: Record<string, number> = {
   A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6,
@@ -857,36 +856,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ── Sample Videos ── */}
-        {inputMode === "url" && !hasContent && (
-          <div className="max-w-2xl mx-auto mt-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex-1 h-px bg-slate-200" />
-              <span className="text-xs font-medium text-slate-400 whitespace-nowrap">
-                👇 まずは人気の動画で試す
-              </span>
-              <div className="flex-1 h-px bg-slate-200" />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {EXAMPLES.map((v) => (
-                <Link
-                  key={v.slug}
-                  href={`/examples/${v.slug}`}
-                  className="flex flex-col items-center gap-1.5 p-3 bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/60 hover:shadow-md hover:shadow-indigo-100/50 transition-all text-center group"
-                >
-                  <span className="text-2xl leading-none">{v.emoji}</span>
-                  <span className="text-xs font-semibold text-slate-700 group-hover:text-indigo-700 leading-tight transition-colors">
-                    {v.title}
-                  </span>
-                  <span className="text-[10px] text-slate-400 mb-0.5">{v.sublabel}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
-                    {v.cefrRange}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* ── Loading Skeleton ── */}
         {isPending && (
@@ -1220,6 +1189,9 @@ export default function HomePage() {
           <NewsletterBanner />
         </div>
       )}
+
+      {/* ── Recommended Carousel（コンテンツなし時のみ） ── */}
+      {!hasContent && <RecommendedCarousel />}
 
       {/* ── Recent Public Parses（コンテンツなし時のみ） ── */}
       {!hasContent && recentPublicAnalyses.length > 0 && (
