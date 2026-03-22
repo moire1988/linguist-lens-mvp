@@ -131,11 +131,12 @@ export function ScriptViewer({
   // If AI highlight has no <b> tags (e.g. web scrape text too messy for verbatim copy),
   // fall back to client-side phrase matching on the raw source text.
   const safeHtml = useMemo(() => {
-    if (!highlightedHtml) return null;
-    const sanitized = sanitizeHighlight(highlightedHtml);
-    if (sanitized.includes("<b ")) return sanitized;
-    // No highlights survived sanitization → build client-side
-    return phrases.length ? buildClientHighlight(text, phrases) : sanitized;
+    if (highlightedHtml) {
+      const sanitized = sanitizeHighlight(highlightedHtml);
+      if (sanitized.includes("<b ")) return sanitized;
+    }
+    // highlightedHtml 未指定 or <b> タグなし → クライアント側でフレーズマッチ
+    return phrases.length ? buildClientHighlight(text, phrases) : null;
   }, [highlightedHtml, text, phrases]);
 
   // Plain text for TTS (strip tags if needed)
