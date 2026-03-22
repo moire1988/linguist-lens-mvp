@@ -12,7 +12,10 @@ import { NewsletterBanner } from "@/components/newsletter-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { Breadcrumb } from "@/components/breadcrumb";
 import type { ArticleSummary } from "@/lib/article-types";
-import { ARTICLE_CATEGORY_BADGE_STYLE } from "@/lib/article-categories";
+import {
+  ARTICLE_CATEGORY_BADGE_STYLE,
+  getArticleCategoryDisplayLabel,
+} from "@/lib/article-categories";
 import { cn } from "@/lib/utils";
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
@@ -47,7 +50,7 @@ function RelatedArticleCard({ article }: { article: ArticleSummary }) {
         </span>
         {catStyle && (
           <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border truncate max-w-[140px]", catStyle)}>
-            {article.category}
+            {getArticleCategoryDisplayLabel(article.category)}
           </span>
         )}
       </div>
@@ -137,7 +140,7 @@ export default async function ArticlePage({
               "text-[10px] font-mono px-1.5 py-0.5 rounded border",
               ARTICLE_CATEGORY_BADGE_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200"
             )}>
-              {article.category}
+              {getArticleCategoryDisplayLabel(article.category)}
             </span>
           )}
           <span className="text-xs text-slate-400">

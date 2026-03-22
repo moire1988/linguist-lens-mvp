@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { generateCmsArticle } from "@/app/actions/generate-cms-article";
 import { getAdminArticles, updateArticlePublish, deleteAdminArticle } from "@/app/actions/admin-articles";
 import type { Article } from "@/lib/article-types";
-import { ARTICLE_CATEGORY_SHORT_LABEL } from "@/lib/article-categories";
+import { getArticleCategoryDisplayLabel } from "@/lib/article-categories";
 import { VariantBadge } from "@/components/variant-badge";
 import { SiteFooter } from "@/components/site-footer";
 
@@ -278,14 +278,19 @@ export default function AdminPage() {
           {!isLoadingArticles && articles.length > 0 && (() => {
             const existingCategories = Array.from(
               new Set(articles.map((a) => a.category).filter((c): c is string => Boolean(c)))
-            ).sort();
+            ).sort((a, b) =>
+              getArticleCategoryDisplayLabel(a).localeCompare(
+                getArticleCategoryDisplayLabel(b),
+                "ja"
+              )
+            );
             const levelOpts    = [{ value: "all", label: "すべて" }, ...LEVELS.filter((l) => articles.some((a) => a.level === l)).map((l) => ({ value: l, label: l }))];
             const variantOpts  = [{ value: "all", label: "すべて" }, ...VARIANTS.filter((v) => articles.some((a) => a.englishVariant === v.value)).map((v) => ({ value: v.value, label: v.label }))];
             const categoryOpts = [
               { value: "all", label: "すべて" },
               ...existingCategories.map((c) => ({
                 value: c,
-                label: ARTICLE_CATEGORY_SHORT_LABEL[c] ?? c,
+                label: getArticleCategoryDisplayLabel(c),
               })),
             ];
             const hasFilter = filterLevel !== "all" || filterVariant !== "all" || filterCategory !== "all";
@@ -380,7 +385,7 @@ export default function AdminPage() {
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {article.category && (
                               <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 truncate max-w-[140px]">
-                                {article.category}
+                                {getArticleCategoryDisplayLabel(article.category)}
                               </span>
                             )}
                             {article.keyword && (

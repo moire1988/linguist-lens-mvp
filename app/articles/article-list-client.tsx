@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { ArticleSummary, EnglishVariant } from "@/lib/article-types";
 import {
   ARTICLE_CATEGORY_BADGE_STYLE,
-  ARTICLE_CATEGORY_SHORT_LABEL,
+  getArticleCategoryDisplayLabel,
 } from "@/lib/article-categories";
 import { cn } from "@/lib/utils";
 
@@ -89,7 +89,7 @@ function ArticleCard({ article }: { article: ArticleSummary }) {
         </span>
         {catStyle && (
           <span className={cn("text-[10px] font-mono font-semibold px-2 py-0.5 rounded border truncate max-w-[200px]", catStyle)}>
-            {article.category}
+            {getArticleCategoryDisplayLabel(article.category)}
           </span>
         )}
         <span className="ml-auto text-[10px] font-mono text-slate-400 shrink-0">{dateStr}</span>
@@ -126,7 +126,12 @@ export function ArticleListClient({ articles }: { articles: ArticleSummary[] }) 
   // 存在するカテゴリのみ表示（過去データのラベルも拾う）
   const existingCategories = Array.from(
     new Set(articles.map((a) => a.category).filter((c): c is string => Boolean(c)))
-  ).sort();
+  ).sort((a, b) =>
+    getArticleCategoryDisplayLabel(a).localeCompare(
+      getArticleCategoryDisplayLabel(b),
+      "ja"
+    )
+  );
 
   const levelOptions    = [{ value: "all", label: "すべて" }, ...LEVELS.filter((l) => articles.some((a) => a.level === l)).map((l) => ({ value: l, label: l }))];
   const variantOptions  = [{ value: "all", label: "すべて" }, ...VARIANTS.filter((v) => articles.some((a) => a.englishVariant === v)).map((v) => ({ value: v, label: VARIANT_LABEL[v] }))];
@@ -134,7 +139,7 @@ export function ArticleListClient({ articles }: { articles: ArticleSummary[] }) 
     { value: "all", label: "すべて" },
     ...existingCategories.map((c) => ({
       value: c,
-      label: ARTICLE_CATEGORY_SHORT_LABEL[c] ?? c,
+      label: getArticleCategoryDisplayLabel(c),
     })),
   ];
 

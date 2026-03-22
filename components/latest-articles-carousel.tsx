@@ -6,7 +6,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getLatestArticlesAction } from "@/app/actions/articles";
 import type { ArticleSummary } from "@/lib/article-types";
-import { ARTICLE_CATEGORY_BADGE_STYLE } from "@/lib/article-categories";
+import {
+  ARTICLE_CATEGORY_BADGE_STYLE,
+  getArticleCategoryDisplayLabel,
+} from "@/lib/article-categories";
 
 // ─── Style maps ──────────────────────────────────────────────────────────────
 
@@ -119,7 +122,7 @@ export function LatestArticlesCarousel() {
                           catStyle
                         )}
                       >
-                        {article.category}
+                        {getArticleCategoryDisplayLabel(article.category)}
                       </span>
                     )}
                   </div>
