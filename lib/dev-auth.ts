@@ -16,7 +16,7 @@ export function useEffectiveAuth(): { isSignedIn: boolean; isPro: boolean } {
 
   const settings = typeof window !== "undefined" ? getSettings() : null;
 
-  if (!settings?.devMode || settings.devAuthState === "real") {
+  if (!settings || !settings.devMode || settings.devAuthState === "real") {
     return { isSignedIn: !!isSignedIn, isPro: false };
   }
 
