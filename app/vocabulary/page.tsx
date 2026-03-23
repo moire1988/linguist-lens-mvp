@@ -11,6 +11,7 @@ import {
   Volume2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Shuffle,
   Eye,
   EyeOff,
@@ -24,6 +25,7 @@ import {
   Youtube,
   Globe,
   FileText,
+  Quote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
@@ -168,6 +170,7 @@ function VocabCard({
   const [isListening, setIsListening] = useState(false);
   const [recognized,  setRecognized]  = useState("");
   const [feedback,    setFeedback]    = useState<Feedback | null>(null);
+  const [showDetail,  setShowDetail]  = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   useEffect(() => { return () => { recognitionRef.current?.stop(); }; }, []);
@@ -202,76 +205,118 @@ function VocabCard({
   }, [isListening, phrase.example, phrase.expression]);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5">
-      <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-            <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full border",
-              TYPE_CONFIG[phrase.type]?.color ?? "bg-slate-100 text-slate-600 border-slate-200")}>
-              {TYPE_CONFIG[phrase.type]?.label ?? phrase.type}
-            </span>
-            <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
-              CEFR_COLORS[phrase.cefr_level] ?? "bg-slate-100 text-slate-600")}>
-              {phrase.cefr_level}
-            </span>
-            <span className="text-[10px] text-slate-300 ml-auto hidden sm:block">
-              {new Date(phrase.savedAt).toLocaleDateString("ja-JP")}
-            </span>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+      <div className="p-4 sm:p-5 flex-1">
+        {/* Badges + TTS + Delete */}
+        <div className="flex items-start gap-3 mb-2.5">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+              <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full border",
+                TYPE_CONFIG[phrase.type]?.color ?? "bg-slate-100 text-slate-600 border-slate-200")}>
+                {TYPE_CONFIG[phrase.type]?.label ?? phrase.type}
+              </span>
+              <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+                CEFR_COLORS[phrase.cefr_level] ?? "bg-slate-100 text-slate-600")}>
+                {phrase.cefr_level}
+              </span>
+              <span className="text-[10px] text-slate-300 ml-auto hidden sm:block">
+                {new Date(phrase.savedAt).toLocaleDateString("ja-JP")}
+              </span>
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 leading-tight">{phrase.expression}</h3>
           </div>
-          <h3 className="text-lg font-bold text-slate-900 leading-tight">{phrase.expression}</h3>
-          <p className="text-sm text-slate-500 mt-0.5 leading-snug">{phrase.meaning_ja}</p>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={() => handleSpeak(phrase.expression, 0.82)}
-            className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" title="発音を聞く">
-            <Volume2 className="h-4 w-4" />
-          </button>
-          <button onClick={() => onDelete(phrase.id, phrase.expression)}
-            className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors" title="削除">
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Example + Practice */}
-      <div className="mt-3 bg-indigo-50 rounded-xl px-3 py-2">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">例文</p>
-          <div className="flex items-center gap-1">
-            <button onClick={() => handleSpeak(phrase.example, 0.88)}
-              className="p-1 rounded-lg hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600 transition-colors" title="例文を読み上げ">
-              <Volume2 className="h-3 w-3" />
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={() => handleSpeak(phrase.expression, 0.82)}
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" title="発音を聞く">
+              <Volume2 className="h-4 w-4" />
             </button>
-            <button onClick={handlePractice}
-              className={cn("flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors",
-                isListening ? "bg-rose-100 text-rose-500 animate-pulse" : "hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600")}
-              title={isListening ? "停止" : "音読練習"}>
-              {isListening ? <><MicOff className="h-3 w-3" /> Stop</> : <><Mic className="h-3 w-3" /> Practice</>}
+            <button onClick={() => onDelete(phrase.id, phrase.expression)}
+              className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors" title="削除">
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        <p className="text-xs text-indigo-700 font-medium leading-relaxed">{phrase.example}</p>
-
-        {isListening && (
-          <div className="mt-2 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-            <p className="text-xs text-rose-500 font-medium">Listening...</p>
+        {/* Context */}
+        {phrase.context && (
+          <div className="flex gap-2 bg-slate-50 border border-slate-100 rounded-xl p-3 mb-3.5">
+            <Quote className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-500 leading-relaxed italic">{phrase.context}</p>
           </div>
         )}
 
-        {!isListening && recognized && (
-          <div className="mt-2 space-y-1.5">
-            <p className="text-xs leading-relaxed">{renderExampleDiff(recognized, phrase.example)}</p>
-            <p className="text-[11px] text-indigo-400 italic">「{recognized}」</p>
-            {feedback && (
-              <p className={cn("text-xs font-bold", FEEDBACK_CONFIG[feedback].className)}>
-                {FEEDBACK_CONFIG[feedback].label}
-              </p>
-            )}
+        {/* Meaning */}
+        <div className="mb-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">意味</p>
+          <p className="text-sm font-semibold text-slate-800 leading-snug">{phrase.meaning_ja}</p>
+        </div>
+
+        {/* Nuance */}
+        {phrase.nuance && (
+          <div className="mb-3.5">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ニュアンス解説</p>
+            <p className="text-sm text-slate-600 leading-relaxed">{phrase.nuance}</p>
           </div>
         )}
+
+        {/* Example + Practice */}
+        <div className="bg-indigo-50 rounded-xl px-3 py-2">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">例文</p>
+            <div className="flex items-center gap-1">
+              <button onClick={() => handleSpeak(phrase.example, 0.88)}
+                className="p-1 rounded-lg hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600 transition-colors" title="例文を読み上げ">
+                <Volume2 className="h-3 w-3" />
+              </button>
+              <button onClick={handlePractice}
+                className={cn("flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors",
+                  isListening ? "bg-rose-100 text-rose-500 animate-pulse" : "hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600")}
+                title={isListening ? "停止" : "音読練習"}>
+                {isListening ? <><MicOff className="h-3 w-3" /> Stop</> : <><Mic className="h-3 w-3" /> Practice</>}
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs text-indigo-700 font-medium leading-relaxed">{phrase.example}</p>
+
+          {isListening && (
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              <p className="text-xs text-rose-500 font-medium">Listening...</p>
+            </div>
+          )}
+
+          {!isListening && recognized && (
+            <div className="mt-2 space-y-1.5">
+              <p className="text-xs leading-relaxed">{renderExampleDiff(recognized, phrase.example)}</p>
+              <p className="text-[11px] text-indigo-400 italic">「{recognized}」</p>
+              {feedback && (
+                <p className={cn("text-xs font-bold", FEEDBACK_CONFIG[feedback].className)}>
+                  {FEEDBACK_CONFIG[feedback].label}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* 学習のポイント accordion */}
+      {phrase.why_hard_for_japanese && (
+        <div className="border-t border-slate-100">
+          <button
+            onClick={() => setShowDetail(!showDetail)}
+            className="w-full px-5 py-2.5 flex items-center justify-between hover:bg-slate-50 transition-colors"
+          >
+            <span className="text-xs font-medium text-slate-400">学習のポイント</span>
+            <ChevronDown className={cn("h-3.5 w-3.5 text-slate-400 transition-transform duration-200", showDetail && "rotate-180")} />
+          </button>
+          {showDetail && (
+            <div className="px-5 pb-4">
+              <p className="text-xs text-slate-500 leading-relaxed">{phrase.why_hard_for_japanese}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
