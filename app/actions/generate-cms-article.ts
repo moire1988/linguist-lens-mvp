@@ -401,7 +401,7 @@ export async function generateCmsArticle(
 ): Promise<GenerateCmsArticleResult> {
   // ── Admin guard ────────────────────────────────────────────────────────────
   const { userId } = await auth();
-  const adminId = process.env.ADMIN_USER_ID;
+  const adminId = process.env.NEXT_PUBLIC_ADMIN_USER_ID;
   if (!userId || !adminId || userId !== adminId) {
     return { success: false, error: "管理者権限が必要です" };
   }
