@@ -430,19 +430,8 @@ export default function HomePage() {
           });
         }
       } else {
-        // 未ログイン → localStorage に保存（3件制限あり）
-        const res = saveAnalysis(results, inputMode, selectedLevel, sourceUrl);
-        if (res.success) {
-          setAnalysisSaved(true);
-          setSavedAnalysisSlots((c) => c + 1);
-          toast.success("解析結果を保存しました", {
-            description: "マイページからいつでも復元できます",
-          });
-        } else if (res.reason === "full") {
-          toast.error("保存枠がいっぱいです", {
-            description: `未ログイン時は最大${ANALYSIS_MAX_SLOTS}件までです。ログインするか、マイページから古い保存を削除してください。`,
-          });
-        }
+        // 未ログイン → ログイン誘導（仕様: Guest は保存不可）
+        openLoginPrompt("save");
       }
     } catch (e) {
       toast.error("保存中にエラーが発生しました", {
@@ -530,6 +519,10 @@ export default function HomePage() {
   // 個別保存（ScriptViewer / PhraseCard 共通）
   const handleSavePhrase = useCallback(
     (phrase: PhraseResult) => {
+      if (!isSignedIn) {
+        openLoginPrompt("save");
+        return;
+      }
       const key = phrase.expression.toLowerCase();
       if (savedExpressions.has(key)) return;
       const result = savePhrase({
@@ -1035,54 +1028,34 @@ export default function HomePage() {
 
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Save analysis result */}
-                <div className="relative group">
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveAnalysis()}
-                    disabled={
-                      analysisSaved ||
-                      isSavingAnalysis ||
-                      (!isSignedIn && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS)
-                    }
-                    className={cn(
-                      "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
-                      analysisSaved
-                        ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                        : !isSignedIn && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS
-                        ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
-                        : "bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50 hover:shadow-sm hover:shadow-violet-100 disabled:opacity-70"
-                    )}
-                  >
-                    {analysisSaved ? (
-                      <>
-                        <Check className="h-4 w-4" />
-                        結果を保存済み
-                      </>
-                    ) : isSavingAnalysis ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        保存中...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4" />
-                        この結果を保存
-                        {!isSignedIn && (
-                          <span className="text-[10px] font-bold opacity-60">
-                            {savedAnalysisSlots}/{ANALYSIS_MAX_SLOTS}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </button>
-                  {/* Tooltip when full (未ログインのみ) */}
-                  {!isSignedIn && !analysisSaved && savedAnalysisSlots >= ANALYSIS_MAX_SLOTS && (
-                    <div className="absolute bottom-full right-0 mb-2 w-56 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 leading-snug">
-                      保存枠がいっぱいです。マイページから削除してください
-                      <div className="absolute top-full right-4 border-4 border-transparent border-t-slate-800" />
-                    </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveAnalysis()}
+                  disabled={analysisSaved || isSavingAnalysis}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
+                    analysisSaved
+                      ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50 hover:shadow-sm hover:shadow-violet-100 disabled:opacity-70"
                   )}
-                </div>
+                >
+                  {analysisSaved ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      結果を保存済み
+                    </>
+                  ) : isSavingAnalysis ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      保存中...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      この結果を保存
+                    </>
+                  )}
+                </button>
 
                 {/* 管理者専用: SEO公開保存ボタン */}
                 {showPublicSaveButton && results && (
