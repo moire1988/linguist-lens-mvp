@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Youtube, Globe, FileText } from "lucide-react";
 import { getAnalysisAction } from "@/app/actions/save-analysis";
@@ -6,6 +7,25 @@ import { auth } from "@clerk/nextjs/server";
 import type { PhraseResult } from "@/lib/types";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+
+const SITE_URL = "https://linguist-lens-mvp.vercel.app";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string };
+}): Promise<Metadata> {
+  const ogImageUrl = `${SITE_URL}/analyses/${params.id}/opengraph-image`;
+  return {
+    openGraph: {
+      images: [{ url: ogImageUrl, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card:   "summary_large_image",
+      images: [ogImageUrl],
+    },
+  };
+}
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
 
