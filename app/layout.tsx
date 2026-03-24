@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Goldman } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { GoogleTagManager } from "@next/third-parties/google";
@@ -11,6 +11,12 @@ import { LoginPromptModal } from "@/components/login-prompt-modal";
 import { SiteFooter } from "@/components/site-footer";
 
 const inter = Inter({ subsets: ["latin"] });
+
+export const goldman = Goldman({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-goldman",
+});
 
 const siteUrl = "https://linguist-lens-mvp.vercel.app";
 
@@ -61,7 +67,7 @@ export default function RootLayout({
 
       <html lang="ja">
         <GoogleTagManager gtmId={gtmId} />
-        <body className={`${inter.className} flex flex-col min-h-screen`} style={{ backgroundColor: "#f7f8ff" }}>
+        <body className={`${inter.className} ${goldman.variable} flex flex-col min-h-screen`} style={{ backgroundColor: "#f7f8ff" }}>
           <MeshBackground />
           <div className="flex flex-col flex-1">
             {children}

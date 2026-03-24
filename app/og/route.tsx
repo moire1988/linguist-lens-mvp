@@ -64,8 +64,20 @@ export function GET() {
           </span>
         </div>
 
-        {/* Brand name */}
-        <div style={{ display: "flex", marginBottom: 18 }}>
+        {/* Brand name with logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 28, marginBottom: 18 }}>
+          {/* Logo circle (gradient approximation for ImageResponse) */}
+          <div
+            style={{
+              width: 88,
+              height: 88,
+              borderRadius: "50%",
+              background:
+                "linear-gradient(135deg, #7C3AED 0%, #6366F1 55%, #06B6D4 100%)",
+              display: "flex",
+              flexShrink: 0,
+            }}
+          />
           <span
             style={{
               fontSize: 84,
