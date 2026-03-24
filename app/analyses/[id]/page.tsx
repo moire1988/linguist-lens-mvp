@@ -1,9 +1,8 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Youtube, Globe, FileText } from "lucide-react";
 import { getAnalysisAction } from "@/app/actions/save-analysis";
-import { auth } from "@clerk/nextjs/server";
 import type { PhraseResult } from "@/lib/types";
 import { SiteHeader } from "@/components/site-header";
 
@@ -101,9 +100,9 @@ export default async function AnalysisDetailPage({
 }: {
   params: { id: string };
 }) {
-  const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
-
+  // getAnalysisAction 内で auth() によるアクセス制御を実施。
+  // - ゲスト解析（user_id=NULL）は UUID を知る誰でも閲覧可
+  // - ログイン済みユーザーは自分の解析のみ閲覧可
   const analysis = await getAnalysisAction(params.id);
   if (!analysis) notFound();
 
@@ -125,11 +124,11 @@ export default async function AnalysisDetailPage({
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {/* Back link */}
         <Link
-          href="/vocabulary"
+          href="/"
           className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-6"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          マイページに戻る
+          別の動画を解析する
         </Link>
 
         {/* Hero */}
@@ -212,13 +211,19 @@ export default async function AnalysisDetailPage({
         </div>
 
         {/* Bottom nav */}
-        <div className="flex justify-center">
+        <div className="flex justify-center gap-3">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            別の動画を解析する
+          </Link>
           <Link
             href="/vocabulary"
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
-            マイページに戻る
+            マイ単語帳を見る
           </Link>
         </div>
       </main>
