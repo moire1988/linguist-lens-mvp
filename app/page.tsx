@@ -34,6 +34,7 @@ import {
   analyzeContent,
   type AnalysisResult,
   type ExpressionType,
+  type AnalyzeErrorCode,
 } from "@/app/actions/analyze";
 import { generateArticle } from "@/app/actions/generate-article";
 import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
@@ -176,6 +177,7 @@ export default function HomePage() {
   const [results, setResults] = useState<AnalysisResult | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<AnalyzeErrorCode | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | ExpressionType>("all");
   const [stepIndex, setStepIndex] = useState(0);
   const [msgVisible, setMsgVisible] = useState(true);
@@ -340,6 +342,7 @@ export default function HomePage() {
   // Run analysis
   const handleSubmit = useCallback(async () => {
     setError(null);
+    setErrorCode(null);
     setResults(null);
     setAllSaved(false);
     setFromCache(false);
@@ -380,9 +383,11 @@ export default function HomePage() {
         }
         if (result.data.total_count === 0) {
           setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
+          setErrorCode("generic");
         }
       } else {
         setError(result.error);
+        setErrorCode(result.errorCode);
       }
     });
   }, [inputValue, url, selectedLevel, inputMode, devMode]);
@@ -516,12 +521,14 @@ export default function HomePage() {
   const handleGenerateAndAnalyze = useCallback(async () => {
     setIsGenerating(true);
     setError(null);
+    setErrorCode(null);
 
     const genResult = await generateArticle(selectedLevel, getSettings().accent);
 
     if (!genResult.success) {
       setIsGenerating(false);
       setError(`記事の生成に失敗しました: ${genResult.error}`);
+      setErrorCode("generic");
       return;
     }
 
@@ -545,9 +552,11 @@ export default function HomePage() {
         setResults(result.data);
         if (result.data.total_count === 0) {
           setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
+          setErrorCode("generic");
         }
       } else {
         setError(result.error);
+        setErrorCode(result.errorCode);
       }
     });
   }, [selectedLevel, devMode]);
@@ -1068,19 +1077,79 @@ export default function HomePage() {
         )}
 
         {/* ── Error ── */}
-        {error && !isPending && (
-          <div className="max-w-2xl mx-auto mt-4">
-            <div className="flex gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-red-800 mb-0.5">
-                  エラーが発生しました
-                </p>
-                <p className="text-sm text-red-600">{error}</p>
+        {error && !isPending && (() => {
+          const isNoSubs  = errorCode === "no_subtitles";
+          const isInvalid = errorCode === "invalid_url";
+
+          const icon = isNoSubs ? (
+            <span className="text-2xl leading-none select-none">🥲</span>
+          ) : isInvalid ? (
+            <span className="text-2xl leading-none select-none">👀</span>
+          ) : (
+            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5 text-rose-400" />
+          );
+
+          const title = isNoSubs
+            ? "英語字幕が見つかりませんでした"
+            : isInvalid
+            ? "URLを確認してください"
+            : "解析エラーが発生しました";
+
+          const body = isNoSubs
+            ? "申し訳ありません、この動画には英語字幕が設定されていないようです🥲 別の動画でお試しください！"
+            : isInvalid
+            ? "URLの形式が正しくないようです。YouTubeや英語記事のURLを確認してください👀"
+            : "解析中にエラーが発生しました。少し時間をおいて再度お試しください🙏";
+
+          const borderColor = isNoSubs
+            ? "border-amber-200/70"
+            : isInvalid
+            ? "border-sky-200/70"
+            : "border-rose-200/70";
+
+          const bgColor = isNoSubs
+            ? "bg-amber-50/80"
+            : isInvalid
+            ? "bg-sky-50/80"
+            : "bg-rose-50/80";
+
+          const titleColor = isNoSubs
+            ? "text-amber-800"
+            : isInvalid
+            ? "text-sky-800"
+            : "text-rose-800";
+
+          const bodyColor = isNoSubs
+            ? "text-amber-700"
+            : isInvalid
+            ? "text-sky-700"
+            : "text-rose-600";
+
+          return (
+            <div className="max-w-2xl mx-auto mt-6">
+              <div className={`flex gap-3.5 items-start rounded-2xl border px-5 py-4 backdrop-blur-sm ${bgColor} ${borderColor}`}>
+                <div className="flex-shrink-0 mt-0.5">{icon}</div>
+                <div className="min-w-0">
+                  <p className={`text-sm font-semibold mb-0.5 ${titleColor}`}>
+                    {title}
+                  </p>
+                  <p className={`text-sm leading-relaxed ${bodyColor}`}>
+                    {body}
+                  </p>
+                  {/* 開発用：生のエラーメッセージを折り畳みで表示 */}
+                  {process.env.NODE_ENV === "development" && (
+                    <details className="mt-2">
+                      <summary className="text-xs text-slate-400 cursor-pointer select-none">
+                        raw error
+                      </summary>
+                      <p className="mt-1 text-xs font-mono text-slate-500 break-all">{error}</p>
+                    </details>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── Results Dashboard ── */}
         {results && !isPending && results.total_count > 0 && (

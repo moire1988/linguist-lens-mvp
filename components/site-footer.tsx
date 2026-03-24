@@ -39,13 +39,13 @@ export function SiteFooter() {
             <XIcon />
           </a>
           <Link
-            href="#"
+            href="/terms"
             className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
           >
             利用規約
           </Link>
           <Link
-            href="#"
+            href="/privacy"
             className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
           >
             プライバシーポリシー

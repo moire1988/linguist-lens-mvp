@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen } from "lucide-react";
+import { LinguistLensLogo } from "@/components/linguist-lens-logo";
 
 // ─── Width variants (match your page's main content width) ───────────────────
 
@@ -25,10 +25,10 @@ export function HeaderLogo() {
   return (
     <Link
       href="/"
-      className="flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0"
+      className="flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0 group"
     >
-      <BookOpen className="h-5 w-5 text-indigo-600" />
-      <span className="font-bold text-slate-800 tracking-tight">LinguistLens</span>
+      <LinguistLensLogo size={28} className="transition-transform group-hover:scale-105" />
+      <span style={{ fontFamily: "var(--font-goldman)", fontWeight: 400, color: "#1A2D42" }}>LinguistLens</span>
     </Link>
   );
 }

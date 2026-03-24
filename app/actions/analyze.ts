@@ -8,6 +8,8 @@ import type { PhraseResult, AnalysisResult } from "@/lib/types";
 import { DEV_TEST_VIDEO_ID } from "@/lib/settings";
 export type { ExpressionType, PhraseResult, AnalysisResult } from "@/lib/types";
 
+export type AnalyzeErrorCode = "no_subtitles" | "invalid_url" | "generic";
+
 function loadMockTranscript(): string {
   const filePath = path.join(process.cwd(), "data", "mock-transcript.json");
   const raw = JSON.parse(fs.readFileSync(filePath, "utf-8")) as { content: string };
@@ -366,18 +368,41 @@ const cachedUrlAnalysis = unstable_cache(
 
 // ─── Main Server Action ────────────────────────────────────────────────────
 
+function classifyError(msg: string): AnalyzeErrorCode {
+  if (
+    msg.includes("字幕が存在しません") ||
+    msg.includes("字幕が見つかりませんでした") ||
+    msg.includes("字幕が見つかりません") ||
+    msg.includes("has no transcript") ||
+    msg.includes("Transcript not found") ||
+    (msg.includes("404") && msg.includes("字幕"))
+  ) return "no_subtitles";
+
+  if (
+    msg.includes("URLの形式が正しくありません") ||
+    msg.includes("YouTube URLの形式") ||
+    msg.includes("Invalid URL") ||
+    msg.includes("https://") ||
+    msg.includes("URL を確認") ||
+    msg.includes("形式が正しく")
+  ) return "invalid_url";
+
+  return "generic";
+}
+
 export async function analyzeContent(
   input: string,
   cefrLevel: string,
   inputMode: "url" | "text",
   devMode?: boolean
 ): Promise<
-  { success: true; data: AnalysisResult } | { success: false; error: string }
+  | { success: true; data: AnalysisResult }
+  | { success: false; error: string; errorCode: AnalyzeErrorCode }
 > {
   try {
-    if (!input.trim()) return { success: false, error: "入力が空です" };
+    if (!input.trim()) return { success: false, error: "入力が空です", errorCode: "generic" };
     if (!process.env.ANTHROPIC_API_KEY)
-      return { success: false, error: "APIキーが設定されていません。.env.local を確認してください。" };
+      return { success: false, error: "APIキーが設定されていません。.env.local を確認してください。", errorCode: "generic" };
 
     // Developer mode: skip Supadata API, load transcript from local file or demo text
     if (devMode && inputMode === "url") {
@@ -433,12 +458,8 @@ export async function analyzeContent(
       },
     };
   } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "予期しないエラーが発生しました",
-    };
+    const msg =
+      error instanceof Error ? error.message : "予期しないエラーが発生しました";
+    return { success: false, error: msg, errorCode: classifyError(msg) };
   }
 }
