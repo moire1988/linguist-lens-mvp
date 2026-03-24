@@ -26,7 +26,7 @@ import { saveAnalysisAction } from "@/app/actions/save-analysis";
 import { saveVocabularyAction } from "@/app/actions/vocabulary";
 import { savePublicAnalysis } from "@/app/actions/save-public-analysis";
 import { consumeQuotaAction } from "@/app/actions/check-quota";
-import { QuotaModal } from "@/components/quota-modal";
+import { UpgradeModal } from "@/components/upgrade-modal";
 import { Rocket, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,6 @@ import { generateArticle } from "@/app/actions/generate-article";
 import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
 import type { PhraseResult } from "@/lib/types";
 import { getCachedResult, setCachedResult } from "@/lib/cache";
-import { PremiumModal } from "@/components/premium-modal";
 import { PhraseCard } from "@/components/phrase-card";
 import { ScriptViewer } from "@/components/script-viewer";
 import { AdPlaceholder } from "@/components/ad-placeholder";
@@ -573,13 +572,8 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen relative">
-      {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
-      {showQuotaModal && (
-        <QuotaModal
-          isLoggedIn={!!isSignedIn}
-          onClose={() => setShowQuotaModal(false)}
-        />
-      )}
+      {showPremium && <UpgradeModal reason="vocab_limit" onClose={() => setShowPremium(false)} />}
+      {showQuotaModal && <UpgradeModal reason="daily_limit" onClose={() => setShowQuotaModal(false)} />}
       {showSettings && (
         <SettingsModal
           onClose={() => {

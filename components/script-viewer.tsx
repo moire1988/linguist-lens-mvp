@@ -14,7 +14,7 @@ import { cn, getBestEnglishVoice } from "@/lib/utils";
 import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import type { PhraseResult } from "@/lib/types";
 import { translateTranscript } from "@/app/actions/translate";
-import { ProWaitlistModal } from "@/components/pro-waitlist-modal";
+import { UpgradeModal } from "@/components/upgrade-modal";
 import { PhrasePopup } from "@/components/phrase-popup";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -465,7 +465,7 @@ export function ScriptViewer({
 
       {/* Pro waitlist modal */}
       {showProModal && (
-        <ProWaitlistModal onClose={() => setShowProModal(false)} />
+        <UpgradeModal reason="pro_feature" onClose={() => setShowProModal(false)} />
       )}
 
       {/* Phrase popup (fixed position) */}

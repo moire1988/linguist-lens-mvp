@@ -14,7 +14,7 @@ import { saveVocabularyAction } from "@/app/actions/vocabulary";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 import { PhraseCard } from "@/components/phrase-card";
 import { ScriptViewer } from "@/components/script-viewer";
-import { PremiumModal } from "@/components/premium-modal";
+import { UpgradeModal } from "@/components/upgrade-modal";
 import { AdBanner } from "@/components/ad-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -114,7 +114,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
 
   return (
     <div className="min-h-screen relative">
-      {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
+      {showPremium && <UpgradeModal reason="vocab_limit" onClose={() => setShowPremium(false)} />}
 
       {showSettings && (
         <SettingsModal onClose={() => setShowSettings(false)} />
