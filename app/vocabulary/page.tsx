@@ -797,25 +797,22 @@ export default function VocabularyPage() {
                   フラッシュカード
                 </button>
                 <button
-                  onClick={handleExportCSV}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-sm font-medium text-slate-600 transition-colors"
-                >
-                  <Download className="h-4 w-4" />
-                  CSV
-                </button>
-                <button
-                  onClick={handleExportMarkdown}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-violet-200 hover:text-violet-600 rounded-xl text-sm font-medium text-slate-600 transition-colors"
-                >
-                  <Download className="h-4 w-4" />
-                  Obsidian
-                </button>
-                <button
                   onClick={() => setShowClearConfirm(true)}
                   className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-rose-200 hover:text-rose-500 rounded-xl text-sm font-medium text-slate-400 transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
                   全削除
+                </button>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                <button onClick={handleExportCSV} className="flex items-center gap-1 hover:text-slate-600 transition-colors underline underline-offset-2">
+                  <Download className="h-3 w-3" />
+                  CSVダウンロード
+                </button>
+                <span>·</span>
+                <button onClick={handleExportMarkdown} className="flex items-center gap-1 hover:text-slate-600 transition-colors underline underline-offset-2">
+                  <Download className="h-3 w-3" />
+                  Obsidian md
                 </button>
               </div>
               {learningVocab.length < MIN_COACH_PHRASES && (
@@ -956,7 +953,7 @@ export default function VocabularyPage() {
                 className={cn(
                   "px-4 py-1.5 rounded-full text-xs font-semibold border transition-all",
                   statusTab === 'learning'
-                    ? "bg-slate-900 text-white border-slate-900"
+                    ? "bg-indigo-600 text-white border-indigo-600"
                     : "border-slate-200 text-slate-500 hover:border-slate-400"
                 )}
               >
@@ -967,7 +964,7 @@ export default function VocabularyPage() {
                 className={cn(
                   "px-4 py-1.5 rounded-full text-xs font-semibold border transition-all",
                   statusTab === 'archived'
-                    ? "bg-slate-900 text-white border-slate-900"
+                    ? "bg-indigo-600 text-white border-indigo-600"
                     : "border-slate-200 text-slate-500 hover:border-slate-400"
                 )}
               >
@@ -1004,7 +1001,7 @@ export default function VocabularyPage() {
                   className={cn(
                     "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
                     typeFilter === "all"
-                      ? "bg-slate-800 text-white border-slate-800"
+                      ? "bg-indigo-600 text-white border-indigo-600"
                       : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
                   )}
                 >
@@ -1017,7 +1014,7 @@ export default function VocabularyPage() {
                     className={cn(
                       "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
                       typeFilter === type
-                        ? "bg-slate-800 text-white border-slate-800"
+                        ? "bg-indigo-600 text-white border-indigo-600"
                         : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
                     )}
                   >
