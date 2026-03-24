@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import type { AnalysisResult } from "@/lib/types";
+import type { SavedAnalysis } from "@/lib/saved-analyses";
 
 export type SaveAnalysisResult =
   | { success: true; id: string }
@@ -46,4 +47,59 @@ export async function saveAnalysisAction(payload: {
   }
 
   return { success: true, id: (data as { id: string }).id };
+}
+
+// ─── ユーザー自身の解析一覧を取得 ────────────────────────────────────────────
+
+interface AnalysisRow {
+  id: string;
+  url: string | null;
+  level: string;
+  result_json: AnalysisResult;
+  created_at: string;
+}
+
+export async function getUserAnalysesAction(): Promise<SavedAnalysis[]> {
+  const { userId } = await auth();
+  if (!userId) return [];
+
+  let db;
+  try { db = createAdminClient(); } catch { return []; }
+
+  const { data, error } = await db
+    .from("saved_analyses")
+    .select("id, url, level, result_json, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+
+  return (data as AnalysisRow[]).map((row) => ({
+    id: row.id,
+    savedAt: row.created_at,
+    sourceUrl: row.url ?? undefined,
+    inputMode: row.url ? "url" : "text",
+    cefrLevel: row.level,
+    data: row.result_json,
+  }));
+}
+
+// ─── ユーザー自身の解析を削除 ─────────────────────────────────────────────────
+
+export async function deleteUserAnalysisAction(
+  id: string
+): Promise<{ ok: boolean }> {
+  const { userId } = await auth();
+  if (!userId) return { ok: false };
+
+  let db;
+  try { db = createAdminClient(); } catch { return { ok: false }; }
+
+  await db
+    .from("saved_analyses")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId); // user_id で絞ることで他人のデータは削除不可
+
+  return { ok: true };
 }
