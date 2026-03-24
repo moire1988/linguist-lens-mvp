@@ -10,6 +10,7 @@ import type { ExampleVideo } from "@/lib/examples-data";
 import type { PhraseResult } from "@/lib/types";
 import type { ExpressionType } from "@/app/actions/analyze";
 import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
+import { saveVocabularyAction } from "@/app/actions/vocabulary";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 import { PhraseCard } from "@/components/phrase-card";
 import { ScriptViewer } from "@/components/script-viewer";
@@ -71,6 +72,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
       meaning_ja: phrase.meaning_ja,
       nuance: phrase.nuance,
       example: phrase.example,
+      example_translation: phrase.example_translation,
       context: phrase.context,
       why_hard_for_japanese: phrase.why_hard_for_japanese,
       sourceUrl: example.url,
@@ -79,13 +81,28 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
       setSavedExpressions((s) => { const n = new Set(Array.from(s)); n.add(key); return n; });
       setDailyRemaining((r) => Math.max(0, r - 1));
       setVocabCount((c) => c + 1);
+      if (isSignedIn) {
+        void saveVocabularyAction({
+          expression: phrase.expression,
+          type: phrase.type,
+          cefr_level: phrase.cefr_level,
+          meaning_ja: phrase.meaning_ja,
+          nuance: phrase.nuance,
+          example: phrase.example,
+          example_translation: phrase.example_translation,
+          context: phrase.context,
+          why_hard_for_japanese: phrase.why_hard_for_japanese,
+          sourceUrl: example.url,
+          status: 'learning',
+        });
+      }
       toast.success("単語帳に保存しました", {
         description: `「${phrase.expression}」をマイ単語帳に追加しました`,
       });
     } else if (result.reason === "limit_reached") {
       setShowPremium(true);
     }
-  }, [savedExpressions, example.url]);
+  }, [savedExpressions, example.url, isSignedIn]);
 
   const filtered = activeFilter === "all"
     ? example.phrases

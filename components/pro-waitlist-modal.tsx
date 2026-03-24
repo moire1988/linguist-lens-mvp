@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { X, Sparkles, Check, Loader2, LogIn } from "lucide-react";
 import { useAuth, useClerk } from "@clerk/nextjs";
-import { registerProWaitlistAction } from "@/app/actions/waitlist";
+import { registerWaitlistLoggedInAction } from "@/app/actions/waitlist";
 
 interface ProWaitlistModalProps {
   onClose: () => void;
@@ -26,7 +26,7 @@ export function ProWaitlistModal({ onClose }: ProWaitlistModalProps) {
   const handleRegister = async () => {
     setIsLoading(true);
     setErrorMsg(null);
-    const result = await registerProWaitlistAction();
+    const result = await registerWaitlistLoggedInAction();
     setIsLoading(false);
     if (!result.ok) {
       setErrorMsg(result.error ?? "登録に失敗しました");

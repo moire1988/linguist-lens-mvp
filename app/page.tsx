@@ -23,7 +23,10 @@ import {
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 import { saveAnalysisAction } from "@/app/actions/save-analysis";
+import { saveVocabularyAction } from "@/app/actions/vocabulary";
 import { savePublicAnalysis } from "@/app/actions/save-public-analysis";
+import { consumeQuotaAction } from "@/app/actions/check-quota";
+import { QuotaModal } from "@/components/quota-modal";
 import { Rocket, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -53,11 +56,7 @@ import {
   getPendingRestore,
   ANALYSIS_MAX_SLOTS,
 } from "@/lib/saved-analyses";
-import {
-  openLoginPrompt,
-  getGuestExtractionCount,
-  incrementGuestExtraction,
-} from "@/lib/login-prompt-store";
+import { openLoginPrompt } from "@/lib/login-prompt-store";
 import {
   getRecentPublicAnalysesAction,
   type RecentPublicAnalysis,
@@ -173,6 +172,7 @@ export default function HomePage() {
   const [vocabCount, setVocabCount] = useState(0);
   const [fromCache, setFromCache] = useState(false);
   const [showPremium, setShowPremium] = useState(false);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
   const { isSignedIn, userId } = useAuth();
@@ -302,7 +302,7 @@ export default function HomePage() {
   }, [isPending]);
 
   // Run analysis
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     setError(null);
     setResults(null);
     setAllSaved(false);
@@ -312,11 +312,11 @@ export default function HomePage() {
     setPublicSaveUrl(null);
     setSourceUrl(inputMode === "url" ? url : undefined);
 
-    // ゲスト解析制限チェック（1回まで無料）
-    if (!isSignedIn && !devMode) {
-      const guestCount = getGuestExtractionCount();
-      if (guestCount >= 1) {
-        openLoginPrompt("extraction");
+    // ── 解析クォータチェック（devModeはスキップ）──────────────────────────
+    if (!devMode) {
+      const quota = await consumeQuotaAction();
+      if (!quota.allowed) {
+        setShowQuotaModal(true);
         return;
       }
     }
@@ -327,7 +327,6 @@ export default function HomePage() {
       if (cached) {
         setResults(cached);
         setFromCache(true);
-        if (!isSignedIn) incrementGuestExtraction();
         toast.success("キャッシュから読み込みました", {
           description: "API呼び出しをスキップしました（7日間有効）",
         });
@@ -339,7 +338,6 @@ export default function HomePage() {
       const result = await analyzeContent(inputValue, selectedLevel, inputMode, devMode);
       if (result.success) {
         setResults(result.data);
-        if (!isSignedIn && !devMode) incrementGuestExtraction();
         // URLモードの結果をキャッシュ保存（devModeはスキップ）
         if (inputMode === "url" && url.trim() && !devMode) {
           setCachedResult(url.trim(), selectedLevel, result.data);
@@ -376,6 +374,7 @@ export default function HomePage() {
         meaning_ja: phrase.meaning_ja,
         nuance: phrase.nuance,
         example: phrase.example,
+        example_translation: phrase.example_translation,
         context: phrase.context,
         why_hard_for_japanese: phrase.why_hard_for_japanese,
         sourceUrl,
@@ -540,6 +539,7 @@ export default function HomePage() {
         meaning_ja: phrase.meaning_ja,
         nuance: phrase.nuance,
         example: phrase.example,
+        example_translation: phrase.example_translation,
         context: phrase.context,
         why_hard_for_japanese: phrase.why_hard_for_japanese,
         sourceUrl,
@@ -548,6 +548,21 @@ export default function HomePage() {
         setSavedExpressions((s) => { const n = new Set(Array.from(s)); n.add(key); return n; });
         setDailyRemaining((r) => Math.max(0, r - 1));
         setVocabCount((c) => c + 1);
+        if (isSignedIn) {
+          void saveVocabularyAction({
+            expression: phrase.expression,
+            type: phrase.type,
+            cefr_level: phrase.cefr_level,
+            meaning_ja: phrase.meaning_ja,
+            nuance: phrase.nuance,
+            example: phrase.example,
+            example_translation: phrase.example_translation,
+            context: phrase.context,
+            why_hard_for_japanese: phrase.why_hard_for_japanese,
+            sourceUrl,
+            status: 'learning',
+          });
+        }
         toast.success("単語帳に保存しました", {
           description: `「${phrase.expression}」をマイ単語帳に追加しました`,
         });
@@ -555,7 +570,7 @@ export default function HomePage() {
         setShowPremium(true);
       }
     },
-    [savedExpressions, sourceUrl]
+    [savedExpressions, sourceUrl, isSignedIn]
   );
 
   const canSubmit =
@@ -566,6 +581,12 @@ export default function HomePage() {
   return (
     <div className="min-h-screen relative">
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
+      {showQuotaModal && (
+        <QuotaModal
+          isLoggedIn={!!isSignedIn}
+          onClose={() => setShowQuotaModal(false)}
+        />
+      )}
       {showSettings && (
         <SettingsModal
           onClose={() => {
@@ -1294,18 +1315,18 @@ export default function HomePage() {
         )}
       </main>
 
+      {/* ── Recommended Carousel（コンテンツなし時のみ） ── */}
+      {!hasContent && <RecommendedCarousel />}
+
+      {/* ── Latest Articles Carousel（コンテンツなし時のみ） ── */}
+      {!hasContent && <LatestArticlesCarousel />}
+
       {/* ── Newsletter（コンテンツなし時のみ） ── */}
       {!hasContent && (
         <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10">
           <NewsletterBanner />
         </div>
       )}
-
-      {/* ── Recommended Carousel（コンテンツなし時のみ） ── */}
-      {!hasContent && <RecommendedCarousel />}
-
-      {/* ── Latest Articles Carousel（コンテンツなし時のみ） ── */}
-      {!hasContent && <LatestArticlesCarousel />}
 
       {/* ── Recent Public Parses（コンテンツなし時のみ） ── */}
       {!hasContent && recentPublicAnalyses.length > 0 && (

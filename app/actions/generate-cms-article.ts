@@ -1,6 +1,7 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { auth } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import type {
   Article,
@@ -9,8 +10,8 @@ import type {
   GenerateCmsArticleResult,
 } from "@/lib/article-types";
 import {
+  ARTICLE_CATEGORIES,
   isGrammarMasterclassCategory,
-  pickArticleCategory,
 } from "@/lib/article-categories";
 
 // ─── CEFR descriptions ───────────────────────────────────────────────────────
@@ -24,12 +25,98 @@ const LEVEL_DESCRIPTIONS: Record<string, string> = {
   C2: "near-native — full vocabulary range, subtle nuance, literary style acceptable",
 };
 
-// ─── English variant ─────────────────────────────────────────────────────────
+// ─── English variant (balanced picker) ──────────────────────────────────────
+// Target ratio  US : UK : AU : common = 3 : 1 : 1 : 5
 
-const VARIANTS: EnglishVariant[] = ["US", "UK", "AU", "common"];
+const VARIANT_WEIGHTS: Record<EnglishVariant, number> = {
+  US: 3, UK: 1, AU: 1, common: 5,
+};
 
-function pickVariant(): EnglishVariant {
-  return VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
+/** 重み付きランダム（DB不可時のフォールバック用） */
+function weightedRandomVariant(): EnglishVariant {
+  const total = Object.values(VARIANT_WEIGHTS).reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (const [v, w] of Object.entries(VARIANT_WEIGHTS) as [EnglishVariant, number][]) {
+    r -= w;
+    if (r <= 0) return v;
+  }
+  return "common";
+}
+
+/**
+ * 直近20件の分布を見て目標比率から最も不足しているvariantを選ぶ。
+ * DB参照失敗時は重み付きランダムにフォールバック。
+ */
+async function pickVariantBalanced(
+  db: ReturnType<typeof createAdminClient>
+): Promise<EnglishVariant> {
+  try {
+    const { data } = await db
+      .from("articles")
+      .select("english_variant")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (!data || data.length < 4) return weightedRandomVariant();
+
+    const weightTotal = Object.values(VARIANT_WEIGHTS).reduce((a, b) => a + b, 0);
+    const targets: Record<string, number> = Object.fromEntries(
+      Object.entries(VARIANT_WEIGHTS).map(([v, w]) => [v, w / weightTotal])
+    );
+    const counts: Record<string, number> = { US: 0, UK: 0, AU: 0, common: 0 };
+    for (const row of data as { english_variant: string }[]) {
+      if (row.english_variant in counts) counts[row.english_variant]++;
+    }
+    const n = data.length;
+
+    let best = weightedRandomVariant();
+    let bestDeficit = -Infinity;
+    for (const v of ["US", "UK", "AU", "common"] as EnglishVariant[]) {
+      const deficit = targets[v] - counts[v] / n;
+      if (deficit > bestDeficit) { bestDeficit = deficit; best = v; }
+    }
+    return best;
+  } catch {
+    return weightedRandomVariant();
+  }
+}
+
+// ─── Category (balanced picker) ──────────────────────────────────────────────
+// 4カテゴリ均等 (25% each)。直近20件で最も不足しているカテゴリを優先。
+
+async function pickCategoryBalanced(
+  db: ReturnType<typeof createAdminClient>
+): Promise<string> {
+  const categories = ARTICLE_CATEGORIES as readonly string[];
+  const target = 1 / categories.length;
+
+  try {
+    const { data } = await db
+      .from("articles")
+      .select("category")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (!data || data.length < categories.length) {
+      return categories[Math.floor(Math.random() * categories.length)];
+    }
+
+    const counts: Record<string, number> = Object.fromEntries(categories.map((c) => [c, 0]));
+    for (const row of data as { category: string | null }[]) {
+      if (row.category && row.category in counts) counts[row.category]++;
+    }
+    const n = data.length;
+
+    let best = categories[0];
+    let bestDeficit = -Infinity;
+    for (const cat of categories) {
+      const deficit = target - counts[cat] / n;
+      if (deficit > bestDeficit) { bestDeficit = deficit; best = cat; }
+    }
+    return best;
+  } catch {
+    return categories[Math.floor(Math.random() * categories.length)];
+  }
 }
 
 /** 英語本文の目標語数（A1/A2 は読む負荷を抑える） */
@@ -312,6 +399,13 @@ export async function generateCmsArticle(
   level: string,
   publishImmediately = true
 ): Promise<GenerateCmsArticleResult> {
+  // ── Admin guard ────────────────────────────────────────────────────────────
+  const { userId } = await auth();
+  const adminId = process.env.ADMIN_USER_ID;
+  if (!userId || !adminId || userId !== adminId) {
+    return { success: false, error: "管理者権限が必要です" };
+  }
+
   const validLevels = ["A1", "A2", "B1", "B2", "C1", "C2"];
   if (!validLevels.includes(level)) {
     return { success: false, error: `無効な CEFR レベルです: ${level}` };
@@ -321,8 +415,19 @@ export async function generateCmsArticle(
     return { success: false, error: "ANTHROPIC_API_KEY が設定されていません" };
   }
 
-  const variant          = pickVariant();
-  const selectedCategory = pickArticleCategory();
+  // DB クライアントを先に作り、分布参照と保存の両方に使う
+  let db;
+  try {
+    db = createAdminClient();
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Supabase 接続に失敗しました（環境変数を確認してください）",
+    };
+  }
+
+  const variant          = await pickVariantBalanced(db);
+  const selectedCategory = await pickCategoryBalanced(db);
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -360,16 +465,6 @@ export async function generateCmsArticle(
 
   const rawSlug    = parsed.slug ?? parsed.titleEn;
   const uniqueSlug = await ensureUniqueSlug(rawSlug);
-
-  let db;
-  try {
-    db = createAdminClient();
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Supabase 接続に失敗しました（環境変数を確認してください）",
-    };
-  }
 
   const insertPayload = {
     slug:             uniqueSlug,

@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  BookOpen,
   Search,
   Trash2,
   Download,
@@ -14,7 +13,6 @@ import {
   ChevronDown,
   Shuffle,
   Eye,
-  EyeOff,
   BookMarked,
   X,
   AlertTriangle,
@@ -26,6 +24,7 @@ import {
   Globe,
   FileText,
   Quote,
+  CheckCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
@@ -33,6 +32,9 @@ import { getSettings, ACCENT_LANG } from "@/lib/settings";
 import {
   getVocabulary,
   deletePhrase,
+  archivePhrase,
+  restorePhrase,
+  clearByStatus,
   clearAll,
   exportToCSV,
   exportToMarkdown,
@@ -43,6 +45,7 @@ import { AdPlaceholder } from "@/components/ad-placeholder";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { CoachModal } from "@/components/coach-modal";
+import { TranslationAccordion } from "@/components/translation-accordion";
 import {
   getSavedAnalyses,
   deleteSavedAnalysis,
@@ -51,6 +54,13 @@ import {
   type SavedAnalysis,
 } from "@/lib/saved-analyses";
 import { getDbAnalyses, deleteDbAnalysis } from "@/lib/db/analyses";
+import {
+  archiveVocabularyAction,
+  restoreVocabularyAction,
+  deleteVocabularyAction,
+  clearVocabularyAction,
+} from "@/app/actions/vocabulary";
+import { EXAMPLES } from "@/lib/examples-data";
 
 const MIN_COACH_PHRASES = 5;
 
@@ -162,15 +172,22 @@ const CEFR_COLORS: Record<string, string> = {
 
 function VocabCard({
   phrase,
+  isArchived,
   onDelete,
+  onArchive,
+  onRestore,
 }: {
   phrase: SavedPhrase;
+  isArchived: boolean;
   onDelete: (id: string, expression: string) => void;
+  onArchive: (id: string, expression: string) => void;
+  onRestore: (id: string, expression: string) => void;
 }) {
   const [isListening, setIsListening] = useState(false);
   const [recognized,  setRecognized]  = useState("");
   const [feedback,    setFeedback]    = useState<Feedback | null>(null);
   const [showDetail,  setShowDetail]  = useState(false);
+  const [archiving,   setArchiving]   = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   useEffect(() => { return () => { recognitionRef.current?.stop(); }; }, []);
@@ -204,10 +221,19 @@ function VocabCard({
     rec.start(); setIsListening(true);
   }, [isListening, phrase.example, phrase.expression]);
 
+  const handleArchiveClick = useCallback(async () => {
+    setArchiving(true);
+    await new Promise((r) => setTimeout(r, 280));
+    onArchive(phrase.id, phrase.expression);
+  }, [onArchive, phrase.id, phrase.expression]);
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+    <div className={cn(
+      "bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col duration-300",
+      archiving && "opacity-0 scale-95 -translate-y-1 pointer-events-none"
+    )}>
       <div className="p-4 sm:p-5 flex-1">
-        {/* Badges + TTS + Delete */}
+        {/* Badges + TTS + Archive/Restore + Delete */}
         <div className="flex items-start gap-3 mb-2.5">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -230,6 +256,17 @@ function VocabCard({
               className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" title="発音を聞く">
               <Volume2 className="h-4 w-4" />
             </button>
+            {isArchived ? (
+              <button onClick={() => onRestore(phrase.id, phrase.expression)}
+                className="p-2 rounded-xl hover:bg-indigo-50 text-slate-400 hover:text-indigo-500 transition-colors" title="学習中に戻す">
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            ) : (
+              <button onClick={handleArchiveClick}
+                className="p-2 rounded-xl hover:bg-emerald-50 text-slate-300 hover:text-emerald-500 transition-all hover:shadow-[0_0_10px_rgba(16,185,129,0.35)]" title="I've mastered it">
+                <CheckCheck className="h-4 w-4" />
+              </button>
+            )}
             <button onClick={() => onDelete(phrase.id, phrase.expression)}
               className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors" title="削除">
               <Trash2 className="h-4 w-4" />
@@ -278,6 +315,10 @@ function VocabCard({
           </div>
 
           <p className="text-xs text-indigo-700 font-medium leading-relaxed">{phrase.example}</p>
+
+          {phrase.example_translation && (
+            <TranslationAccordion text={phrase.example_translation} variant="indigo" />
+          )}
 
           {isListening && (
             <div className="mt-2 flex items-center gap-1.5">
@@ -336,7 +377,6 @@ function FlashCard({
   const [score, setScore] = useState({ known: 0, unknown: 0 });
   const [finished, setFinished] = useState(false);
 
-  // Shuffle on mount
   useEffect(() => {
     setDeck([...cards].sort(() => Math.random() - 0.5));
   }, [cards]);
@@ -396,7 +436,6 @@ function FlashCard({
               <X className="h-4 w-4" />
             </button>
           </div>
-          {/* Progress bar */}
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-indigo-500 rounded-full transition-all duration-500"
@@ -414,9 +453,7 @@ function FlashCard({
             <div className="text-4xl mb-4">
               {score.known >= deck.length * 0.8 ? "🎉" : "💪"}
             </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2">
-              完了！
-            </h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">完了！</h2>
             <p className="text-slate-500 text-sm mb-6">
               覚えた: {score.known}語 ／ もう少し: {score.unknown}語
             </p>
@@ -438,42 +475,29 @@ function FlashCard({
           </div>
         ) : (
           <div className="px-6 py-6">
-            {/* Card front */}
             <div className="text-center mb-6">
               <div className="flex items-center justify-center gap-2 mb-3">
-                <span
-                  className={cn(
-                    "text-xs font-semibold px-2.5 py-0.5 rounded-full border",
-                    TYPE_CONFIG[current.type]?.color ?? "bg-slate-100 text-slate-600 border-slate-200"
-                  )}
-                >
+                <span className={cn("text-xs font-semibold px-2.5 py-0.5 rounded-full border",
+                  TYPE_CONFIG[current.type]?.color ?? "bg-slate-100 text-slate-600 border-slate-200")}>
                   {TYPE_CONFIG[current.type]?.label ?? current.type}
                 </span>
-                <span
-                  className={cn(
-                    "text-xs font-bold px-2.5 py-0.5 rounded-full",
-                    CEFR_COLORS[current.cefr_level] ?? "bg-slate-100 text-slate-600"
-                  )}
-                >
+                <span className={cn("text-xs font-bold px-2.5 py-0.5 rounded-full",
+                  CEFR_COLORS[current.cefr_level] ?? "bg-slate-100 text-slate-600")}>
                   {current.cefr_level}
                 </span>
               </div>
-
               <div className="flex items-center justify-center gap-2 mb-1">
                 <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
                   {current.expression}
                 </h2>
-                <button
-                  onClick={handleSpeak}
-                  className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-                >
+                <button onClick={handleSpeak}
+                  className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
                   <Volume2 className="h-4 w-4" />
                 </button>
               </div>
               <p className="text-xs text-slate-400">この表現の意味は？</p>
             </div>
 
-            {/* Reveal section */}
             {!revealed ? (
               <button
                 onClick={() => setRevealed(true)}
@@ -485,71 +509,52 @@ function FlashCard({
             ) : (
               <div>
                 <div className="bg-slate-50 rounded-2xl p-4 mb-4">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                    意味
-                  </p>
-                  <p className="text-base font-semibold text-slate-800 mb-3">
-                    {current.meaning_ja}
-                  </p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">意味</p>
+                  <p className="text-base font-semibold text-slate-800 mb-3">{current.meaning_ja}</p>
                   <div className="flex items-center justify-between mb-1.5">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                      例文
-                    </p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">例文</p>
                     <button
                       onClick={() => {
                         if (!("speechSynthesis" in window)) return;
                         window.speechSynthesis.cancel();
                         const u = new SpeechSynthesisUtterance(current.example);
-                        u.lang = "en-US";
-                        u.rate = 0.88;
+                        u.lang = "en-US"; u.rate = 0.88;
                         window.speechSynthesis.speak(u);
                       }}
                       className="p-1 rounded-lg hover:bg-indigo-100 text-indigo-400 hover:text-indigo-600 transition-colors"
-                      title="例文を読み上げ"
                     >
                       <Volume2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <p className="text-sm text-indigo-700 font-medium">
-                    {current.example}
-                  </p>
+                  <p className="text-sm text-indigo-700 font-medium">{current.example}</p>
                 </div>
-
-                {/* Answer buttons */}
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => next(false)}
-                    className="py-3 rounded-xl border-2 border-rose-200 bg-rose-50 text-rose-600 font-semibold text-sm hover:bg-rose-100 transition-colors"
-                  >
+                  <button onClick={() => next(false)}
+                    className="py-3 rounded-xl border-2 border-rose-200 bg-rose-50 text-rose-600 font-semibold text-sm hover:bg-rose-100 transition-colors">
                     😔 もう少し
                   </button>
-                  <button
-                    onClick={() => next(true)}
-                    className="py-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold text-sm hover:bg-emerald-100 transition-colors"
-                  >
+                  <button onClick={() => next(true)}
+                    className="py-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold text-sm hover:bg-emerald-100 transition-colors">
                     😊 覚えた！
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Navigation */}
             <div className="flex items-center justify-between mt-4">
               <button
                 onClick={() => { setIndex((i) => Math.max(0, i - 1)); setRevealed(false); }}
                 disabled={index === 0}
                 className="flex items-center gap-1 text-xs text-slate-400 disabled:opacity-30 hover:text-slate-600 transition-colors"
               >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                前へ
+                <ChevronLeft className="h-3.5 w-3.5" />前へ
               </button>
               <button
                 onClick={() => { setIndex((i) => Math.min(deck.length - 1, i + 1)); setRevealed(false); }}
                 disabled={index >= deck.length - 1}
                 className="flex items-center gap-1 text-xs text-slate-400 disabled:opacity-30 hover:text-slate-600 transition-colors"
               >
-                次へ
-                <ChevronRight className="h-3.5 w-3.5" />
+                次へ<ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -567,6 +572,7 @@ export default function VocabularyPage() {
   const [vocabulary, setVocabulary] = useState<SavedPhrase[]>([]);
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [loadingAnalyses, setLoadingAnalyses] = useState(false);
+  const [statusTab, setStatusTab] = useState<'learning' | 'archived'>('learning');
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [cefrFilter, setCefrFilter] = useState<string>("all");
@@ -574,14 +580,34 @@ export default function VocabularyPage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showCoach, setShowCoach] = useState(false);
 
-  // 単語帳は常に localStorage から
-  useEffect(() => {
-    setVocabulary(getVocabulary());
+  // /examples 静的データから example_translation を補完するためのルックアップマップ
+  const examplesTranslationMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const video of EXAMPLES) {
+      for (const phrase of video.phrases) {
+        if (phrase.example_translation) {
+          map.set(phrase.expression.toLowerCase(), phrase.example_translation);
+        }
+      }
+    }
+    return map;
   }, []);
+
+  // 単語帳は localStorage から（ログイン済みでも同期はしない — 保存はServer Action経由）
+  useEffect(() => {
+    const raw = getVocabulary();
+    // example_translation が未保存の既存データは /examples 静的データで補完
+    const enriched = raw.map((p) =>
+      p.example_translation
+        ? p
+        : { ...p, example_translation: examplesTranslationMap.get(p.expression.toLowerCase()) }
+    );
+    setVocabulary(enriched);
+  }, [examplesTranslationMap]);
 
   // 解析履歴: ログイン済みは Supabase、未ログインは localStorage
   useEffect(() => {
-    if (isSignedIn === undefined) return; // Clerk 初期化待ち
+    if (isSignedIn === undefined) return;
     if (isSignedIn && userId) {
       setLoadingAnalyses(true);
       (async () => {
@@ -596,9 +622,31 @@ export default function VocabularyPage() {
     }
   }, [isSignedIn, userId, getToken]);
 
+  // ─── Derived vocab lists ──────────────────────────────────────────────────
+
+  const learningVocab = useMemo(
+    () => vocabulary.filter((p) => !p.status || p.status === 'learning'),
+    [vocabulary]
+  );
+  const archivedVocab = useMemo(
+    () => vocabulary.filter((p) => p.status === 'archived'),
+    [vocabulary]
+  );
+  const activeVocab = statusTab === 'learning' ? learningVocab : archivedVocab;
+
+  // Available filter options from activeVocab
+  const availableTypes = useMemo(
+    () => Array.from(new Set(activeVocab.map((p) => p.type))),
+    [activeVocab]
+  );
+  const availableCefr = useMemo(
+    () => ["A1","A2","B1","B2","C1","C2"].filter((l) => activeVocab.some((p) => p.cefr_level === l)),
+    [activeVocab]
+  );
+
   // Filtered vocabulary
   const filtered = useMemo(() => {
-    return vocabulary.filter((p) => {
+    return activeVocab.filter((p) => {
       const matchSearch =
         search === "" ||
         p.expression.toLowerCase().includes(search.toLowerCase()) ||
@@ -607,29 +655,42 @@ export default function VocabularyPage() {
       const matchCefr = cefrFilter === "all" || p.cefr_level === cefrFilter;
       return matchSearch && matchType && matchCefr;
     });
-  }, [vocabulary, search, typeFilter, cefrFilter]);
+  }, [activeVocab, search, typeFilter, cefrFilter]);
 
-  // Available filter options (only show types/levels that exist in data)
-  const availableTypes = useMemo(
-    () => Array.from(new Set(vocabulary.map((p) => p.type))),
-    [vocabulary]
-  );
-  const availableCefr = useMemo(
-    () => ["A1","A2","B1","B2","C1","C2"].filter((l) => vocabulary.some((p) => p.cefr_level === l)),
-    [vocabulary]
-  );
+  // Reset type/cefr filter when switching tabs
+  useEffect(() => {
+    setTypeFilter("all");
+    setCefrFilter("all");
+    setSearch("");
+  }, [statusTab]);
 
   const handleDelete = useCallback((id: string, expression: string) => {
     setVocabulary(deletePhrase(id));
+    if (isSignedIn) void deleteVocabularyAction(id);
     toast.success(`「${expression}」を削除しました`);
-  }, []);
+  }, [isSignedIn]);
 
-  const handleClearAll = useCallback(() => {
-    clearAll();
-    setVocabulary([]);
+  const handleArchive = useCallback((id: string, expression: string) => {
+    setVocabulary(archivePhrase(id));
+    if (isSignedIn) void archiveVocabularyAction(id);
+    toast.success(`「${expression}」をマスター済みに移動しました`, {
+      description: "MasteredタブでいつでもLearningに戻せます",
+    });
+  }, [isSignedIn]);
+
+  const handleRestore = useCallback((id: string, expression: string) => {
+    setVocabulary(restorePhrase(id));
+    if (isSignedIn) void restoreVocabularyAction(id);
+    toast.success(`「${expression}」を学習中に戻しました`);
+  }, [isSignedIn]);
+
+  const handleClearByStatus = useCallback(() => {
+    const updated = clearByStatus(statusTab);
+    setVocabulary(updated);
     setShowClearConfirm(false);
-    toast.success("単語帳をすべて削除しました");
-  }, []);
+    if (isSignedIn) void clearVocabularyAction(statusTab);
+    toast.success(statusTab === 'learning' ? "学習中の単語をすべて削除しました" : "マスター済みの単語をすべて削除しました");
+  }, [statusTab, isSignedIn]);
 
   const handleDeleteAnalysis = useCallback(async (id: string) => {
     if (isSignedIn && userId) {
@@ -650,39 +711,30 @@ export default function VocabularyPage() {
   }, [router]);
 
   const handleExportCSV = useCallback(() => {
-    if (vocabulary.length === 0) {
-      toast.error("保存された表現がありません");
-      return;
-    }
+    if (vocabulary.length === 0) { toast.error("保存された表現がありません"); return; }
     exportToCSV(vocabulary);
     toast.success("CSVをダウンロードしました");
   }, [vocabulary]);
 
   const handleExportMarkdown = useCallback(() => {
-    if (vocabulary.length === 0) {
-      toast.error("保存された表現がありません");
-      return;
-    }
+    if (vocabulary.length === 0) { toast.error("保存された表現がありません"); return; }
     exportToMarkdown(vocabulary);
-    toast.success("Markdownをダウンロードしました", {
-      description: "Obsidianなどのツールで開けます",
-    });
+    toast.success("Markdownをダウンロードしました", { description: "Obsidianなどのツールで開けます" });
   }, [vocabulary]);
 
   return (
     <div className="min-h-screen relative">
-      {/* Flashcard overlay */}
-      {showFlashcard && vocabulary.length > 0 && (
+      {/* Flashcard overlay — learning only */}
+      {showFlashcard && learningVocab.length > 0 && (
         <FlashCard
-          cards={filtered.length > 0 ? filtered : vocabulary}
+          cards={filtered.length > 0 && statusTab === 'learning' ? filtered : learningVocab}
           onExit={() => setShowFlashcard(false)}
         />
       )}
 
-      {/* Coach modal */}
       {showCoach && (
         <CoachModal
-          vocabulary={vocabulary}
+          vocabulary={learningVocab}
           onClose={() => setShowCoach(false)}
         />
       )}
@@ -712,63 +764,68 @@ export default function VocabularyPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               マイ単語帳
             </h1>
-            <p className="text-sm text-slate-400 mt-0.5">
-              {vocabulary.length > 0
-                ? `${vocabulary.length}個の表現を保存中`
-                : "保存した表現がここに表示されます"}
-            </p>
+            {vocabulary.length > 0 ? (
+              <div className="text-sm text-slate-400 mt-0.5 space-x-1.5">
+                <span>{vocabulary.length}個の表現を保存中</span>
+                <span className="text-slate-300">·</span>
+                <span>学習中 {learningVocab.length}個</span>
+                <span className="text-slate-300">·</span>
+                <span>マスター {archivedVocab.length}個</span>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 mt-0.5">保存した表現がここに表示されます</p>
+            )}
           </div>
 
           {vocabulary.length > 0 && (
             <div className="flex flex-col items-start sm:items-end gap-2">
               <div className="flex items-center gap-2 flex-wrap">
-              {/* AI coach button */}
-              <button
-                onClick={() => vocabulary.length >= MIN_COACH_PHRASES && setShowCoach(true)}
-                disabled={vocabulary.length < MIN_COACH_PHRASES}
-                className={cn(
-                  "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm",
-                  vocabulary.length >= MIN_COACH_PHRASES
-                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:opacity-90"
-                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
-                )}
-              >
-                <Brain className="h-4 w-4" />
-                傾向と対策を分析する
-              </button>
-              <button
-                onClick={() => setShowFlashcard(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-sm font-semibold text-slate-600 transition-colors"
-              >
-                <Eye className="h-4 w-4" />
-                フラッシュカード
-              </button>
-              <button
-                onClick={handleExportCSV}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-sm font-medium text-slate-600 transition-colors"
-              >
-                <Download className="h-4 w-4" />
-                CSV
-              </button>
-              <button
-                onClick={handleExportMarkdown}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-violet-200 hover:text-violet-600 rounded-xl text-sm font-medium text-slate-600 transition-colors"
-              >
-                <Download className="h-4 w-4" />
-                Obsidian
-              </button>
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-rose-200 hover:text-rose-500 rounded-xl text-sm font-medium text-slate-400 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-                全削除
-              </button>
+                <button
+                  onClick={() => learningVocab.length >= MIN_COACH_PHRASES && setShowCoach(true)}
+                  disabled={learningVocab.length < MIN_COACH_PHRASES}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm",
+                    learningVocab.length >= MIN_COACH_PHRASES
+                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:opacity-90"
+                      : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  )}
+                >
+                  <Brain className="h-4 w-4" />
+                  傾向と対策を分析する
+                </button>
+                <button
+                  onClick={() => setShowFlashcard(true)}
+                  disabled={learningVocab.length === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-sm font-semibold text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Eye className="h-4 w-4" />
+                  フラッシュカード
+                </button>
+                <button
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-sm font-medium text-slate-600 transition-colors"
+                >
+                  <Download className="h-4 w-4" />
+                  CSV
+                </button>
+                <button
+                  onClick={handleExportMarkdown}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-violet-200 hover:text-violet-600 rounded-xl text-sm font-medium text-slate-600 transition-colors"
+                >
+                  <Download className="h-4 w-4" />
+                  Obsidian
+                </button>
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-rose-200 hover:text-rose-500 rounded-xl text-sm font-medium text-slate-400 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  全削除
+                </button>
               </div>
-              {/* Coach unlock hint */}
-              {vocabulary.length < MIN_COACH_PHRASES && (
+              {learningVocab.length < MIN_COACH_PHRASES && (
                 <p className="text-[11px] text-slate-400">
-                  ※ 5個以上の保存でAIコーチが解放されます（現在{vocabulary.length}個）
+                  ※ 5個以上の保存でAIコーチが解放されます（現在{learningVocab.length}個）
                 </p>
               )}
             </div>
@@ -810,11 +867,8 @@ export default function VocabularyPage() {
                     : analysis.sourceUrl
                   : null;
                 return (
-                  <div
-                    key={analysis.id}
-                    className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-3"
-                  >
-                    {/* Info */}
+                  <div key={analysis.id}
+                    className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         {isYt && <Youtube className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />}
@@ -835,8 +889,6 @@ export default function VocabularyPage() {
                         <span>{new Date(analysis.savedAt).toLocaleDateString("ja-JP")}</span>
                       </div>
                     </div>
-
-                    {/* Actions */}
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleRestoreAnalysis(analysis.id)}
@@ -884,11 +936,36 @@ export default function VocabularyPage() {
           </div>
         )}
 
-        {/* Search + Filters */}
+        {/* Learning / Mastered tabs + Search + Filters */}
         {vocabulary.length > 0 && (
           <>
+            {/* Status tabs */}
+            <div className="flex items-center gap-2 mb-5 font-mono">
+              <button
+                onClick={() => setStatusTab('learning')}
+                className={cn(
+                  "px-4 py-1.5 rounded-full text-xs font-semibold border transition-all",
+                  statusTab === 'learning'
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "border-slate-200 text-slate-500 hover:border-slate-400"
+                )}
+              >
+                Learning ({learningVocab.length})
+              </button>
+              <button
+                onClick={() => setStatusTab('archived')}
+                className={cn(
+                  "px-4 py-1.5 rounded-full text-xs font-semibold border transition-all",
+                  statusTab === 'archived'
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "border-slate-200 text-slate-500 hover:border-slate-400"
+                )}
+              >
+                Mastered ({archivedVocab.length})
+              </button>
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-3 mb-5">
-              {/* Search */}
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
@@ -971,15 +1048,22 @@ export default function VocabularyPage() {
               </div>
             )}
 
-            {/* Result count */}
             {(search || typeFilter !== "all" || cefrFilter !== "all") && (
               <p className="text-xs text-slate-400 mb-4">
                 {filtered.length}件 表示中
               </p>
             )}
 
-            {/* Cards */}
-            {filtered.length === 0 && (
+            {/* Empty tab state */}
+            {activeVocab.length === 0 && (
+              <div className="text-center py-12 text-slate-400 text-sm">
+                {statusTab === 'learning'
+                  ? "学習中の表現はありません"
+                  : "マスター済みの表現はありません。カードの ✓✓ ボタンで追加できます"}
+              </div>
+            )}
+
+            {filtered.length === 0 && activeVocab.length > 0 && (
               <div className="text-center py-12 text-slate-400 text-sm">
                 条件に一致する表現が見つかりませんでした
               </div>
@@ -988,7 +1072,6 @@ export default function VocabularyPage() {
             <div className="space-y-3">
               {filtered.map((phrase, i) => (
                 <div key={phrase.id}>
-                  {/* Ad placeholder every 8 items */}
                   {i > 0 && i % 8 === 0 && (
                     <AdPlaceholder
                       slot={`インフィード広告 · 336×280`}
@@ -996,7 +1079,13 @@ export default function VocabularyPage() {
                       className="mb-3"
                     />
                   )}
-                  <VocabCard phrase={phrase} onDelete={handleDelete} />
+                  <VocabCard
+                    phrase={phrase}
+                    isArchived={phrase.status === 'archived'}
+                    onDelete={handleDelete}
+                    onArchive={handleArchive}
+                    onRestore={handleRestore}
+                  />
                 </div>
               ))}
             </div>
@@ -1010,10 +1099,14 @@ export default function VocabularyPage() {
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
             <div className="flex items-center gap-3 mb-3">
               <AlertTriangle className="h-5 w-5 text-rose-500 flex-shrink-0" />
-              <h3 className="font-bold text-slate-800">単語帳をすべて削除</h3>
+              <h3 className="font-bold text-slate-800">
+                {statusTab === 'learning' ? '学習中の単語をすべて削除' : 'マスター済みの単語をすべて削除'}
+              </h3>
             </div>
             <p className="text-sm text-slate-500 mb-5">
-              {vocabulary.length}個の表現がすべて削除されます。この操作は元に戻せません。
+              {statusTab === 'learning'
+                ? `学習中の${learningVocab.length}個の表現がすべて削除されます。この操作は元に戻せません。`
+                : `マスター済みの${archivedVocab.length}個の表現がすべて削除されます。この操作は元に戻せません。`}
             </p>
             <div className="flex gap-3">
               <button
@@ -1023,7 +1116,7 @@ export default function VocabularyPage() {
                 キャンセル
               </button>
               <button
-                onClick={handleClearAll}
+                onClick={handleClearByStatus}
                 className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-sm font-semibold transition-colors"
               >
                 削除する
