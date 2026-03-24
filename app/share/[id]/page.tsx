@@ -103,13 +103,20 @@ export async function generateMetadata({
       url:         canonicalUrl,
       title:       `${pageTitle} | LinguistLens`,
       description,
-      images: [{ url: "/og", width: 1200, height: 630 }],
+      images: [
+        {
+          url:    `${SITE_URL}/share/${params.id}/opengraph-image`,
+          width:  1200,
+          height: 630,
+          alt:    pageTitle,
+        },
+      ],
     },
     twitter: {
       card:        "summary_large_image",
       title:       `${pageTitle} | LinguistLens`,
       description,
-      images:      ["/og"],
+      images: [`${SITE_URL}/share/${params.id}/opengraph-image`],
     },
     alternates: { canonical: canonicalUrl },
   };
