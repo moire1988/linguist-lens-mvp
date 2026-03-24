@@ -1,0 +1,18 @@
+# プロジェクト概要
+Next.js 14 (App Router) + Clerk認証 + Supabase + Vercelデプロイの英語学習SaaS「LinguistLens」
+
+# 技術スタック & ルール
+- TypeScriptを厳格に使用。any型は使用禁止。
+- UIは Tailwind CSS と shadcn/ui をベースにする。
+- サーバーサイドとクライアントサイド（"use client"）を明確に分離する。
+- データベースのアクセスは必ずSupabaseのクライアントを使用する。
+
+# デザインシステム（Cyber-Minimal）
+- 背景はダークモード（または極薄のグリッド）。
+- 1pxのシャープなボーダー（border-slate-800等）を多用する。
+- カラフルな色は避け、モノトーン＋微かなGlow（シャドウ）で上品に仕上げる。
+
+# AIエージェント体制（重要）
+- `.claude/agents/` ディレクトリ内に、各役割（UI/UX, Content Creator, Director等）のMDファイルが存在します。
+- プロンプト内で `@content-creator.md` のようにメンションされた場合は、そのファイルのルールを最優先で読み込み、その人格としてコードの生成や提案を行ってください。
+- アプリの仕様や会員ごとの権限・機能制限については、必ず `docs/specifications.md` を参照してから実装方針を決定してください。
