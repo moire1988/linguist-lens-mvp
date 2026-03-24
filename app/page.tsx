@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Search,
@@ -10,39 +11,28 @@ import {
   FileText,
   Loader2,
   AlertCircle,
-  BookmarkPlus,
   ChevronRight,
   Tv,
-  Check,
   BookMarked,
   Settings,
-  Save,
   Wand2,
   Library,
 } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 import { saveAnalysisAction } from "@/app/actions/save-analysis";
-import { saveVocabularyAction } from "@/app/actions/vocabulary";
-import { savePublicAnalysis } from "@/app/actions/save-public-analysis";
 import { consumeQuotaAction } from "@/app/actions/check-quota";
 import { UpgradeModal } from "@/components/upgrade-modal";
-import { Rocket, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   analyzeContent,
-  type AnalysisResult,
-  type ExpressionType,
   type AnalyzeErrorCode,
 } from "@/app/actions/analyze";
+import type { AnalysisResult } from "@/lib/types";
 import { generateArticle } from "@/app/actions/generate-article";
-import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
-import type { PhraseResult } from "@/lib/types";
+import { getVocabularyCount } from "@/lib/vocabulary";
 import { getCachedResult, setCachedResult } from "@/lib/cache";
-import { PhraseCard } from "@/components/phrase-card";
-import { ScriptViewer } from "@/components/script-viewer";
-import { AdPlaceholder } from "@/components/ad-placeholder";
 import { SettingsModal } from "@/components/settings-modal";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import { NewsletterBanner } from "@/components/newsletter-banner";
@@ -61,13 +51,6 @@ import {
   type DevAuthState,
 } from "@/lib/settings";
 import {
-  saveAnalysis,
-  getSavedAnalyses,
-  getPendingRestore,
-  ANALYSIS_MAX_SLOTS,
-} from "@/lib/saved-analyses";
-import { openLoginPrompt } from "@/lib/login-prompt-store";
-import {
   getRecentPublicAnalysesAction,
   type RecentPublicAnalysis,
 } from "@/app/actions/public-analyses";
@@ -76,62 +59,12 @@ import { RECOMMENDED_VIDEOS } from "@/lib/recommended-videos-data";
 // ─── Constants ─────────────────────────────────────────────────────────────
 
 const CEFR_LEVELS = [
-  {
-    value: "A1",
-    label: "A1",
-    description: "入門",
-    toeic: "〜225",
-    toefl: null,
-    color: "slate",
-  },
-  {
-    value: "A2",
-    label: "A2",
-    description: "初級",
-    toeic: "225〜549",
-    toefl: null,
-    color: "green",
-  },
-  {
-    value: "B1",
-    label: "B1",
-    description: "中級",
-    toeic: "550〜780",
-    toefl: "42〜71",
-    color: "blue",
-  },
-  {
-    value: "B2",
-    label: "B2",
-    description: "中上級",
-    toeic: "785〜940",
-    toefl: "72〜94",
-    color: "indigo",
-  },
-  {
-    value: "C1",
-    label: "C1",
-    description: "上級",
-    toeic: "945〜990",
-    toefl: "95〜120",
-    color: "purple",
-  },
-  {
-    value: "C2",
-    label: "C2",
-    description: "熟達",
-    toeic: null,
-    toefl: null,
-    color: "rose",
-  },
-];
-
-const FILTER_OPTIONS: { value: "all" | ExpressionType; label: string }[] = [
-  { value: "all", label: "すべて" },
-  { value: "phrasal_verb", label: "句動詞" },
-  { value: "idiom", label: "イディオム" },
-  { value: "collocation", label: "コロケーション" },
-  { value: "grammar_pattern", label: "文法パターン" },
+  { value: "A1", label: "A1", description: "入門",   toeic: "〜225",      toefl: null,      color: "slate"  },
+  { value: "A2", label: "A2", description: "初級",   toeic: "225〜549",   toefl: null,      color: "green"  },
+  { value: "B1", label: "B1", description: "中級",   toeic: "550〜780",   toefl: "42〜71",  color: "blue"   },
+  { value: "B2", label: "B2", description: "中上級", toeic: "785〜940",   toefl: "72〜94",  color: "indigo" },
+  { value: "C1", label: "C1", description: "上級",   toeic: "945〜990",   toefl: "95〜120", color: "purple" },
+  { value: "C2", label: "C2", description: "熟達",   toeic: null,         toefl: null,      color: "rose"   },
 ];
 
 const LOADING_STEPS = [
@@ -141,12 +74,6 @@ const LOADING_STEPS = [
   "あなた専用のリストを生成しています...",
 ];
 
-const SOURCE_LABELS = {
-  youtube: { label: "YouTube", icon: "🎬" },
-  web: { label: "Web記事", icon: "🌐" },
-  text: { label: "テキスト入力", icon: "📄" },
-};
-
 /** `recommended-videos-data` から YouTube 視聴 URL の候補を生成 */
 function getRecommendedVideoUrlCandidates(): string[] {
   return RECOMMENDED_VIDEOS.filter((v) => v.youtubeId.trim().length > 0).map(
@@ -154,98 +81,65 @@ function getRecommendedVideoUrlCandidates(): string[] {
   );
 }
 
-const CEFR_RANK: Record<string, number> = {
-  A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6,
-};
-
-const CEFR_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  A1: { label: "入門",   bg: "bg-slate-100",  text: "text-slate-700",  border: "border-slate-200"  },
-  A2: { label: "初級",   bg: "bg-green-100",  text: "text-green-700",  border: "border-green-200"  },
-  B1: { label: "中級",   bg: "bg-blue-100",   text: "text-blue-700",   border: "border-blue-200"   },
-  B2: { label: "中上級", bg: "bg-indigo-100", text: "text-indigo-700", border: "border-indigo-200" },
-  C1: { label: "上級",   bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200" },
-  C2: { label: "熟達",   bg: "bg-rose-100",   text: "text-rose-700",   border: "border-rose-200"   },
-};
+/** ゲスト解析 UUID を localStorage に保存（後からアクセス用） */
+function storeGuestAnalysisId(id: string): void {
+  if (typeof window === "undefined") return;
+  const key = "ll_guest_analysis_ids";
+  const existing: string[] = JSON.parse(localStorage.getItem(key) ?? "[]");
+  const updated = [id, ...existing.filter((i) => i !== id)].slice(0, 20);
+  localStorage.setItem(key, JSON.stringify(updated));
+}
 
 // ─── Page Component ────────────────────────────────────────────────────────
 
 export default function HomePage() {
+  const router = useRouter();
+
   const [inputMode, setInputMode] = useState<"url" | "text">("url");
   const [url, setUrl] = useState("");
   const [textInput, setTextInput] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("B2");
-  const [results, setResults] = useState<AnalysisResult | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<AnalyzeErrorCode | null>(null);
-  const [activeFilter, setActiveFilter] = useState<"all" | ExpressionType>("all");
   const [stepIndex, setStepIndex] = useState(0);
   const [msgVisible, setMsgVisible] = useState(true);
-  const [allSaved, setAllSaved] = useState(false);
   const [vocabCount, setVocabCount] = useState(0);
-  const [fromCache, setFromCache] = useState(false);
-  const [showPremium, setShowPremium] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
-  const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
-  const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
-  const { isSignedIn, userId } = useAuth();
+  const { isSignedIn } = useAuth();
   const { openSignIn } = useClerk();
-  const { isPro } = useEffectiveAuth();
+  useEffectiveAuth(); // devAuthState を副作用で読み込む（将来的な機能フラグ用）
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [devMode, setDevMode] = useState(false);
   const [devAuthState, setDevAuthState] = useState<DevAuthState>("real");
-  const [analysisSaved, setAnalysisSaved] = useState(false);
-  const [isSavingAnalysis, setIsSavingAnalysis] = useState(false);
-  const [savedAnalysisSlots, setSavedAnalysisSlots] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [publicSaveUrl, setPublicSaveUrl] = useState<string | null>(null);
-  const [isPublicSaving, setIsPublicSaving] = useState(false);
   const [recentPublicAnalyses, setRecentPublicAnalyses] = useState<RecentPublicAnalysis[]>([]);
   const [urlInputGlow, setUrlInputGlow] = useState(false);
   const [isUrlTyping, setIsUrlTyping] = useState(false);
   const urlTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 管理者かつ devMode ON の場合のみ公開保存ボタンを表示
-  const isAdmin = isSignedIn && userId === process.env.NEXT_PUBLIC_ADMIN_USER_ID;
-  const showPublicSaveButton = isAdmin && devMode;
-
-  // 単語帳の件数・保存済みセット・残り回数、設定をロード
+  // 設定・単語帳件数をロード
   useEffect(() => {
     setVocabCount(getVocabularyCount());
-    setSavedExpressions(new Set(getVocabulary().map((p) => p.expression.toLowerCase())));
-    setDailyRemaining(getDailyRemaining());
     const s = getSettings();
     setSelectedLevel(s.defaultLevel);
     setDevMode(s.devMode);
     setDevAuthState(s.devAuthState);
     if (s.devMode) setUrl(DEV_TEST_URL);
 
-    // 解析結果ストックの件数を読み込む
-    const saved = getSavedAnalyses();
-    setSavedAnalysisSlots(saved.length);
-
-    // マイページからの復元チェック
-    const restoreId = getPendingRestore();
-    if (restoreId) {
-      const target = saved.find((a) => a.id === restoreId);
-      if (target) {
-        setResults(target.data);
-        setSelectedLevel(target.cefrLevel);
-        setSourceUrl(target.sourceUrl);
-        setInputMode(target.inputMode);
-        if (target.sourceUrl && target.inputMode === "url") setUrl(target.sourceUrl);
-        setActiveFilter("all");
-        setAnalysisSaved(true);
-      }
-    }
-
     // 公開済み解析フィードを取得
     getRecentPublicAnalysesAction(6).then(setRecentPublicAnalyses);
   }, []);
 
   useEffect(() => {
-    if (isSignedIn) return;
+    // Clerk がまだ認証状態を読み込み中（undefined）は何もしない
+    if (isSignedIn === undefined) return;
+    // ログイン済みならオンボーディング不要。万が一表示中の場合は閉じる
+    if (isSignedIn) {
+      setShowOnboarding(false);
+      return;
+    }
+    // 未ログインの場合のみ、オンボーディング完了 or 設定済みを確認してから表示
     if (hasCompletedOnboarding()) return;
     if (hasSavedSettings()) return;
     setShowOnboarding(true);
@@ -339,19 +233,35 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [isPending]);
 
-  // Run analysis
+  /** 解析完了後、DB に保存して /analyses/[id] へ遷移 */
+  const saveAndRedirect = useCallback(
+    async (
+      data: AnalysisResult,
+      opts: { inputMode: "url" | "text"; cefrLevel: string; sourceUrl?: string }
+    ) => {
+      const result = await saveAnalysisAction({
+        data,
+        inputMode: opts.inputMode,
+        cefrLevel: opts.cefrLevel,
+        sourceUrl: opts.sourceUrl,
+      });
+      if (!result.success) {
+        setError(`保存に失敗しました: ${result.error}`);
+        setErrorCode("generic");
+        return;
+      }
+      storeGuestAnalysisId(result.id);
+      router.push(`/analyses/${result.id}`);
+    },
+    [router]
+  );
+
+  // URL/テキスト解析を実行
   const handleSubmit = useCallback(async () => {
     setError(null);
     setErrorCode(null);
-    setResults(null);
-    setAllSaved(false);
-    setFromCache(false);
-    setActiveFilter("all");
-    setAnalysisSaved(false);
-    setPublicSaveUrl(null);
-    setSourceUrl(inputMode === "url" ? url : undefined);
 
-    // ── 解析クォータチェック（devModeはスキップ）──────────────────────────
+    // ── 解析クォータチェック（devModeはスキップ）─────────────────────────
     if (!devMode) {
       const quota = await consumeQuotaAction();
       if (!quota.allowed) {
@@ -364,10 +274,13 @@ export default function HomePage() {
     if (inputMode === "url" && url.trim() && !devMode) {
       const cached = getCachedResult(url.trim(), selectedLevel);
       if (cached) {
-        setResults(cached);
-        setFromCache(true);
         toast.success("キャッシュから読み込みました", {
           description: "API呼び出しをスキップしました（7日間有効）",
+        });
+        await saveAndRedirect(cached, {
+          inputMode,
+          cefrLevel: selectedLevel,
+          sourceUrl: url,
         });
         return;
       }
@@ -375,147 +288,31 @@ export default function HomePage() {
 
     startTransition(async () => {
       const result = await analyzeContent(inputValue, selectedLevel, inputMode, devMode);
-      if (result.success) {
-        setResults(result.data);
-        // URLモードの結果をキャッシュ保存（devModeはスキップ）
-        if (inputMode === "url" && url.trim() && !devMode) {
-          setCachedResult(url.trim(), selectedLevel, result.data);
-        }
-        if (result.data.total_count === 0) {
-          setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
-          setErrorCode("generic");
-        }
-      } else {
+
+      if (!result.success) {
         setError(result.error);
         setErrorCode(result.errorCode);
-      }
-    });
-  }, [inputValue, url, selectedLevel, inputMode, devMode]);
-
-  // Filtered results
-  const filteredPhrases =
-    results?.phrases.filter(
-      (p) => activeFilter === "all" || p.type === activeFilter
-    ) ?? [];
-
-  // 全件を単語帳に保存
-  const handleSaveAll = useCallback(() => {
-    if (!results || allSaved) return;
-    if (!isSignedIn) {
-      openLoginPrompt("save");
-      return;
-    }
-    let count = 0;
-    const newKeys: string[] = [];
-    for (const phrase of results.phrases) {
-      const res = savePhrase({
-        expression: phrase.expression,
-        type: phrase.type,
-        cefr_level: phrase.cefr_level,
-        meaning_ja: phrase.meaning_ja,
-        nuance: phrase.nuance,
-        example: phrase.example,
-        example_translation: phrase.example_translation,
-        context: phrase.context,
-        why_hard_for_japanese: phrase.why_hard_for_japanese,
-        sourceUrl,
-      });
-      if (res.success) {
-        count++;
-        newKeys.push(phrase.expression.toLowerCase());
-      } else if (res.reason === "limit_reached") {
-        setShowPremium(true);
-        if (count > 0) {
-          setSavedExpressions((s) => { const n = new Set(Array.from(s)); newKeys.forEach((k) => n.add(k)); return n; });
-          setDailyRemaining(getDailyRemaining());
-          setVocabCount(getVocabularyCount());
-          toast.success(`${count}件保存しました`, {
-            description: "本日の上限に達しました。残りはプレミアムプランで保存できます。",
-          });
-        }
         return;
       }
-    }
-    setSavedExpressions((s) => { const n = new Set(Array.from(s)); newKeys.forEach((k) => n.add(k)); return n; });
-    setDailyRemaining(getDailyRemaining());
-    setAllSaved(true);
-    setVocabCount(getVocabularyCount());
-    toast.success("単語帳にすべて保存しました", {
-      description: `${count}個の表現を追加しました`,
-    });
-  }, [results, sourceUrl, allSaved]);
 
-  // 解析結果全体をストックに保存
-  const handleSaveAnalysis = useCallback(async () => {
-    if (!results || analysisSaved || isSavingAnalysis) return;
-
-    setIsSavingAnalysis(true);
-    try {
-      // クライアントの userId はロード遅延があり得るため、ログイン判定は isSignedIn のみ。
-      // 実際の user 検証は saveAnalysisAction 内の auth() で行う。
-      if (isSignedIn) {
-        const result = await saveAnalysisAction({
-          data: results,
-          inputMode,
-          cefrLevel: selectedLevel,
-          sourceUrl,
-        });
-        if (result.success) {
-          setAnalysisSaved(true);
-          toast.success("解析結果を保存しました", {
-            description: "マイページからいつでも復元できます",
-          });
-        } else {
-          toast.error("解析結果を保存できませんでした", {
-            description: result.error,
-          });
-        }
-      } else {
-        // 未ログイン → ログイン誘導（仕様: Guest は保存不可）
-        openLoginPrompt("save");
+      if (result.data.total_count === 0) {
+        setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
+        setErrorCode("generic");
+        return;
       }
-    } catch (e) {
-      toast.error("保存中にエラーが発生しました", {
-        description: e instanceof Error ? e.message : undefined,
-      });
-    } finally {
-      setIsSavingAnalysis(false);
-    }
-  }, [
-    results,
-    analysisSaved,
-    isSavingAnalysis,
-    inputMode,
-    selectedLevel,
-    sourceUrl,
-    isSignedIn,
-  ]);
 
-  // 管理者専用: SEO用公開ページとして保存
-  const handleSavePublicAnalysis = useCallback(async () => {
-    if (!results || isPublicSaving) return;
-    setIsPublicSaving(true);
-    const res = await savePublicAnalysis({
-      data: results,
-      cefrLevel: selectedLevel,
-      sourceUrl,
-      inputMode,
-    });
-    setIsPublicSaving(false);
-    if (res.success) {
-      setPublicSaveUrl(res.shareUrl);
-      toast.success("公開ページを作成しました 🚀", {
-        description: res.shareUrl,
-        duration: 8000,
-        action: {
-          label: "開く",
-          onClick: () => window.open(res.shareUrl, "_blank"),
-        },
+      // URLモードの結果をキャッシュ保存（devModeはスキップ）
+      if (inputMode === "url" && url.trim() && !devMode) {
+        setCachedResult(url.trim(), selectedLevel, result.data);
+      }
+
+      await saveAndRedirect(result.data, {
+        inputMode,
+        cefrLevel: selectedLevel,
+        sourceUrl: inputMode === "url" ? url : undefined,
       });
-    } else {
-      toast.error("公開保存に失敗しました", { description: res.error });
-    }
-  }, [results, isPublicSaving, selectedLevel, sourceUrl, inputMode]);
+    });
+  }, [inputValue, url, selectedLevel, inputMode, devMode, saveAndRedirect]);
 
   // AI記事生成 → そのまま解析
   const handleGenerateAndAnalyze = useCallback(async () => {
@@ -532,93 +329,40 @@ export default function HomePage() {
       return;
     }
 
-    // タイトル + 本文をテキストエリアに注入
     const fullText = `${genResult.title}\n\n${genResult.body}`;
     setTextInput(fullText);
     setIsGenerating(false);
 
-    // すぐに解析を開始（state更新を待たず直接 fullText を渡す）
-    setResults(null);
-    setAllSaved(false);
-    setFromCache(false);
-    setActiveFilter("all");
-    setAnalysisSaved(false);
-    setPublicSaveUrl(null);
-    setSourceUrl(undefined);
-
     startTransition(async () => {
       const result = await analyzeContent(fullText, selectedLevel, "text", devMode);
-      if (result.success) {
-        setResults(result.data);
-        if (result.data.total_count === 0) {
-          setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
-          setErrorCode("generic");
-        }
-      } else {
+
+      if (!result.success) {
         setError(result.error);
         setErrorCode(result.errorCode);
-      }
-    });
-  }, [selectedLevel, devMode]);
-
-  // 個別保存（ScriptViewer / PhraseCard 共通）
-  const handleSavePhrase = useCallback(
-    (phrase: PhraseResult) => {
-      if (!isSignedIn) {
-        openLoginPrompt("save");
         return;
       }
-      const key = phrase.expression.toLowerCase();
-      if (savedExpressions.has(key)) return;
-      const result = savePhrase({
-        expression: phrase.expression,
-        type: phrase.type,
-        cefr_level: phrase.cefr_level,
-        meaning_ja: phrase.meaning_ja,
-        nuance: phrase.nuance,
-        example: phrase.example,
-        example_translation: phrase.example_translation,
-        context: phrase.context,
-        why_hard_for_japanese: phrase.why_hard_for_japanese,
-        sourceUrl,
-      });
-      if (result.success) {
-        setSavedExpressions((s) => { const n = new Set(Array.from(s)); n.add(key); return n; });
-        setDailyRemaining((r) => Math.max(0, r - 1));
-        setVocabCount((c) => c + 1);
-        if (isSignedIn) {
-          void saveVocabularyAction({
-            expression: phrase.expression,
-            type: phrase.type,
-            cefr_level: phrase.cefr_level,
-            meaning_ja: phrase.meaning_ja,
-            nuance: phrase.nuance,
-            example: phrase.example,
-            example_translation: phrase.example_translation,
-            context: phrase.context,
-            why_hard_for_japanese: phrase.why_hard_for_japanese,
-            sourceUrl,
-            status: 'learning',
-          });
-        }
-        toast.success("単語帳に保存しました", {
-          description: `「${phrase.expression}」をマイ単語帳に追加しました`,
-        });
-      } else if (result.reason === "limit_reached") {
-        setShowPremium(true);
+
+      if (result.data.total_count === 0) {
+        setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
+        setErrorCode("generic");
+        return;
       }
-    },
-    [savedExpressions, sourceUrl, isSignedIn]
-  );
+
+      await saveAndRedirect(result.data, {
+        inputMode: "text",
+        cefrLevel: selectedLevel,
+        sourceUrl: undefined,
+      });
+    });
+  }, [selectedLevel, devMode, saveAndRedirect]);
 
   const canSubmit =
     inputMode === "url" ? url.trim().length > 0 : textInput.trim().length > 10;
 
-  const hasContent = isPending || !!results || !!error;
+  const hasContent = isPending || !!error;
 
   return (
     <div className="min-h-screen relative">
-      {showPremium && <UpgradeModal reason="vocab_limit" onClose={() => setShowPremium(false)} />}
       {showQuotaModal && <UpgradeModal reason="daily_limit" onClose={() => setShowQuotaModal(false)} />}
       {showOnboarding && (
         <OnboardingModal
@@ -729,7 +473,7 @@ export default function HomePage() {
         <div
           className={cn(
             "max-w-2xl mx-auto",
-            (isPending || results || error) && "mb-10"
+            (isPending || error) && "mb-10"
           )}
         >
           <div className="bg-white rounded-2xl border border-purple-200/50 shadow-sm p-6 sm:p-7">
@@ -920,8 +664,8 @@ export default function HomePage() {
                       )}
                       <div
                         className={cn(
-                          "text-base font-mono font-extrabold leading-none mb-0.5",
-                          isSelected ? "text-indigo-700" : "text-slate-700"
+                          "text-sm font-bold font-mono leading-none mb-1",
+                          isSelected ? "text-indigo-600" : "text-slate-700"
                         )}
                       >
                         {level.label}
@@ -946,9 +690,7 @@ export default function HomePage() {
 
               {/* Selected level detail */}
               {(() => {
-                const level = CEFR_LEVELS.find(
-                  (l) => l.value === selectedLevel
-                )!;
+                const level = CEFR_LEVELS.find((l) => l.value === selectedLevel)!;
                 return (
                   <div className="mt-2.5 flex flex-wrap gap-2 text-xs text-slate-400">
                     {level.toeic && (
@@ -1136,7 +878,6 @@ export default function HomePage() {
                   <p className={`text-sm leading-relaxed ${bodyColor}`}>
                     {body}
                   </p>
-                  {/* 開発用：生のエラーメッセージを折り畳みで表示 */}
                   {process.env.NODE_ENV === "development" && (
                     <details className="mt-2">
                       <summary className="text-xs text-slate-400 cursor-pointer select-none">
@@ -1151,289 +892,6 @@ export default function HomePage() {
           );
         })()}
 
-        {/* ── Results Dashboard ── */}
-        {results && !isPending && results.total_count > 0 && (
-          <div className="max-w-5xl mx-auto">
-            {/* Results header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                  <span className="text-2xl font-extrabold text-indigo-600">
-                    {results.total_count}
-                  </span>
-                  <span>個の表現が見つかりました</span>
-                </div>
-                <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                  {SOURCE_LABELS[results.source_type].icon}{" "}
-                  {SOURCE_LABELS[results.source_type].label}
-                </span>
-                {fromCache && (
-                  <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
-                    ⚡ キャッシュ
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Save analysis result */}
-                <button
-                  type="button"
-                  onClick={() => void handleSaveAnalysis()}
-                  disabled={analysisSaved || isSavingAnalysis}
-                  className={cn(
-                    "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
-                    analysisSaved
-                      ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                      : "bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50 hover:shadow-sm hover:shadow-violet-100 disabled:opacity-70"
-                  )}
-                >
-                  {analysisSaved ? (
-                    <>
-                      <Check className="h-4 w-4" />
-                      結果を保存済み
-                    </>
-                  ) : isSavingAnalysis ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      保存中...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      この結果を保存
-                    </>
-                  )}
-                </button>
-
-                {/* 管理者専用: SEO公開保存ボタン */}
-                {showPublicSaveButton && results && (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={handleSavePublicAnalysis}
-                      disabled={isPublicSaving || !!publicSaveUrl}
-                      className={cn(
-                        "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
-                        publicSaveUrl
-                          ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-                      )}
-                    >
-                      {isPublicSaving ? (
-                        <>
-                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                          </svg>
-                          保存中...
-                        </>
-                      ) : publicSaveUrl ? (
-                        <>
-                          <Check className="h-4 w-4" />
-                          公開済み
-                        </>
-                      ) : (
-                        <>
-                          <Rocket className="h-4 w-4" />
-                          SEO用公開ページとして保存
-                        </>
-                      )}
-                    </button>
-                    {publicSaveUrl && (
-                      <a
-                        href={publicSaveUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 px-2 py-2 rounded-xl text-xs text-indigo-600 hover:bg-indigo-50 border border-indigo-100 transition-colors"
-                        title={publicSaveUrl}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                    )}
-                  </div>
-                )}
-
-                {/* 一括保存はプレミアムのみ（無料は1日の保存上限が少ないため） */}
-                {isPro ? (
-                  <button
-                    type="button"
-                    onClick={handleSaveAll}
-                    disabled={allSaved}
-                    className={cn(
-                      "flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
-                      allSaved
-                        ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                        : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm hover:shadow-indigo-100"
-                    )}
-                  >
-                    {allSaved ? (
-                      <>
-                        <Check className="h-4 w-4" />
-                        全て保存済み
-                      </>
-                    ) : (
-                      <>
-                        <BookmarkPlus className="h-4 w-4" />
-                        単語帳に全て保存
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <div className="flex flex-col items-end sm:items-start gap-1 max-w-[220px] text-right sm:text-left">
-                    <p className="text-[10px] leading-snug text-slate-400 font-mono">
-                      一括保存はプレミアムのみ
-                    </p>
-                    <p className="text-[9px] leading-relaxed text-slate-400">
-                      無料プランは1日あたりの保存上限が小さいため、カードから個別に保存してください。
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowPremium(true)}
-                      className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
-                    >
-                      プレミアムを見る
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ── Overall Level Badge ── */}
-            {results.overall_level && (() => {
-              const meta = CEFR_META[results.overall_level];
-              const gap = (CEFR_RANK[results.overall_level] ?? 0) - (CEFR_RANK[selectedLevel] ?? 0);
-              return (
-                <div className="mb-5 space-y-2">
-                  {/* Badge */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-semibold text-slate-500">
-                      コンテンツの総合難易度
-                    </span>
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-extrabold border",
-                        meta?.bg ?? "bg-slate-100",
-                        meta?.text ?? "text-slate-700",
-                        meta?.border ?? "border-slate-200"
-                      )}
-                    >
-                      {results.overall_level}
-                      <span className="font-medium text-xs opacity-80">
-                        {meta?.label}
-                      </span>
-                    </span>
-                  </div>
-
-                  {/* Advice message */}
-                  {gap >= 2 && (
-                    <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                      <span className="text-base leading-none mt-0.5">💡</span>
-                      <p className="text-sm text-amber-800 leading-relaxed">
-                        このコンテンツはあなたの現在のレベル（
-                        <span className="font-bold">{selectedLevel}</span>）より
-                        <span className="font-bold">{gap}段階</span>
-                        上の難易度です。難しく感じても大丈夫！
-                        抽出されたフレーズを一つずつ押さえていきましょう。
-                      </p>
-                    </div>
-                  )}
-                  {gap === 1 && (
-                    <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
-                      <span className="text-base leading-none mt-0.5">✨</span>
-                      <p className="text-sm text-emerald-800 leading-relaxed">
-                        ちょうど背伸びできる難易度です。理想的な学習素材です！
-                      </p>
-                    </div>
-                  )}
-                  {gap < 0 && (
-                    <div className="flex items-start gap-2.5 bg-sky-50 border border-sky-100 rounded-xl px-4 py-3">
-                      <span className="text-base leading-none mt-0.5">📘</span>
-                      <p className="text-sm text-sky-800 leading-relaxed">
-                        あなたのレベルに対してやさしめのコンテンツです。
-                        表現のニュアンスや使い分けを深掘りしてみましょう。
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Script viewer with highlights */}
-            {(results.source_text || results.full_script_with_highlight) && (
-              <ScriptViewer
-                text={results.source_text ?? ""}
-                phrases={results.phrases}
-                highlightedHtml={results.full_script_with_highlight}
-                savedExpressions={savedExpressions}
-                onSave={handleSavePhrase}
-                showTranslate={inputMode === "url"}
-                isPro={isPro}
-                dailyRemaining={dailyRemaining}
-              />
-            )}
-
-            {/* Filter pills */}
-            <div className="flex flex-wrap gap-2 mb-5">
-              {FILTER_OPTIONS.filter((opt) => {
-                if (opt.value === "all") return true;
-                return results.phrases.some((p) => p.type === opt.value);
-              }).map((opt) => {
-                const count =
-                  opt.value === "all"
-                    ? results.total_count
-                    : results.phrases.filter((p) => p.type === opt.value)
-                        .length;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => setActiveFilter(opt.value)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
-                      activeFilter === opt.value
-                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-200"
-                        : "bg-white text-slate-500 border-slate-200 hover:border-indigo-400 hover:text-indigo-700 hover:shadow-sm"
-                    )}
-                  >
-                    {opt.label}
-                    <span
-                      className={cn(
-                        "ml-1.5 font-bold",
-                        activeFilter === opt.value
-                          ? "text-indigo-200"
-                          : "text-slate-400"
-                      )}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Phrase cards grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredPhrases.map((phrase, i) => (
-                <>
-                  <PhraseCard
-                    key={`${phrase.expression}-${i}`}
-                    phrase={phrase}
-                    savedExpressions={savedExpressions}
-                    dailyRemaining={dailyRemaining}
-                    onSave={handleSavePhrase}
-                  />
-                  {/* 6枚ごとに広告プレースホルダー */}
-                  {(i + 1) % 6 === 0 && i + 1 < filteredPhrases.length && (
-                    <AdPlaceholder
-                      key={`ad-${i}`}
-                      slot="結果フィード広告 · 336×280"
-                      size="md"
-                      className="sm:col-span-2 lg:col-span-1"
-                    />
-                  )}
-                </>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
 
       {/* ── Recommended Carousel（コンテンツなし時のみ） ── */}
