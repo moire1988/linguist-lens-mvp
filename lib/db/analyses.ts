@@ -13,6 +13,8 @@ interface AnalysisRow {
   level: string;
   result_json: AnalysisResult;
   is_public: boolean;
+  is_shared: boolean;
+  is_approved: boolean;
   created_at: string;
 }
 
@@ -37,6 +39,8 @@ function rowToSavedAnalysis(row: AnalysisRow): SavedAnalysis {
     inputMode: row.url ? "url" : "text",
     cefrLevel: row.level,
     data: row.result_json,
+    isShared: row.is_shared ?? false,
+    isApproved: row.is_approved ?? false,
   };
 }
 

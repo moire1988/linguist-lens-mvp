@@ -861,44 +861,59 @@ export default function VocabularyPage() {
                     ? analysis.sourceUrl.slice(0, 49) + "…"
                     : analysis.sourceUrl
                   : null;
+                const ytId = analysis.sourceUrl?.match(/[?&]v=([^&]{11})/)?.[1]
+                  ?? analysis.sourceUrl?.match(/youtu\.be\/([^?&]{11})/)?.[1];
                 return (
                   <div key={analysis.id}
-                    className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        {isYt && <Youtube className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />}
-                        {isWeb && <Globe className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />}
-                        {!isYt && !isWeb && <FileText className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />}
-                        <span className="text-xs font-medium text-slate-600 truncate">
-                          {truncUrl ?? "テキスト入力"}
-                        </span>
+                    className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col sm:flex-row sm:items-stretch gap-0">
+                    {/* YouTube thumbnail */}
+                    {ytId && (
+                      <div className="sm:w-32 w-full h-20 sm:h-auto flex-shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-400">
-                        <span className="font-bold text-indigo-600">{analysis.cefrLevel}</span>
-                        {analysis.data.overall_level && (
-                          <span>→ {analysis.data.overall_level}</span>
-                        )}
-                        <span>·</span>
-                        <span>{analysis.data.total_count}個の表現</span>
-                        <span>·</span>
-                        <span>{new Date(analysis.savedAt).toLocaleDateString("ja-JP")}</span>
+                    )}
+                    <div className="flex-1 min-w-0 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          {isYt && <Youtube className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />}
+                          {isWeb && <Globe className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />}
+                          {!isYt && !isWeb && <FileText className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />}
+                          <span className="text-xs font-medium text-slate-600 truncate">
+                            {truncUrl ?? "テキスト入力"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-400">
+                          <span className="font-bold text-indigo-600">{analysis.cefrLevel}</span>
+                          {analysis.data.overall_level && (
+                            <span>→ {analysis.data.overall_level}</span>
+                          )}
+                          <span>·</span>
+                          <span>{analysis.data.total_count}個の表現</span>
+                          <span>·</span>
+                          <span>{new Date(analysis.savedAt).toLocaleDateString("ja-JP")}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => handleRestoreAnalysis(analysis.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold border border-indigo-100 transition-colors"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        復元して表示
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAnalysis(analysis.id)}
-                        className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-300 hover:text-rose-400 transition-colors"
-                        title="削除"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => router.push(`/analyses/${analysis.id}`)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold border border-indigo-100 transition-colors"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          詳細を見る
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAnalysis(analysis.id)}
+                          className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-300 hover:text-rose-400 transition-colors"
+                          title="削除"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
