@@ -44,7 +44,6 @@ import { ScriptViewer } from "@/components/script-viewer";
 import { AdPlaceholder } from "@/components/ad-placeholder";
 import { SettingsModal } from "@/components/settings-modal";
 import { OnboardingModal } from "@/components/onboarding-modal";
-import { SiteFooter } from "@/components/site-footer";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
 import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
@@ -135,9 +134,10 @@ const FILTER_OPTIONS: { value: "all" | ExpressionType; label: string }[] = [
 ];
 
 const LOADING_STEPS = [
-  "コンテンツを取得中...",
-  "AIが表現を解析中...",
-  "結果を整理中...",
+  "AIが文脈を深く読み取っています...",
+  "ネイティブ特有のニュアンスを解析中...",
+  "本当に使える表現を厳選しています...",
+  "あなた専用のリストを生成しています...",
 ];
 
 const SOURCE_LABELS = {
@@ -178,6 +178,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | ExpressionType>("all");
   const [stepIndex, setStepIndex] = useState(0);
+  const [msgVisible, setMsgVisible] = useState(true);
   const [allSaved, setAllSaved] = useState(false);
   const [vocabCount, setVocabCount] = useState(0);
   const [fromCache, setFromCache] = useState(false);
@@ -315,19 +316,25 @@ export default function HomePage() {
       ? "web"
       : null;
 
-  // Animate loading steps
+  // Animate loading steps with fade
   useEffect(() => {
     if (!isPending) {
       setStepIndex(0);
+      setMsgVisible(true);
       return;
     }
     setStepIndex(0);
-    const t1 = setTimeout(() => setStepIndex(1), 2500);
-    const t2 = setTimeout(() => setStepIndex(2), 6000);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    setMsgVisible(true);
+    let idx = 0;
+    const interval = setInterval(() => {
+      setMsgVisible(false);
+      setTimeout(() => {
+        idx = (idx + 1) % LOADING_STEPS.length;
+        setStepIndex(idx);
+        setMsgVisible(true);
+      }, 400);
+    }, 3000);
+    return () => clearInterval(interval);
   }, [isPending]);
 
   // Run analysis
@@ -685,7 +692,7 @@ export default function HomePage() {
           <div className="flex justify-center mb-5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold border border-indigo-100">
               <Sparkles className="h-3 w-3" />
-              AI powered · CEFR / TOEIC / TOEFL 対応
+              お気に入りの動画から、生きた英語を自分のものに。
             </span>
           </div>
           <h1 className={cn(
@@ -852,19 +859,23 @@ export default function HomePage() {
                   <button
                     onClick={handleGenerateAndAnalyze}
                     disabled={isGenerating || isPending}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-sm font-semibold shadow-sm hover:from-violet-600 hover:to-indigo-600 hover:shadow-[0_4px_18px_rgba(139,92,246,0.45)] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    className={[
+                      "relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold transition-all overflow-hidden",
+                      isGenerating
+                        ? "bg-gradient-to-r from-violet-500 to-indigo-500 opacity-90 cursor-not-allowed animate-pulse shadow-[0_0_20px_rgba(139,92,246,0.4)]"
+                        : isPending
+                        ? "bg-gradient-to-r from-violet-400 to-indigo-400 opacity-60 cursor-not-allowed"
+                        : "bg-gradient-to-r from-violet-500 to-indigo-500 shadow-sm hover:from-violet-600 hover:to-indigo-600 hover:shadow-[0_4px_18px_rgba(139,92,246,0.45)] active:scale-[0.98]",
+                    ].join(" ")}
                   >
                     {isGenerating ? (
                       <>
-                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                        </svg>
-                        面白い記事を執筆中...✍️
+                        <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+                        AIが面白い記事を執筆中... ✨
                       </>
                     ) : (
                       <>
-                        <Wand2 className="h-4 w-4" />
+                        <Wand2 className="h-4 w-4 flex-shrink-0" />
                         AIに面白い記事を作ってもらう ✨
                       </>
                     )}
@@ -967,7 +978,7 @@ export default function HomePage() {
               {isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {LOADING_STEPS[stepIndex]}
+                  解析中...
                 </>
               ) : (
                 <>
@@ -983,39 +994,76 @@ export default function HomePage() {
         </div>
 
 
-        {/* ── Loading Skeleton ── */}
+        {/* ── Analysis Loading Overlay ── */}
         {isPending && (
-          <div className="max-w-5xl mx-auto">
-            <div className="flex items-center gap-2 mb-5">
-              <Loader2 className="h-4 w-4 text-indigo-500 animate-spin" />
-              <span className="text-sm text-slate-500">
-                {LOADING_STEPS[stepIndex]}
-              </span>
+          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/55 backdrop-blur-sm">
+
+            {/* Ring system */}
+            <div className="relative flex items-center justify-center mb-10">
+
+              {/* Outer glow pulse */}
+              <div className="absolute w-48 h-48 rounded-full bg-violet-500/10 animate-pulse" />
+
+              {/* Ring 1 – slow outer */}
+              <div
+                className="absolute w-40 h-40 rounded-full border border-violet-400/25 border-t-violet-500/80"
+                style={{ animation: "spin 4s linear infinite" }}
+              />
+
+              {/* Ring 2 – medium counter-rotate */}
+              <div
+                className="absolute w-28 h-28 rounded-full border border-indigo-400/20 border-b-indigo-400/90"
+                style={{ animation: "spin 2.5s linear infinite reverse" }}
+              />
+
+              {/* Ring 3 – fast inner */}
+              <div
+                className="absolute w-16 h-16 rounded-full border border-violet-300/30 border-l-violet-300/80"
+                style={{ animation: "spin 1.6s linear infinite" }}
+              />
+
+              {/* Orbiting particles */}
+              {[0, 60, 120, 180, 240, 300].map((deg, i) => (
+                <div
+                  key={i}
+                  className="absolute w-1.5 h-1.5 rounded-full bg-violet-400/70"
+                  style={{
+                    transform: `rotate(${deg}deg) translateX(54px)`,
+                    animation: `ping 1.5s cubic-bezier(0,0,0.2,1) infinite`,
+                    animationDelay: `${i * 0.25}s`,
+                    opacity: 0.6,
+                  }}
+                />
+              ))}
+
+              {/* Center icon */}
+              <Sparkles className="relative h-9 w-9 text-violet-300 animate-pulse" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...Array(6)].map((_, i) => (
-                i === 3 ? (
-                  <AdPlaceholder key="ad-loading" slot="解析待機中 · 300×250" size="md" className="min-h-[140px]" />
-                ) : (
-                  <div
-                    key={i}
-                    className="bg-white rounded-2xl border border-violet-100/60 p-5 animate-pulse"
-                  >
-                    <div className="flex gap-2 mb-3">
-                      <div className="h-5 w-16 bg-slate-100 rounded-full" />
-                      <div className="h-5 w-8 bg-slate-100 rounded-full" />
-                    </div>
-                    <div className="h-7 w-3/4 bg-slate-100 rounded-lg mb-3" />
-                    <div className="h-12 bg-slate-50 rounded-xl mb-3" />
-                    <div className="space-y-2">
-                      <div className="h-3 bg-slate-100 rounded w-full" />
-                      <div className="h-3 bg-slate-100 rounded w-5/6" />
-                      <div className="h-3 bg-slate-100 rounded w-4/6" />
-                    </div>
-                  </div>
-                )
+
+            {/* Fading message */}
+            <div
+              className="transition-opacity duration-400 text-center px-6"
+              style={{ opacity: msgVisible ? 1 : 0, transitionDuration: "400ms" }}
+            >
+              <p className="text-white/90 text-base sm:text-lg font-medium tracking-wide">
+                {LOADING_STEPS[stepIndex]}
+              </p>
+            </div>
+
+            {/* Progress dots */}
+            <div className="flex gap-2 mt-6">
+              {LOADING_STEPS.map((_, i) => (
+                <div
+                  key={i}
+                  className="h-1.5 rounded-full transition-all duration-500"
+                  style={{
+                    width: i === stepIndex ? "24px" : "6px",
+                    background: i === stepIndex ? "rgb(167 139 250)" : "rgba(255,255,255,0.2)",
+                  }}
+                />
               ))}
             </div>
+
           </div>
         )}
 
@@ -1403,8 +1451,6 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── Footer ── */}
-      {!hasContent && <SiteFooter />}
     </div>
   );
 }

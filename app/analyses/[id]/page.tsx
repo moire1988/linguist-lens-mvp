@@ -6,7 +6,6 @@ import { getAnalysisAction } from "@/app/actions/save-analysis";
 import { auth } from "@clerk/nextjs/server";
 import type { PhraseResult } from "@/lib/types";
 import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
 
 const SITE_URL = "https://linguist-lens-mvp.vercel.app";
 
@@ -224,7 +223,7 @@ export default async function AnalysisDetailPage({
         </div>
       </main>
 
-      <SiteFooter />
+
     </div>
   );
 }

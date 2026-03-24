@@ -42,7 +42,6 @@ import {
 } from "@/lib/vocabulary";
 import { useAuth } from "@clerk/nextjs";
 import { AdPlaceholder } from "@/components/ad-placeholder";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { CoachModal } from "@/components/coach-modal";
 import { TranslationAccordion } from "@/components/translation-accordion";
@@ -1133,7 +1132,7 @@ export default function VocabularyPage() {
         </div>
       )}
 
-      <SiteFooter />
+
     </div>
   );
 }

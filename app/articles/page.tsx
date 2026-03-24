@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { getAllPublishedArticles } from "@/lib/db/articles";
 import { ArticleHeader } from "@/components/article-header";
-import { SiteFooter } from "@/components/site-footer";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { ArticleListClient } from "./article-list-client";
 
@@ -55,7 +54,7 @@ export default async function ArticlesPage() {
         )}
       </main>
 
-      <SiteFooter />
+
     </div>
   );
 }

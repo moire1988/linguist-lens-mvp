@@ -5,7 +5,6 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Globe, Trash2, Loader2, RefreshCw } from "lucide-react";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -247,7 +246,7 @@ export default function ApprovalsPage() {
           </div>
         )}
       </main>
-      <SiteFooter />
+
     </div>
   );
 }
