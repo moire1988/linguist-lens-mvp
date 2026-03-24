@@ -55,15 +55,15 @@ export async function generateArticle(
 
   const grammarBlock = grammarMode
     ? `
-This run is GRAMMAR MASTERCLASS mode: write the ENTIRE body as a compelling English essay that teaches ONE deep grammar or usage topic (why natives pick this tense, modal, or pattern; subtle differences between near-synonyms). Explain in English only in the body.`
+This run is GRAMMAR MASTERCLASS mode: write the ENTIRE body as a fun, eye-opening English essay that teaches ONE grammar or usage quirk — focus on why natives say it that way, lazy shortcuts, or funny slip-ups learners make. Keep it light and conversational. Explain in English only in the body.`
     : `
-This run is culture / trend / daily-life mode: pick a topic that fits the category below — real, slightly niche, "Aha!" for Japanese readers.`;
+This run is culture / trend / daily-life mode: pick a topic that fits the category below — something real, slightly niche, and genuinely fun. Think "wow, natives actually do that?" or "I had no idea that word meant something totally different!"`;
 
   const hookInstruction = grammarMode
-    ? "a provocative question or bold claim about grammar, usage, or what natives feel when they choose a form"
-    : "a surprising fact or question about culture, trend, or daily survival — never a tourism or café-list teaser";
+    ? "a funny observation, surprising confession, or playful myth-bust about how natives actually speak (vs. how textbooks claim they do)"
+    : "a laugh-out-loud moment, a relatable embarrassment, or a delightful 'wait, really?' cultural fact — never a dry definition or a tourism teaser";
 
-  const prompt = `You are a creative English writer producing short magazine-style articles for Japanese learners.
+  const prompt = `You are a witty, warm English writer creating short lifestyle-column articles for Japanese learners who want to enjoy English, not stress about it.
 
 Assigned category (follow this — do not choose another): ${selectedCategory}
 ${grammarBlock}
@@ -71,20 +71,32 @@ ${grammarBlock}
 Target level: ${cefrLevel} — ${levelDesc}
 English variant: ${accent} — ${accentInstruction}
 
-STRICTLY FORBIDDEN: tourist-guide fluff ("best cafés", sightseeing lists), generic self-help ("your brain is sabotaging you"), or bland encyclopedia summaries.
+STRICTLY FORBIDDEN:
+- Tourist-guide fluff ("best cafés", sightseeing lists)
+- Generic self-help ("your brain is sabotaging you")
+- Bland encyclopedia summaries
+- Preachy social commentary or heavy sociology ("unwritten rules of society", "hidden social codes", "office politics", "etiquette violations", "navigating social hierarchies")
+- Any topic that feels like homework or a lecture
 
-REQUIRED: ${accent} English must feel natural — spelling, idioms, and vocabulary consistent with that variant. The dialect controls language, not the setting (do not force London/Sydney/New York unless the topic truly needs it).
+GREAT topics (aim for these vibes):
+- Hilarious everyday misunderstandings between cultures
+- Lazy or weird native habits ("we actually say 'gonna' 99% of the time")
+- Fun pop-culture quirks, memes, or slang that took on a life of their own
+- Surprising things that are totally normal in one country and bizarre in another
+- Moments where "correct English" and "real English" are hilariously far apart
+
+REQUIRED: ${accent} English must feel natural — spelling, idioms, and vocabulary consistent with that variant. The dialect controls language, not the setting.
 
 Hard rules:
 1. Vocabulary, sentence length, and grammar complexity MUST strictly match ${cefrLevel} level.
 2. Apply ${accent} English spelling, vocabulary, and idioms consistently throughout the article.
 3. Hook the reader in the very first sentence with ${hookInstruction}.
 4. Body length: 200–400 words.
-5. Writing style: sharp magazine piece — ${grammarMode ? "deep grammar or usage insight" : "fresh cultural or trend insight"} that makes readers think "I had no idea!"
+5. Writing style: engaging, humorous, and relatable lifestyle column — ${grammarMode ? "a fun grammar myth-bust or native shortcut that makes readers think 'oh, so THAT'S why!'" : "a delightful cultural or language quirk that makes readers smile and think 'I had no idea!'"}
 6. NEVER mention "CEFR", "language learning", "English learner", or the reader's language level.
 
 Output ONLY valid JSON — no markdown fences, no explanation, nothing else:
-{"title": "catchy title (max 10 words)", "body": "full article body"}`;
+{"title": "catchy, fun title (max 10 words)", "body": "full article body"}`;
 
   try {
     const response = await client.messages.create({
