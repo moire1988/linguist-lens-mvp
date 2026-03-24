@@ -53,7 +53,7 @@ import {
   ANALYSIS_MAX_SLOTS,
   type SavedAnalysis,
 } from "@/lib/saved-analyses";
-import { getDbAnalyses, deleteDbAnalysis } from "@/lib/db/analyses";
+import { getUserAnalysesAction, deleteUserAnalysisAction } from "@/app/actions/save-analysis";
 import {
   archiveVocabularyAction,
   restoreVocabularyAction,
@@ -568,7 +568,7 @@ function FlashCard({
 
 export default function VocabularyPage() {
   const router = useRouter();
-  const { isSignedIn, userId, getToken } = useAuth();
+  const { isSignedIn, userId } = useAuth();
   const [vocabulary, setVocabulary] = useState<SavedPhrase[]>([]);
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [loadingAnalyses, setLoadingAnalyses] = useState(false);
@@ -605,22 +605,19 @@ export default function VocabularyPage() {
     setVocabulary(enriched);
   }, [examplesTranslationMap]);
 
-  // 解析履歴: ログイン済みは Supabase、未ログインは localStorage
+  // 解析履歴: ログイン済みは Supabase（Server Action）、未ログインは localStorage
   useEffect(() => {
     if (isSignedIn === undefined) return;
     if (isSignedIn && userId) {
       setLoadingAnalyses(true);
-      (async () => {
-        const token = await getToken({ template: "supabase" });
-        if (!token) { setLoadingAnalyses(false); return; }
-        const analyses = await getDbAnalyses(token, userId);
+      getUserAnalysesAction().then((analyses) => {
         setSavedAnalyses(analyses);
         setLoadingAnalyses(false);
-      })();
+      });
     } else {
       setSavedAnalyses(getSavedAnalyses());
     }
-  }, [isSignedIn, userId, getToken]);
+  }, [isSignedIn, userId]);
 
   // ─── Derived vocab lists ──────────────────────────────────────────────────
 
@@ -694,16 +691,14 @@ export default function VocabularyPage() {
 
   const handleDeleteAnalysis = useCallback(async (id: string) => {
     if (isSignedIn && userId) {
-      const token = await getToken({ template: "supabase" });
-      if (!token) return;
-      await deleteDbAnalysis(token, userId, id);
+      await deleteUserAnalysisAction(id);
       setSavedAnalyses((prev) => prev.filter((a) => a.id !== id));
     } else {
       deleteSavedAnalysis(id);
       setSavedAnalyses(getSavedAnalyses());
     }
     toast.success("保存した解析結果を削除しました");
-  }, [isSignedIn, userId, getToken]);
+  }, [isSignedIn, userId]);
 
   const handleRestoreAnalysis = useCallback((id: string) => {
     setPendingRestore(id);
