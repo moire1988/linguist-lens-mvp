@@ -36,12 +36,98 @@ const LEVEL_DESCRIPTIONS: Record<string, string> = {
   C2: "ネイティブに近い表現力を持つ熟達者",
 };
 
+function getMaxCharsForLevel(level: string): number {
+  if (level === "A1" || level === "A2") return 3000;
+  if (level === "B1" || level === "B2") return 5500;
+  if (level === "C1" || level === "C2") return 8000;
+  return 5500;
+}
+
+function normalizeAndTruncateText(text: string, level: string): string {
+  return text.replace(/\s{2,}/g, " ").trim().slice(0, getMaxCharsForLevel(level));
+}
+
+function parseYouTubeTimestampParam(raw: string | null): number {
+  if (!raw) return 0;
+  const value = raw.trim().toLowerCase();
+  if (value === "") return 0;
+
+  // 例: "120", "120s", "1m30s", "1h2m3s"
+  const hmsMatch = value.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+  if (hmsMatch) {
+    const hours = Number(hmsMatch[1] ?? "0");
+    const mins = Number(hmsMatch[2] ?? "0");
+    const secs = Number(hmsMatch[3] ?? "0");
+    const total = hours * 3600 + mins * 60 + secs;
+    if (Number.isFinite(total) && total >= 0) return total;
+  }
+
+  const secOnly = value.match(/^(\d+)(?:s)?$/);
+  if (secOnly) return Number(secOnly[1]);
+  return 0;
+}
+
+function getYouTubeOffsetSeconds(url: string): number {
+  try {
+    const parsed = new URL(url);
+    return Math.max(
+      parseYouTubeTimestampParam(parsed.searchParams.get("t")),
+      parseYouTubeTimestampParam(parsed.searchParams.get("start"))
+    );
+  } catch {
+    return 0;
+  }
+}
+
+type SupadataSegment = Record<string, unknown>;
+
+function readSegmentText(segment: SupadataSegment): string {
+  const text =
+    (typeof segment.text === "string" && segment.text) ||
+    (typeof segment.content === "string" && segment.content) ||
+    (typeof segment.snippet === "string" && segment.snippet) ||
+    "";
+  return text.trim();
+}
+
+function readSegmentOffsetSeconds(segment: SupadataSegment): number | null {
+  const raw =
+    segment.offset ??
+    segment.start ??
+    segment.startTime ??
+    segment.start_time ??
+    segment.time ??
+    null;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function joinTranscriptAfterOffset(
+  segments: SupadataSegment[],
+  offsetSeconds: number
+): string {
+  const picked = segments
+    .filter((seg) => {
+      const sec = readSegmentOffsetSeconds(seg);
+      if (sec === null) return true;
+      return sec >= offsetSeconds;
+    })
+    .map(readSegmentText)
+    .filter((t) => t.length > 0);
+  return picked.join(" ");
+}
+
 // ─── YouTube（Supadata API 経由）──────────────────────────────────────────
 
-async function getYouTubeTranscript(url: string): Promise<string> {
+async function getYouTubeTranscript(url: string, cefrLevel: string): Promise<string> {
   const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
   if (!match) throw new Error("YouTube URLの形式が正しくありません");
   const videoId = match[1];
+  const offsetSeconds = getYouTubeOffsetSeconds(url);
 
   const apiKey = process.env.SUPADATA_API_KEY;
   if (!apiKey) {
@@ -52,8 +138,7 @@ async function getYouTubeTranscript(url: string): Promise<string> {
 
   const endpoint =
     `https://api.supadata.ai/v1/youtube/transcript` +
-    `?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}` +
-    `&text=true`;
+    `?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
 
   const res = await fetch(endpoint, {
     headers: { "x-api-key": apiKey },
@@ -69,18 +154,33 @@ async function getYouTubeTranscript(url: string): Promise<string> {
     throw new Error(`字幕の取得に失敗しました（HTTP ${res.status}）`);
   }
 
-  const data = (await res.json()) as { content?: string };
-  const transcript = data.content?.trim();
+  const data = (await res.json()) as {
+    content?: string;
+    transcript?: SupadataSegment[];
+    segments?: SupadataSegment[];
+  };
+  const baseTranscript = data.content?.trim() ?? "";
+  const segmentList = Array.isArray(data.transcript)
+    ? data.transcript
+    : Array.isArray(data.segments)
+    ? data.segments
+    : null;
+
+  let transcript = baseTranscript;
+  if (offsetSeconds > 0 && segmentList) {
+    transcript = joinTranscriptAfterOffset(segmentList, offsetSeconds).trim();
+  }
+
   if (!transcript) {
     throw new Error("この動画には字幕が見つかりませんでした。");
   }
 
-  return transcript.replace(/\s{2,}/g, " ").slice(0, 8000);
+  return normalizeAndTruncateText(transcript, cefrLevel);
 }
 
 // ─── Web Article ───────────────────────────────────────────────────────────
 
-async function getWebContent(url: string): Promise<string> {
+async function getWebContent(url: string, cefrLevel: string): Promise<string> {
   try {
     new URL(url);
   } catch {
@@ -120,7 +220,7 @@ async function getWebContent(url: string): Promise<string> {
       "ページからテキストを取得できませんでした。スクレイピングがブロックされている可能性があります。"
     );
 
-  return text.slice(0, 8000);
+  return normalizeAndTruncateText(text, cefrLevel);
 }
 
 // ─── Claude AI ─────────────────────────────────────────────────────────────
@@ -251,10 +351,10 @@ const cachedUrlAnalysis = unstable_cache(
     let text: string;
     let sourceType: "youtube" | "web";
     if (url.includes("youtube.com") || url.includes("youtu.be")) {
-      text = await getYouTubeTranscript(url);
+      text = await getYouTubeTranscript(url, cefrLevel);
       sourceType = "youtube";
     } else {
-      text = await getWebContent(url);
+      text = await getWebContent(url, cefrLevel);
       sourceType = "web";
     }
     const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(text, cefrLevel);
@@ -282,7 +382,10 @@ export async function analyzeContent(
     // Developer mode: skip Supadata API, load transcript from local file or demo text
     if (devMode && inputMode === "url") {
       const isTestUrl = input.trim().includes(DEV_TEST_VIDEO_ID);
-      const transcript = isTestUrl ? loadMockTranscript() : DEMO_TRANSCRIPT;
+      const transcript = normalizeAndTruncateText(
+        isTestUrl ? loadMockTranscript() : DEMO_TRANSCRIPT,
+        cefrLevel
+      );
       // Always call Claude directly — bypass unstable_cache so every submit tests the prompt
       const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(transcript, cefrLevel);
       return {
