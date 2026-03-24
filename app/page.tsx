@@ -43,12 +43,23 @@ import { PhraseCard } from "@/components/phrase-card";
 import { ScriptViewer } from "@/components/script-viewer";
 import { AdPlaceholder } from "@/components/ad-placeholder";
 import { SettingsModal } from "@/components/settings-modal";
+import { OnboardingModal } from "@/components/onboarding-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
 import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
-import { getSettings, DEV_TEST_URL, type DevAuthState } from "@/lib/settings";
+import {
+  getSettings,
+  saveSettings,
+  DEV_TEST_URL,
+  hasCompletedOnboarding,
+  hasSavedSettings,
+  markOnboardingCompleted,
+  type CefrLevel,
+  type Accent,
+  type DevAuthState,
+} from "@/lib/settings";
 import {
   saveAnalysis,
   getSavedAnalyses,
@@ -178,6 +189,7 @@ export default function HomePage() {
   const { openSignIn } = useClerk();
   const { isPro } = useEffectiveAuth();
   const [showSettings, setShowSettings] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [devMode, setDevMode] = useState(false);
   const [devAuthState, setDevAuthState] = useState<DevAuthState>("real");
   const [analysisSaved, setAnalysisSaved] = useState(false);
@@ -228,6 +240,24 @@ export default function HomePage() {
     // 公開済み解析フィードを取得
     getRecentPublicAnalysesAction(6).then(setRecentPublicAnalyses);
   }, []);
+
+  useEffect(() => {
+    if (isSignedIn) return;
+    if (hasCompletedOnboarding()) return;
+    if (hasSavedSettings()) return;
+    setShowOnboarding(true);
+  }, [isSignedIn]);
+
+  const handleOnboardingStart = useCallback(
+    ({ level, accent }: { level: CefrLevel; accent: Accent }) => {
+      saveSettings({ defaultLevel: level, accent });
+      setSelectedLevel(level);
+      markOnboardingCompleted();
+      setShowOnboarding(false);
+      toast.success("設定を保存しました");
+    },
+    []
+  );
 
   useEffect(() => {
     return () => {
@@ -574,6 +604,13 @@ export default function HomePage() {
     <div className="min-h-screen relative">
       {showPremium && <UpgradeModal reason="vocab_limit" onClose={() => setShowPremium(false)} />}
       {showQuotaModal && <UpgradeModal reason="daily_limit" onClose={() => setShowQuotaModal(false)} />}
+      {showOnboarding && (
+        <OnboardingModal
+          initialLevel={"B1" as CefrLevel}
+          initialAccent={"US"}
+          onStart={handleOnboardingStart}
+        />
+      )}
       {showSettings && (
         <SettingsModal
           onClose={() => {
@@ -771,7 +808,7 @@ export default function HomePage() {
                   />
                 </div>
                 <p className="mt-1.5 text-[9px] font-mono text-slate-400">
-                  YouTube: 英語字幕あり動画 · Web: 英語記事のURL · 学習効率を高めるため冒頭を抜粋して解析します
+                  YouTubeは冒頭から（タイムスタンプ指定も可）、記事は全文から、学習に最適なパートをAIが自動抽出します。
                 </p>
                 {urlType && (
                   <p className="mt-1 text-[11px] text-slate-500 flex items-center gap-1.5">
@@ -923,7 +960,7 @@ export default function HomePage() {
                 "w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl",
                 "font-semibold text-sm transition-all",
                 canSubmit && !isPending
-                  ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)] active:scale-[0.99]"
+                  ? "bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white shadow-sm hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)] active:scale-[0.99]"
                   : "bg-slate-100 text-slate-400 cursor-not-allowed"
               )}
             >

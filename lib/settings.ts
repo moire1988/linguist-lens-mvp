@@ -10,6 +10,7 @@ export interface UserSettings {
 }
 
 const SETTINGS_KEY = "ll_settings";
+const ONBOARDING_KEY = "ll_has_completed_onboarding";
 
 const DEFAULTS: UserSettings = {
   accent: "US",
@@ -34,6 +35,22 @@ export function saveSettings(patch: Partial<UserSettings>): void {
   const current = getSettings();
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...current, ...patch }));
   window.dispatchEvent(new CustomEvent("ll-settings-changed"));
+}
+
+export function hasSavedSettings(): boolean {
+  if (typeof window === "undefined") return false;
+  const raw = localStorage.getItem(SETTINGS_KEY);
+  return !!raw;
+}
+
+export function hasCompletedOnboarding(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(ONBOARDING_KEY) === "1";
+}
+
+export function markOnboardingCompleted(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ONBOARDING_KEY, "1");
 }
 
 export const ACCENT_LANG: Record<Accent, string> = {
