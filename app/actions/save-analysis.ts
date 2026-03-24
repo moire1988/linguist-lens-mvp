@@ -56,6 +56,8 @@ interface AnalysisRow {
   url: string | null;
   level: string;
   result_json: AnalysisResult;
+  is_shared: boolean;
+  is_approved: boolean;
   created_at: string;
 }
 
@@ -68,7 +70,7 @@ export async function getUserAnalysesAction(): Promise<SavedAnalysis[]> {
 
   const { data, error } = await db
     .from("saved_analyses")
-    .select("id, url, level, result_json, created_at")
+    .select("id, url, level, result_json, is_shared, is_approved, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -81,7 +83,41 @@ export async function getUserAnalysesAction(): Promise<SavedAnalysis[]> {
     inputMode: row.url ? "url" : "text",
     cefrLevel: row.level,
     data: row.result_json,
+    isShared: row.is_shared ?? false,
+    isApproved: row.is_approved ?? false,
   }));
+}
+
+// ─── 単一解析結果を取得（詳細ページ用）──────────────────────────────────────────
+
+export async function getAnalysisAction(
+  id: string
+): Promise<SavedAnalysis | null> {
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  let db;
+  try { db = createAdminClient(); } catch { return null; }
+
+  const { data, error } = await db
+    .from("saved_analyses")
+    .select("id, url, level, result_json, is_shared, is_approved, created_at")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .single();
+
+  if (error || !data) return null;
+  const row = data as AnalysisRow;
+  return {
+    id: row.id,
+    savedAt: row.created_at,
+    sourceUrl: row.url ?? undefined,
+    inputMode: row.url ? "url" : "text",
+    cefrLevel: row.level,
+    data: row.result_json,
+    isShared: row.is_shared ?? false,
+    isApproved: row.is_approved ?? false,
+  };
 }
 
 // ─── ユーザー自身の解析を削除 ─────────────────────────────────────────────────

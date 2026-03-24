@@ -16,6 +16,8 @@ export interface SavedAnalysis {
   inputMode: "url" | "text";
   cefrLevel: string;
   data: AnalysisResult;
+  isShared?: boolean;
+  isApproved?: boolean;
 }
 
 export type SaveAnalysisResult =
