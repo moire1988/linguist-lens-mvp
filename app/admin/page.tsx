@@ -13,7 +13,6 @@ import { getAdminArticles, updateArticlePublish, deleteAdminArticle } from "@/ap
 import type { Article } from "@/lib/article-types";
 import { getArticleCategoryDisplayLabel } from "@/lib/article-categories";
 import { VariantBadge } from "@/components/variant-badge";
-import { SiteFooter } from "@/components/site-footer";
 
 // ─── CEFR / Variant helpers ───────────────────────────────────────────────────
 
@@ -448,7 +447,7 @@ export default function AdminPage() {
           )}
         </section>
       </main>
-      <SiteFooter />
+
     </div>
   );
 }

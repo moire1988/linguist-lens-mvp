@@ -16,7 +16,6 @@ import { PhraseCard } from "@/components/phrase-card";
 import { ScriptViewer } from "@/components/script-viewer";
 import { UpgradeModal } from "@/components/upgrade-modal";
 import { AdBanner } from "@/components/ad-banner";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SettingsModal } from "@/components/settings-modal";
 import { getSettings, DEV_TEST_URL } from "@/lib/settings";
@@ -328,7 +327,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
           </div>
         </div>
       </main>
-      <SiteFooter />
+
     </div>
   );
 }

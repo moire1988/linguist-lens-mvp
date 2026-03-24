@@ -1,7 +1,6 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
-import { auth } from "@clerk/nextjs/server";
 import { isGrammarMasterclassCategory, pickArticleCategory } from "@/lib/article-categories";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -35,13 +34,8 @@ export async function generateArticle(
   cefrLevel: string,
   accent: string = "US"
 ): Promise<GenerateArticleResult> {
-  // ── Admin guard ────────────────────────────────────────────────────────────
-  const { userId } = await auth();
-  const adminId = process.env.NEXT_PUBLIC_ADMIN_USER_ID;
-  if (!userId || !adminId || userId !== adminId) {
-    return { success: false, error: "管理者権限が必要です" };
-  }
-
+  // 一般ユーザー向け（ログイン不要）。Admin チェックは不要。
+  // クォータ制御はクライアント側 consumeQuotaAction() で行われる。
   if (!process.env.ANTHROPIC_API_KEY) {
     return { success: false, error: "APIキーが設定されていません" };
   }

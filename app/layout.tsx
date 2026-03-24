@@ -8,6 +8,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { FeedbackModal } from "@/components/feedback-modal";
 import { MeshBackground } from "@/components/mesh-background";
 import { LoginPromptModal } from "@/components/login-prompt-modal";
+import { SiteFooter } from "@/components/site-footer";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -60,9 +61,12 @@ export default function RootLayout({
 
       <html lang="ja">
         <GoogleTagManager gtmId={gtmId} />
-        <body className={inter.className} style={{ backgroundColor: "#f7f8ff" }}>
+        <body className={`${inter.className} flex flex-col min-h-screen`} style={{ backgroundColor: "#f7f8ff" }}>
           <MeshBackground />
-          {children}
+          <div className="flex flex-col flex-1">
+            {children}
+          </div>
+          <SiteFooter />
           <FeedbackModal />
           <LoginPromptModal />
           <Toaster richColors position="bottom-right" />

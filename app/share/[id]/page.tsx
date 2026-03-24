@@ -5,7 +5,6 @@ import { ExternalLink, Youtube, Globe, FileText } from "lucide-react";
 import { getPublicAnalysis } from "@/lib/db/analyses";
 import type { PhraseResult } from "@/lib/types";
 import { AdBanner } from "@/components/ad-banner";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
@@ -285,7 +284,7 @@ export default async function SharePage({
         </div>
       </main>
 
-      <SiteFooter />
+
     </div>
   );
 }

@@ -9,7 +9,6 @@ import { ArticleTts } from "@/components/article-tts";
 import { ArticleBody, ArticleVocabCard } from "@/components/article-body";
 import { ArticleHeader } from "@/components/article-header";
 import { NewsletterBanner } from "@/components/newsletter-banner";
-import { SiteFooter } from "@/components/site-footer";
 import { Breadcrumb } from "@/components/breadcrumb";
 import type { ArticleSummary } from "@/lib/article-types";
 import {
@@ -258,7 +257,7 @@ export default async function ArticlePage({
         </div>
       </main>
 
-      <SiteFooter />
+
     </div>
   );
 }
