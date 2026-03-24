@@ -37,7 +37,6 @@ export async function saveAnalysisAction(payload: {
       title:       null,
       level:       payload.cefrLevel,
       result_json: payload.data,
-      is_public:   false,
     })
     .select("id")
     .single();

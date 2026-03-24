@@ -10,8 +10,16 @@ import {
   ARTICLE_CATEGORY_BADGE_STYLE,
   getArticleCategoryDisplayLabel,
 } from "@/lib/article-categories";
+import type { EnglishVariant } from "@/lib/article-types";
 
 // ─── Style maps ──────────────────────────────────────────────────────────────
+
+const VARIANT_LABEL: Record<EnglishVariant, { flag: string; short: string; color: string }> = {
+  US:     { flag: "🇺🇸", short: "US",   color: "bg-blue-50 text-blue-700 border-blue-200" },
+  UK:     { flag: "🇬🇧", short: "UK",   color: "bg-red-50 text-red-700 border-red-200" },
+  AU:     { flag: "🇦🇺", short: "AU",   color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  common: { flag: "🌐",  short: "共通", color: "bg-slate-50 text-slate-500 border-slate-200" },
+};
 
 const LEVEL_STYLES: Record<string, string> = {
   A1: "bg-slate-100 text-slate-600 border-slate-300",
@@ -115,10 +123,21 @@ export function LatestArticlesCarousel() {
                     >
                       {article.level}
                     </span>
+                    {(() => {
+                      const v = VARIANT_LABEL[article.englishVariant] ?? VARIANT_LABEL.common;
+                      return (
+                        <span className={cn(
+                          "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border",
+                          v.color
+                        )}>
+                          {v.flag} {v.short}
+                        </span>
+                      );
+                    })()}
                     {catStyle && (
                       <span
                         className={cn(
-                          "px-1.5 py-0.5 rounded text-[10px] font-mono border truncate max-w-[148px]",
+                          "px-1.5 py-0.5 rounded text-[10px] font-mono border truncate max-w-[120px]",
                           catStyle
                         )}
                       >

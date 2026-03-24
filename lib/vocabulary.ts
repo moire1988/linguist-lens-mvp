@@ -10,10 +10,13 @@ export interface SavedPhrase {
   meaning_ja: string;
   nuance: string;
   example: string;
+  example_translation?: string;
   context: string;
   why_hard_for_japanese: string;
   sourceUrl?: string;
   savedAt: string;
+  status?: 'learning' | 'archived';
+  archivedAt?: string;
 }
 
 export type SaveResult =
@@ -109,6 +112,7 @@ export function savePhrase(
     ...phrase,
     id: generateId(),
     savedAt: new Date().toISOString(),
+    status: 'learning',
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify([newEntry, ...current]));
   incrementDailyCount();
@@ -118,6 +122,35 @@ export function savePhrase(
 
 export function deletePhrase(id: string): SavedPhrase[] {
   const updated = getVocabulary().filter((p) => p.id !== id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+export function archivePhrase(id: string): SavedPhrase[] {
+  const updated = getVocabulary().map((p) =>
+    p.id === id
+      ? { ...p, status: 'archived' as const, archivedAt: new Date().toISOString() }
+      : p
+  );
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+export function restorePhrase(id: string): SavedPhrase[] {
+  const updated = getVocabulary().map((p) =>
+    p.id === id
+      ? { ...p, status: 'learning' as const, archivedAt: undefined }
+      : p
+  );
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+export function clearByStatus(status: 'learning' | 'archived'): SavedPhrase[] {
+  const updated = getVocabulary().filter((p) => {
+    const s = p.status ?? 'learning';
+    return s !== status;
+  });
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   return updated;
 }
@@ -148,7 +181,7 @@ const TYPE_LABELS: Record<string, string> = {
 export function exportToCSV(phrases: SavedPhrase[]): void {
   const headers = [
     "表現", "種類", "CEFRレベル", "意味", "ニュアンス",
-    "例文", "文脈", "学習ポイント", "ソースURL", "保存日",
+    "例文", "文脈", "学習ポイント", "ソースURL", "ステータス", "保存日",
   ];
   const rows = phrases.map((p) => [
     p.expression,
@@ -160,6 +193,7 @@ export function exportToCSV(phrases: SavedPhrase[]): void {
     p.context,
     p.why_hard_for_japanese,
     p.sourceUrl ?? "",
+    (p.status ?? 'learning') === 'archived' ? 'マスター済み' : '学習中',
     new Date(p.savedAt).toLocaleDateString("ja-JP"),
   ]);
 
