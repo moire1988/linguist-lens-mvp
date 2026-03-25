@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ReactNode, ElementType } from "react";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
@@ -11,11 +12,18 @@ import {
   Youtube,
   Zap,
   CheckSquare,
+  Check,
+  Loader2,
 } from "lucide-react";
-import { useClerk } from "@clerk/nextjs";
+import { useAuth, useClerk } from "@clerk/nextjs";
+import { toast } from "sonner";
 import { SiteHeader } from "@/components/site-header";
 import { GlobalNav } from "@/components/global-nav";
 import { LinguistLensLogo } from "@/components/linguist-lens-logo";
+import {
+  registerWaitlistLoggedInAction,
+  registerWaitlistGuestAction,
+} from "@/app/actions/waitlist";
 
 // ─── Animation Variants ───────────────────────────────────────────────────────
 
@@ -118,13 +126,104 @@ function StepCard({
   );
 }
 
+// ─── Pro Waitlist Button ──────────────────────────────────────────────────────
+
+function ProWaitlistButton() {
+  const { isSignedIn, isLoaded } = useAuth();
+  const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
+  const [email, setEmail]   = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const onSuccess = () => {
+    setStatus("done");
+    toast.success("登録しました！Proプランの準備ができ次第、メールでご連絡します 🎉");
+  };
+
+  const handleLoggedIn = async () => {
+    setStatus("loading");
+    setErrorMsg(null);
+    const res = await registerWaitlistLoggedInAction();
+    if (res.ok) { onSuccess(); } else {
+      setErrorMsg(res.error ?? "登録に失敗しました");
+      setStatus("idle");
+    }
+  };
+
+  const handleGuest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus("loading");
+    setErrorMsg(null);
+    const res = await registerWaitlistGuestAction(email);
+    if (res.ok) { onSuccess(); } else {
+      setErrorMsg(res.error ?? "登録に失敗しました");
+      setStatus("idle");
+    }
+  };
+
+  // ── 登録完了 ──────────────────────────────────────────────────────────────
+  if (status === "done") {
+    return (
+      <div className="w-full py-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold text-sm text-center flex items-center justify-center gap-2">
+        <Check className="w-4 h-4 shrink-0" />
+        登録完了！リリース時にお知らせします
+      </div>
+    );
+  }
+
+  // ── ログイン済み: 1クリック登録 ───────────────────────────────────────────
+  if (isLoaded && isSignedIn) {
+    return (
+      <div className="space-y-1.5">
+        {errorMsg && <p className="text-xs text-rose-500">{errorMsg}</p>}
+        <button
+          onClick={handleLoggedIn}
+          disabled={status === "loading"}
+          className="w-full py-3 rounded-xl border border-indigo-500 text-indigo-600 hover:bg-indigo-50 font-semibold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+        >
+          {status === "loading" ? (
+            <><Loader2 className="w-4 h-4 animate-spin" />登録中...</>
+          ) : (
+            "リリース優先案内を受け取る"
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  // ── ゲスト: メールアドレス入力フォーム ────────────────────────────────────
+  return (
+    <form onSubmit={handleGuest} className="space-y-2">
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="your@email.com"
+        required
+        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-400 focus:outline-none text-sm text-slate-800 placeholder-slate-400 transition-colors"
+      />
+      {errorMsg && <p className="text-xs text-rose-500">{errorMsg}</p>}
+      <button
+        type="submit"
+        disabled={status === "loading" || !email.trim()}
+        className="w-full py-3 rounded-xl border border-indigo-500 text-indigo-600 hover:bg-indigo-50 font-semibold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+      >
+        {status === "loading" ? (
+          <><Loader2 className="w-4 h-4 animate-spin" />送信中...</>
+        ) : (
+          "リリース優先案内を受け取る"
+        )}
+      </button>
+    </form>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AboutPage() {
   const { openSignIn } = useClerk();
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
+    <div className="min-h-screen bg-transparent text-slate-900">
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <SiteHeader maxWidth="5xl" right={<GlobalNav />} />
@@ -134,12 +233,6 @@ export default function AboutPage() {
       ═══════════════════════════════════════════════════════════════════ */}
       <section
         className="relative flex items-center justify-center overflow-hidden"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(99,102,241,0.05) 1px, transparent 1px)," +
-            "linear-gradient(90deg, rgba(99,102,241,0.05) 1px, transparent 1px)",
-          backgroundSize: "50px 50px",
-        }}
       >
         {/* Radial center glow */}
         <div
@@ -316,9 +409,9 @@ export default function AboutPage() {
             </FadeUp>
 
             {/* Diagram */}
-            <FadeUp className="flex flex-row items-center justify-center gap-4 mb-10 sm:mb-14">
+            <FadeUp className="flex flex-row items-stretch justify-center gap-4 mb-10 sm:mb-14">
               {/* 丸暗記 NG */}
-              <div className="relative flex flex-col items-center gap-2 px-4 py-5 rounded-2xl border border-red-200 bg-red-50 w-36 sm:w-44 text-center shrink-0">
+              <div className="relative flex flex-col items-center justify-center gap-2 px-4 py-5 rounded-2xl border border-red-200 bg-red-50 w-36 sm:w-44 text-center shrink-0">
                 <span className="text-3xl select-none">📖</span>
                 <p className="text-sm font-bold text-slate-700">丸暗記</p>
                 <p className="text-[11px] text-slate-400 leading-relaxed">1,000個のイディオムを記憶する</p>
@@ -330,10 +423,12 @@ export default function AboutPage() {
               </div>
 
               {/* Arrow */}
-              <ArrowRight className="w-6 h-6 text-slate-300 shrink-0" />
+              <div className="flex items-center">
+                <ArrowRight className="w-6 h-6 text-slate-300 shrink-0" />
+              </div>
 
               {/* LinguistLens */}
-              <div className="flex flex-col items-center gap-2 px-4 py-5 rounded-2xl border border-indigo-200 bg-indigo-50 w-36 sm:w-44 text-center shadow-[0_4px_20px_rgba(99,102,241,0.12)] shrink-0">
+              <div className="flex flex-col items-center justify-center gap-2 px-4 py-5 rounded-2xl border border-indigo-200 bg-indigo-50 w-36 sm:w-44 text-center shadow-[0_4px_20px_rgba(99,102,241,0.12)] shrink-0">
                 <Brain className="w-8 h-8 text-indigo-600" />
                 <p className="text-sm font-bold text-indigo-900">コアイメージ</p>
                 <p className="text-[11px] text-indigo-600 leading-relaxed">本質理解 × 無限の表現力</p>
@@ -400,7 +495,112 @@ export default function AboutPage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 6: CTA
+          SECTION 6: Pricing
+      ═══════════════════════════════════════════════════════════════════ */}
+      <section className="py-14 sm:py-24 px-6 border-t border-slate-100">
+        <div className="max-w-4xl mx-auto">
+          <ScrollSection>
+            <FadeUp className="text-center mb-10 sm:mb-14">
+              <p className="text-xs font-mono font-bold text-indigo-500 uppercase tracking-widest mb-3">
+                ✦ Pricing
+              </p>
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">
+                シンプルで透明なプライシング
+              </h2>
+              <p className="text-slate-500 text-sm mt-3">
+                まず無料で体験して、気に入ったらアップグレード。
+              </p>
+            </FadeUp>
+
+            <FadeUp>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
+
+                {/* ── Free プラン ──────────────────────────────────── */}
+                <div className="flex flex-col gap-5 p-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div>
+                    <p className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest mb-2">
+                      Free
+                    </p>
+                    <div className="flex items-end gap-1.5 leading-none mb-2">
+                      <span className="text-4xl font-extrabold text-slate-900">¥0</span>
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      まずはLinguistLensの価値を体験
+                    </p>
+                  </div>
+
+                  <ul className="space-y-2.5 flex-1">
+                    {[
+                      "アカウント作成後、累計3回までのAI解析",
+                      "解析結果・単語の保存（最大3件まで）",
+                    ].map((item) => (
+                      <li key={item} className="flex items-start gap-2.5 text-sm text-slate-600">
+                        <span className="mt-0.5 w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                          <Check className="w-2.5 h-2.5 text-slate-500" />
+                        </span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button
+                    onClick={() => openSignIn()}
+                    className="w-full py-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-sm transition-colors"
+                  >
+                    無料で始める
+                  </button>
+                </div>
+
+                {/* ── Pro プラン ───────────────────────────────────── */}
+                <div className="relative flex flex-col gap-5 p-6 rounded-2xl border-2 border-indigo-500 bg-white shadow-[0_4px_24px_rgba(99,102,241,0.12)]">
+                  {/* おすすめバッジ */}
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[11px] font-bold shadow-sm whitespace-nowrap">
+                      <Sparkles className="w-3 h-3" />
+                      おすすめ
+                    </span>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-mono font-bold text-indigo-500 uppercase tracking-widest mb-2">
+                      Pro
+                    </p>
+                    <div className="flex items-end gap-1.5 leading-none mb-1">
+                      <span className="text-4xl font-extrabold text-slate-900">¥980</span>
+                      <span className="text-sm text-slate-400 mb-1">/ 月</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-mono mb-1">※ 価格は予定です</p>
+                    <p className="text-sm text-slate-500">
+                      制限なしで、あらゆる英語コンテンツを自分の教材に
+                    </p>
+                  </div>
+
+                  <ul className="space-y-2.5 flex-1">
+                    {[
+                      "AI解析の無制限利用",
+                      "単語・解析結果の無制限保存",
+                      "覚えた単語を使ったAIオリジナル記事生成",
+                    ].map((item) => (
+                      <li key={item} className="flex items-start gap-2.5 text-sm text-slate-700">
+                        <span className="mt-0.5 w-4 h-4 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                          <Check className="w-2.5 h-2.5 text-indigo-600" />
+                        </span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <ProWaitlistButton />
+                </div>
+
+              </div>
+            </FadeUp>
+          </ScrollSection>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 7: CTA
       ═══════════════════════════════════════════════════════════════════ */}
       <section className="py-16 sm:py-28 px-6 border-t border-slate-100 relative overflow-hidden bg-slate-50">
         {/* Subtle glow */}
@@ -410,17 +610,6 @@ export default function AboutPage() {
             background: "radial-gradient(ellipse, rgba(99,102,241,0.08) 0%, transparent 70%)",
           }}
         />
-        {/* Grid */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(99,102,241,0.05) 1px, transparent 1px)," +
-              "linear-gradient(90deg, rgba(99,102,241,0.05) 1px, transparent 1px)",
-            backgroundSize: "50px 50px",
-          }}
-        />
-
         <ScrollSection className="relative z-10 text-center max-w-2xl mx-auto">
           <FadeUp>
             <p className="text-xs font-mono font-bold text-indigo-500 uppercase tracking-widest mb-4">

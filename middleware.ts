@@ -3,6 +3,10 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 // These routes are accessible without signing in.
 const isPublicRoute = createRouteMatcher([
   "/",
+  "/about",
+  "/terms",
+  "/privacy",
+  "/analyses/(.*)",
   "/examples/(.*)",
   "/share/(.*)",
   "/sitemap.xml",
