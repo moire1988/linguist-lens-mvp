@@ -15,6 +15,7 @@ const isPublicRoute = createRouteMatcher([
   "/icon.svg",
   "/articles",
   "/articles/(.*)",
+  "/library",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {

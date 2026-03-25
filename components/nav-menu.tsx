@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, type ElementType } from "react";
 import Link from "next/link";
-import { Menu, X, BookMarked, BookOpen, Lightbulb, Settings } from "lucide-react";
+import { Menu, X, BookMarked, BookOpen, Lightbulb, Settings, Library } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -57,6 +57,7 @@ export function NavMenu({ onSettings, vocabCount }: NavMenuProps) {
       badge: vocabCount && vocabCount > 0 ? vocabCount : undefined,
     },
     { icon: BookOpen, label: "学習記事", href: "/articles" },
+    { icon: Library, label: "厳選表現ライブラリ", href: "/library" },
   ];
 
   const utilityItems: NavItem[] = [

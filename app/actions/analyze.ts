@@ -92,6 +92,10 @@ function readSegmentText(segment: SupadataSegment): string {
   return text.trim();
 }
 
+/**
+ * Supadata `TranscriptChunk.offset` is in milliseconds (see OpenAPI TranscriptChunk).
+ * Normalize to seconds for comparison with YouTube `t` / `start` query params (seconds).
+ */
 function readSegmentOffsetSeconds(segment: SupadataSegment): number | null {
   const raw =
     segment.offset ??
@@ -100,10 +104,10 @@ function readSegmentOffsetSeconds(segment: SupadataSegment): number | null {
     segment.start_time ??
     segment.time ??
     null;
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw / 1000;
   if (typeof raw === "string") {
     const n = Number(raw);
-    if (Number.isFinite(n)) return n;
+    if (Number.isFinite(n)) return n / 1000;
   }
   return null;
 }
@@ -121,6 +125,43 @@ function joinTranscriptAfterOffset(
     .map(readSegmentText)
     .filter((t) => t.length > 0);
   return picked.join(" ");
+}
+
+/** Join Supadata transcript chunks (plain text, space-separated). */
+function joinTranscriptChunks(segments: SupadataSegment[]): string {
+  return segments
+    .map(readSegmentText)
+    .filter((t) => t.length > 0)
+    .join(" ");
+}
+
+type SupadataTranscriptJson = {
+  content?: string | SupadataSegment[];
+  transcript?: SupadataSegment[];
+  segments?: SupadataSegment[];
+  lang?: string;
+  error?: string;
+  message?: string;
+  details?: string;
+};
+
+function throwSupadataApiError(data: SupadataTranscriptJson): never {
+  const code = data.error ?? "";
+  const detail = data.details ?? data.message ?? "";
+  const messages: Record<string, string> = {
+    "transcript-unavailable":
+      "この動画には字幕が取得できませんでした。字幕付きの別の動画をお試しください。",
+    "not-found": "動画が見つかりませんでした。URLをご確認ください。",
+    "limit-exceeded":
+      "字幕取得サービスの利用上限に達しました。時間をおいて再度お試しください。",
+    "upgrade-required":
+      "字幕取得に必要なプランへのアップグレードが必要です。管理者にお問い合わせください。",
+    unauthorized: "字幕APIの認証に失敗しました。環境設定をご確認ください。",
+    forbidden: "字幕APIへのアクセスが拒否されました。",
+    "invalid-request": "字幕取得リクエストが無効です。URLをご確認ください。",
+    "internal-error": "字幕取得サービスで一時的なエラーが発生しました。しばらくしてから再度お試しください。",
+  };
+  throw new Error(messages[code] ?? (detail || `字幕APIエラー（${code || "unknown"}）`));
 }
 
 // ─── YouTube（Supadata API 経由）──────────────────────────────────────────
@@ -153,23 +194,57 @@ async function getYouTubeTranscript(url: string, cefrLevel: string): Promise<str
     );
   }
   if (!res.ok) {
-    throw new Error(`字幕の取得に失敗しました（HTTP ${res.status}）`);
+    let detail = "";
+    try {
+      const errBody = (await res.json()) as { message?: string; details?: string; error?: string };
+      detail = errBody.details ?? errBody.message ?? errBody.error ?? "";
+    } catch {
+      /* ignore */
+    }
+    throw new Error(
+      detail
+        ? `字幕の取得に失敗しました（HTTP ${res.status}）: ${detail}`
+        : `字幕の取得に失敗しました（HTTP ${res.status}）`
+    );
   }
 
-  const data = (await res.json()) as {
-    content?: string;
-    transcript?: SupadataSegment[];
-    segments?: SupadataSegment[];
-  };
-  const baseTranscript = data.content?.trim() ?? "";
-  const segmentList = Array.isArray(data.transcript)
-    ? data.transcript
-    : Array.isArray(data.segments)
-    ? data.segments
-    : null;
+  const data = (await res.json()) as SupadataTranscriptJson;
+
+  // HTTP 206 is "Transcript Unavailable" in OpenAPI but still in 2xx → res.ok === true
+  if (res.status === 206) {
+    if (data.error) throwSupadataApiError(data);
+    throw new Error(
+      "この動画には字幕を取得できませんでした。字幕付きの別の動画をお試しください。"
+    );
+  }
+
+  // Error-shaped JSON with 2xx (e.g. proxies) — no usable transcript payload
+  if (data.error && data.content === undefined) {
+    throwSupadataApiError(data);
+  }
+
+  // Supadata: `text=true` → content is string; default → content is TranscriptChunk[]
+  let baseTranscript = "";
+  let segmentList: SupadataSegment[] | null = null;
+
+  if (typeof data.content === "string") {
+    baseTranscript = data.content.trim();
+  } else if (Array.isArray(data.content)) {
+    segmentList = data.content;
+    baseTranscript = joinTranscriptChunks(segmentList).trim();
+  }
+
+  if (!baseTranscript && Array.isArray(data.transcript)) {
+    segmentList = data.transcript;
+    baseTranscript = joinTranscriptChunks(segmentList).trim();
+  }
+  if (!baseTranscript && Array.isArray(data.segments)) {
+    segmentList = data.segments;
+    baseTranscript = joinTranscriptChunks(segmentList).trim();
+  }
 
   let transcript = baseTranscript;
-  if (offsetSeconds > 0 && segmentList) {
+  if (offsetSeconds > 0 && segmentList && segmentList.length > 0) {
     transcript = joinTranscriptAfterOffset(segmentList, offsetSeconds).trim();
   }
 
