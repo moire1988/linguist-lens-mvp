@@ -30,8 +30,12 @@ jobs:
       - name: 🏗️ Next.jsのビルドテスト
         run: npm run build
         env:
-          # ビルド時に必要な環境変数の「ダミー」を入れておく
+          # Supabase（前回分）
           NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-key
           SUPABASE_SERVICE_ROLE_KEY: dummy-key
-          # もし他にも必須な変数があればここに追加
+          # Clerk（今回の犯人）
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dummy
+          CLERK_SECRET_KEY: sk_test_dummy
+          # その他、もしコード内で使っているならこれも
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
