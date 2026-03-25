@@ -3,10 +3,14 @@ import { NextResponse } from "next/server";
 
 /**
  * Avoid stale HTML after deploy (old document still pointing at removed hashed CSS/JS under /_next/static).
- * Hashed assets keep long cache; this applies to page/RSC responses only (matcher skips /_next and static extensions).
+ * Hashed assets keep long cache (next.config.js); this applies to page/RSC only (matcher skips /_next and file extensions).
+ *
+ * - private: 共有 CDN にユーザー固有として扱わせ、誤キャッシュを減らす
+ * - no-store: ブラウザ・中間プロキシがドキュメントを溜めない
+ * - Vercel-CDN-Cache-Control: Edge が HTML を長期キャッシュしないようにする
  */
 const HTML_CACHE_CONTROL =
-  "public, max-age=0, must-revalidate, s-maxage=0, stale-while-revalidate=0";
+  "private, no-cache, no-store, max-age=0, must-revalidate";
 
 // These routes are accessible without signing in.
 const isPublicRoute = createRouteMatcher([
@@ -24,6 +28,8 @@ const isPublicRoute = createRouteMatcher([
   "/articles",
   "/articles/(.*)",
   "/library",
+  // トップの解析は fetch(/api/analyze) 経由（Server Action スタブによる Webpack 不整合を避ける）
+  "/api/analyze",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
@@ -33,6 +39,9 @@ export default clerkMiddleware(async (auth, request) => {
 
   const response = NextResponse.next();
   response.headers.set("Cache-Control", HTML_CACHE_CONTROL);
+  response.headers.set("Vercel-CDN-Cache-Control", "no-store");
+  response.headers.set("CDN-Cache-Control", "no-store");
+  response.headers.set("Pragma", "no-cache");
   return response;
 });
 

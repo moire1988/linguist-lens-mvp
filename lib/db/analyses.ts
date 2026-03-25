@@ -1,5 +1,6 @@
 import { supabase, createAuthClient } from "@/lib/supabase";
 import type { AnalysisResult } from "@/lib/types";
+import type { FeaturedAnalysis, RecentPublicAnalysis } from "@/lib/public-analyses-types";
 import type { SavedAnalysis } from "@/lib/saved-analyses";
 
 // ─── DB row shape (snake_case) ────────────────────────────────────────────────
@@ -145,14 +146,7 @@ export async function getPublicAnalysis(id: string): Promise<PublicAnalysis | nu
 
 // ─── 公開フィード用（最新N件）──────────────────────────────────────────────
 
-export interface RecentPublicAnalysis {
-  id: string;
-  title: string | null;
-  url: string | null;
-  level: string;
-  phrases: import("@/lib/types").PhraseResult[];
-  createdAt: string;
-}
+export type { FeaturedAnalysis, RecentPublicAnalysis };
 
 /**
  * トップページ用: is_public = true の最新 N 件を取得する。
@@ -180,15 +174,6 @@ export async function getRecentPublicAnalyses(
 }
 
 // ─── 注目のピックアップ（is_featured=true）──────────────────────────────────
-
-export interface FeaturedAnalysis {
-  id: string;
-  url: string | null;
-  level: string;
-  phrases: import("@/lib/types").PhraseResult[];
-  phraseCount: number;
-  createdAt: string;
-}
 
 /**
  * トップページ「注目の解析記事」用:

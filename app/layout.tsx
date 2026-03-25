@@ -65,14 +65,20 @@ export default function RootLayout({
   return (
     <ClerkProvider afterSignOutUrl="/">
 
-      <html lang="ja">
+      <html lang="ja" suppressHydrationWarning>
         <GoogleTagManager gtmId={gtmId} />
-        <body className={`${inter.className} ${goldman.variable} flex flex-col min-h-screen`} style={{ backgroundColor: "#f7f8ff" }}>
+        <body
+          className={`${inter.className} ${goldman.variable} flex flex-col min-h-screen`}
+          style={{ backgroundColor: "#f7f8ff" }}
+          suppressHydrationWarning
+        >
           <MeshBackground />
-          <div className="flex flex-col flex-1">
+          <div className="relative z-[1] flex flex-col flex-1 min-h-0">
             {children}
           </div>
-          <SiteFooter />
+          <div className="relative z-[1]">
+            <SiteFooter />
+          </div>
           <FeedbackModal />
           <LoginPromptModal />
           <Toaster richColors position="bottom-right" />

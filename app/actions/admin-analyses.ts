@@ -3,7 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import type { PhraseResult } from "@/lib/types";
-import type { AnalysisResult } from "@/app/actions/analyze";
+import type { AnalysisResult } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

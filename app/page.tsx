@@ -22,17 +22,14 @@ import { saveAnalysisAction } from "@/app/actions/save-analysis";
 import {
   consumeQuotaAction,
   getUserAnalysisCountAction,
-  type AnalysisCountInfo,
 } from "@/app/actions/check-quota";
 import { FREE_ANALYSIS_LIMIT } from "@/lib/quota-config";
+import type { AnalysisCountInfo } from "@/lib/quota-types";
 import { UpgradeModal } from "@/components/upgrade-modal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import {
-  analyzeContent,
-  type AnalyzeErrorCode,
-} from "@/app/actions/analyze";
-import type { AnalysisResult } from "@/lib/types";
+import type { AnalysisResult, AnalyzeErrorCode } from "@/lib/types";
+import { callAnalyzeApi } from "@/lib/analyze-client";
 import { generateArticle } from "@/app/actions/generate-article";
 import { getVocabularyCount } from "@/lib/vocabulary";
 import { getCachedResult, setCachedResult } from "@/lib/cache";
@@ -57,9 +54,8 @@ import {
 import {
   getRecentPublicAnalysesAction,
   getFeaturedAnalysesAction,
-  type RecentPublicAnalysis,
-  type FeaturedAnalysis,
 } from "@/app/actions/public-analyses";
+import type { FeaturedAnalysis, RecentPublicAnalysis } from "@/lib/public-analyses-types";
 import { RECOMMENDED_VIDEOS } from "@/lib/recommended-videos-data";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -78,6 +74,7 @@ const LOADING_STEPS = [
   "ネイティブ特有のニュアンスを解析中...",
   "本当に使える表現を厳選しています...",
   "あなた専用のリストを生成しています...",
+  "結果を保存しています...",
 ];
 
 /** `recommended-videos-data` から YouTube 視聴 URL の候補を生成 */
@@ -162,7 +159,7 @@ export default function HomePage() {
       setSelectedLevel(level);
       markOnboardingCompleted();
       setShowOnboarding(false);
-      toast.success("設定を保存しました");
+      toast?.success?.("設定を保存しました");
     },
     []
   );
@@ -213,6 +210,9 @@ export default function HomePage() {
   }, [clearUrlTypingTimer]);
 
   const [isPending, startTransition] = useTransition();
+  /** API〜保存〜遷移まで（useTransition の isPending だけでは非同期中に落ちるため併用） */
+  const [isLoading, setIsLoading] = useState(false);
+  const analysisBusy = isPending || isLoading;
 
   // Detect URL type
   const inputValue = inputMode === "url" ? url : textInput;
@@ -223,9 +223,9 @@ export default function HomePage() {
       ? "web"
       : null;
 
-  // Animate loading steps with fade
+  // Animate loading steps with fade（解析 API 〜 保存 〜 router.push まで継続）
   useEffect(() => {
-    if (!isPending) {
+    if (!analysisBusy) {
       setStepIndex(0);
       setMsgVisible(true);
       return;
@@ -242,7 +242,7 @@ export default function HomePage() {
       }, 400);
     }, 3000);
     return () => clearInterval(interval);
-  }, [isPending]);
+  }, [analysisBusy]);
 
   /** 解析完了後、DB に保存して /analyses/[id] へ遷移 */
   const saveAndRedirect = useCallback(
@@ -250,19 +250,41 @@ export default function HomePage() {
       data: AnalysisResult,
       opts: { inputMode: "url" | "text"; cefrLevel: string; sourceUrl?: string }
     ) => {
-      const result = await saveAnalysisAction({
-        data,
-        inputMode: opts.inputMode,
-        cefrLevel: opts.cefrLevel,
-        sourceUrl: opts.sourceUrl,
-      });
-      if (!result.success) {
-        setError(`保存に失敗しました: ${result.error}`);
+      try {
+        const result = await saveAnalysisAction({
+          data,
+          inputMode: opts.inputMode,
+          cefrLevel: opts.cefrLevel,
+          sourceUrl: opts.sourceUrl,
+        });
+
+        // result 自体が undefined/null の場合の安全なチェック
+        if (!result || result.success !== true) {
+          const errText =
+            result && "error" in result
+              ? result.error
+              : "保存に失敗しました（サーバーからの応答がありません）";
+          if (process.env.NODE_ENV === "development") {
+            console.error("[saveAndRedirect] saveAnalysisAction failed", result);
+          }
+          setError(`保存に失敗しました: ${errText}`);
+          setErrorCode("generic");
+          return;
+        }
+
+        // 成功時の処理
+        if (result.id) {
+          storeGuestAnalysisId(result.id);
+          router.push(`/analyses/${result.id}`);
+        } else {
+          throw new Error("保存は成功しましたが、IDが返却されませんでした。");
+        }
+      } catch (err: unknown) {
+        console.error("[saveAndRedirect] Exception:", err);
+        const msg = err instanceof Error ? err.message : "不明なエラー";
+        setError(`通信エラーが発生しました: ${msg}`);
         setErrorCode("generic");
-        return;
       }
-      storeGuestAnalysisId(result.id);
-      router.push(`/analyses/${result.id}`);
     },
     [router]
   );
@@ -281,7 +303,7 @@ export default function HomePage() {
     // ── クォータチェック（devModeはスキップ）─────────────────────────────
     if (!devMode) {
       const quota = await consumeQuotaAction();
-      if (!quota.allowed) {
+      if (!quota?.allowed) {
         setShowQuotaModal(true);
         return;
       }
@@ -291,43 +313,90 @@ export default function HomePage() {
     if (inputMode === "url" && url.trim() && !devMode) {
       const cached = getCachedResult(url.trim(), selectedLevel);
       if (cached) {
-        toast.success("キャッシュから読み込みました", {
+        toast?.success?.("キャッシュから読み込みました", {
           description: "API呼び出しをスキップしました（7日間有効）",
         });
-        await saveAndRedirect(cached, {
-          inputMode,
-          cefrLevel: selectedLevel,
-          sourceUrl: url,
-        });
+        setIsLoading(true);
+        try {
+          await saveAndRedirect(cached, {
+            inputMode,
+            cefrLevel: selectedLevel,
+            sourceUrl: url,
+          });
+        } finally {
+          setIsLoading(false);
+        }
         return;
       }
     }
 
-    startTransition(async () => {
-      const result = await analyzeContent(inputValue, selectedLevel, inputMode, devMode);
+    setIsLoading(true);
+    startTransition(() => {
+      void (async () => {
+        try {
+          const result = await callAnalyzeApi(
+            inputValue,
+            selectedLevel,
+            inputMode,
+            devMode
+          );
 
-      if (!result.success) {
-        setError(result.error);
-        setErrorCode(result.errorCode);
-        return;
-      }
+          // 修正ポイント: result が falsy (undefined/null) の場合はここで確実に止める
+          if (!result) {
+            setError("サーバーからの応答がありません。時間をおいて再試行してください。");
+            setErrorCode("generic");
+            return;
+          }
 
-      if (result.data.total_count === 0) {
-        setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
-        setErrorCode("generic");
-        return;
-      }
+          // この時点で result は存在するので、安全に success をチェックできる
+          if (result.success !== true) {
+            setError(result.error ?? "解析に失敗しました");
+            setErrorCode(result.errorCode ?? "generic");
+            return;
+          }
 
-      // URLモードの結果をキャッシュ保存（devModeはスキップ）
-      if (inputMode === "url" && url.trim() && !devMode) {
-        setCachedResult(url.trim(), selectedLevel, result.data);
-      }
+          const totalCount = result.data?.total_count;
+          if (typeof totalCount !== "number" || !Number.isFinite(totalCount)) {
+            setError("解析結果の形式が不正です。もう一度お試しください。");
+            setErrorCode("generic");
+            return;
+          }
 
-      await saveAndRedirect(result.data, {
-        inputMode,
-        cefrLevel: selectedLevel,
-        sourceUrl: inputMode === "url" ? url : undefined,
-      });
+          if (totalCount === 0) {
+            setError(
+              "抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。"
+            );
+            setErrorCode("generic");
+            return;
+          }
+
+          const analysisData = result.data;
+          if (!analysisData) {
+            setError("解析データがありません。もう一度お試しください。");
+            setErrorCode("generic");
+            return;
+          }
+
+          // URLモードの結果をキャッシュ保存（devModeはスキップ）
+          if (inputMode === "url" && url.trim() && !devMode) {
+            setCachedResult(url.trim(), selectedLevel, analysisData);
+          }
+
+          await saveAndRedirect(analysisData, {
+            inputMode,
+            cefrLevel: selectedLevel,
+            sourceUrl: inputMode === "url" ? url : undefined,
+          });
+        } catch (err: unknown) {
+          // 何らかの例外が発生した場合（APIのネットワークエラーなど）
+          console.error("[handleSubmit] Exception during analysis:", err);
+          const msg = err instanceof Error ? err.message : "不明なエラー";
+          setError(`予期せぬエラーが発生しました: ${msg}`);
+          setErrorCode("generic");
+        } finally {
+          setIsLoading(false);
+        }
+      })();
     });
   }, [inputValue, url, selectedLevel, inputMode, devMode, isSignedIn, openSignIn, saveAndRedirect]);
 
@@ -345,7 +414,8 @@ export default function HomePage() {
     // クォータチェック（devModeはスキップ）
     if (!devMode) {
       const quota = await consumeQuotaAction();
-      if (!quota.allowed) {
+      if (!quota || !quota.allowed) {
+        // 安全にチェック
         setShowQuotaModal(true);
         return;
       }
@@ -353,46 +423,117 @@ export default function HomePage() {
 
     setIsGenerating(true);
 
-    const genResult = await generateArticle(selectedLevel, getSettings().accent);
-
-    if (!genResult.success) {
+    let genResult: Awaited<ReturnType<typeof generateArticle>> | undefined;
+    try {
+      genResult = await generateArticle(selectedLevel, getSettings().accent);
+    } catch (err: unknown) {
+      console.error("[handleGenerateAndAnalyze] Exception:", err);
+      setError(
+        `記事の生成に失敗しました: ${err instanceof Error ? err.message : "通信エラー"}`
+      );
+      setErrorCode("generic");
       setIsGenerating(false);
-      setError(`記事の生成に失敗しました: ${genResult.error}`);
+      return;
+    }
+
+    setIsGenerating(false);
+
+    // 修正ポイント: genResult が無い場合を確実に弾く
+    if (!genResult) {
+      setError("サーバーからの応答がありません。時間をおいて再試行してください。");
+      setErrorCode("generic");
+      return;
+    }
+
+    if (genResult.success !== true) {
+      const errMsg =
+        "error" in genResult && genResult.error ? genResult.error : "不明なエラー";
+      setError(`記事の生成に失敗しました: ${errMsg}`);
+      setErrorCode("generic");
+      return;
+    }
+
+    // 成功した場合のみ title と body が存在する
+    if (
+      !("title" in genResult) ||
+      !("body" in genResult) ||
+      !genResult.title ||
+      !genResult.body
+    ) {
+      setError("記事の生成結果が不正です。もう一度お試しください。");
       setErrorCode("generic");
       return;
     }
 
     const fullText = `${genResult.title}\n\n${genResult.body}`;
     setTextInput(fullText);
-    setIsGenerating(false);
 
-    startTransition(async () => {
-      const result = await analyzeContent(fullText, selectedLevel, "text", devMode);
+    setIsLoading(true);
+    startTransition(() => {
+      void (async () => {
+        try {
+          const result = await callAnalyzeApi(
+            fullText,
+            selectedLevel,
+            "text",
+            devMode
+          );
 
-      if (!result.success) {
-        setError(result.error);
-        setErrorCode(result.errorCode);
-        return;
-      }
+          // 修正ポイント: result が falsy な場合の安全網
+          if (!result) {
+            setError("サーバーからの応答がありません。時間をおいて再試行してください。");
+            setErrorCode("generic");
+            return;
+          }
 
-      if (result.data.total_count === 0) {
-        setError("抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。");
-        setErrorCode("generic");
-        return;
-      }
+          if (result.success !== true) {
+            setError(result.error ?? "解析に失敗しました");
+            setErrorCode(result.errorCode ?? "generic");
+            return;
+          }
 
-      await saveAndRedirect(result.data, {
-        inputMode: "text",
-        cefrLevel: selectedLevel,
-        sourceUrl: undefined,
-      });
+          const totalCount = result.data?.total_count;
+          if (typeof totalCount !== "number" || !Number.isFinite(totalCount)) {
+            setError("解析結果の形式が不正です。もう一度お試しください。");
+            setErrorCode("generic");
+            return;
+          }
+
+          if (totalCount === 0) {
+            setError(
+              "抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。"
+            );
+            setErrorCode("generic");
+            return;
+          }
+
+          const analysisData = result.data;
+          if (!analysisData) {
+            setError("解析データがありません。もう一度お試しください。");
+            setErrorCode("generic");
+            return;
+          }
+
+          await saveAndRedirect(analysisData, {
+            inputMode: "text",
+            cefrLevel: selectedLevel,
+            sourceUrl: undefined,
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "不明なエラー";
+          setError(`予期せぬエラーが発生しました: ${msg}`);
+          setErrorCode("generic");
+        } finally {
+          setIsLoading(false);
+        }
+      })();
     });
   }, [selectedLevel, devMode, isSignedIn, openSignIn, saveAndRedirect]);
 
   const canSubmit =
     inputMode === "url" ? url.trim().length > 0 : textInput.trim().length > 10;
 
-  const hasContent = isPending || !!error;
+  const hasContent = analysisBusy || !!error;
 
   return (
     <div className="min-h-screen relative">
@@ -501,7 +642,7 @@ export default function HomePage() {
         <div
           className={cn(
             "max-w-2xl mx-auto",
-            (isPending || error) && "mb-10"
+            (analysisBusy || error) && "mb-10"
           )}
         >
           <div className="bg-white rounded-2xl border border-purple-200/50 shadow-sm p-6 sm:p-7">
@@ -551,7 +692,7 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={fillRandomRecommendedUrl}
-                    disabled={isPending || isUrlTyping}
+                    disabled={analysisBusy || isUrlTyping}
                     className={cn(
                       "shrink-0 rounded-lg border px-2.5 py-1 text-[10px] font-mono font-medium transition-colors",
                       "border-violet-400 bg-violet-500 text-white",
@@ -639,12 +780,12 @@ export default function HomePage() {
                 <div className="mt-3 flex flex-col items-start gap-1.5">
                   <button
                     onClick={handleGenerateAndAnalyze}
-                    disabled={isGenerating || isPending}
+                    disabled={isGenerating || analysisBusy}
                     className={[
                       "relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold transition-all overflow-hidden",
                       isGenerating
                         ? "bg-gradient-to-r from-violet-500 to-indigo-500 opacity-90 cursor-not-allowed animate-pulse shadow-[0_0_20px_rgba(139,92,246,0.4)]"
-                        : isPending
+                        : analysisBusy
                         ? "bg-gradient-to-r from-violet-400 to-indigo-400 opacity-60 cursor-not-allowed"
                         : "bg-gradient-to-r from-violet-500 to-indigo-500 shadow-sm hover:from-violet-600 hover:to-indigo-600 hover:shadow-[0_4px_18px_rgba(139,92,246,0.45)] active:scale-[0.98]",
                     ].join(" ")}
@@ -745,16 +886,16 @@ export default function HomePage() {
             {/* Submit button */}
             <button
               onClick={handleSubmit}
-              disabled={!canSubmit || isPending}
+              disabled={!canSubmit || analysisBusy}
               className={cn(
                 "w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl",
                 "font-semibold text-sm transition-all",
-                canSubmit && !isPending
+                canSubmit && !analysisBusy
                   ? "bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white shadow-sm hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)] active:scale-[0.99]"
                   : "bg-slate-100 text-slate-400 cursor-not-allowed"
               )}
             >
-              {isPending ? (
+              {analysisBusy ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   解析中...
@@ -792,7 +933,7 @@ export default function HomePage() {
 
 
         {/* ── Analysis Loading Overlay ── */}
-        {isPending && (
+        {analysisBusy && (
           <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/55 backdrop-blur-sm">
 
             {/* Ring system */}
@@ -865,7 +1006,7 @@ export default function HomePage() {
         )}
 
         {/* ── Error ── */}
-        {error && !isPending && (() => {
+        {error && !analysisBusy && (() => {
           const isNoSubs  = errorCode === "no_subtitles";
           const isInvalid = errorCode === "invalid_url";
 
@@ -924,13 +1065,17 @@ export default function HomePage() {
                   <p className={`text-sm leading-relaxed ${bodyColor}`}>
                     {body}
                   </p>
-                  {process.env.NODE_ENV === "development" && (
-                    <details className="mt-2">
-                      <summary className="text-xs text-slate-400 cursor-pointer select-none">
-                        raw error
-                      </summary>
-                      <p className="mt-1 text-xs font-mono text-slate-500 break-all">{error}</p>
-                    </details>
+                  {devMode && errorCode && (
+                    <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white/80 px-3 py-2.5">
+                      <p className="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                        Dev · 検証用（設定の開発者モードON時のみ）
+                      </p>
+                      <p className="text-xs font-mono text-slate-700 break-all leading-relaxed">
+                        <span className="text-indigo-600 font-semibold">[{errorCode}]</span>
+                        <span className="text-slate-500"> </span>
+                        {error}
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>

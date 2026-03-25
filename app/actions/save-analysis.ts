@@ -1,9 +1,17 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { normalizeAnalysisId } from "@/lib/analysis-id";
 import { createAdminClient } from "@/lib/supabase-admin";
 import type { AnalysisResult } from "@/lib/types";
 import type { SavedAnalysis } from "@/lib/saved-analyses";
+import type {
+  AnalysisDetail,
+  AnalysisDetailResult,
+  AnalysisLoadFailure,
+} from "@/lib/analysis-load-types";
+
+export type { AnalysisDetail, AnalysisDetailResult, AnalysisLoadFailure };
 
 export type SaveAnalysisResult =
   | { success: true; id: string }
@@ -24,11 +32,10 @@ interface AnalysisRow {
   created_at: string;
 }
 
-/** getAnalysisDetailAction が返す拡張型 */
-export type AnalysisDetail = SavedAnalysis & {
-  isPublic: boolean;
-  isOwner: boolean;
-};
+function logAnalysisLoadFailureDev(failure: AnalysisLoadFailure): void {
+  if (process.env.NODE_ENV !== "development") return;
+  console.error("[LinguistLens] analysis detail load failed:", failure);
+}
 
 // ─── 解析結果を自動保存（ログイン不要・ゲストは user_id = NULL） ──────────────
 
@@ -63,7 +70,29 @@ export async function saveAnalysisAction(payload: {
     .single();
 
   if (error || !data) {
-    return { success: false, error: error?.message ?? "保存に失敗しました" };
+    const raw = error?.message ?? "";
+    if (process.env.NODE_ENV === "development") {
+      console.error("[saveAnalysisAction] insert failed", {
+        raw,
+        supabaseError: error
+          ? { message: error.message, code: error.code, details: error.details }
+          : null,
+        hasData: Boolean(data),
+      });
+    }
+    if (
+      raw.includes("is_public") ||
+      raw.includes("is_featured") ||
+      raw.includes("schema cache")
+    ) {
+      return {
+        success: false,
+        error:
+          "データベースに必要な列がありません。Supabase の SQL Editor で `supabase/ensure_saved_analyses_columns.sql` を実行し、必要なら Project Settings からスキーマを再読み込みしてください。詳細: " +
+          raw,
+      };
+    }
+    return { success: false, error: raw || "保存に失敗しました" };
   }
 
   return { success: true, id: (data as { id: string }).id };
@@ -101,54 +130,139 @@ export async function getUserAnalysesAction(): Promise<SavedAnalysis[]> {
 // ─── 単一解析結果を取得（詳細ページ用・isPublic / isOwner 付き）────────────────
 
 /**
- * 指定 ID の解析結果を取得する。アクセス制御:
+ * 指定 ID の解析結果を取得する（成功 / 失敗理由つき）。
+ * アクセス制御:
  * - user_id = NULL（ゲスト解析）→ 誰でも UUID を知っていればアクセス可
  * - user_id が設定されている → オーナーのみアクセス可
- * 返り値に isPublic と isOwner を含む。
+ */
+export async function getAnalysisDetailResult(
+  id: string
+): Promise<AnalysisDetailResult> {
+  const normalizedId = normalizeAnalysisId(id);
+  if (!normalizedId) {
+    const failure: AnalysisLoadFailure = { reason: "empty_id" };
+    logAnalysisLoadFailureDev(failure);
+    return { ok: false, failure };
+  }
+
+  const authResult = await auth();
+  const userId = authResult.userId ?? null;
+  const redirectToSignInAvailable =
+    "redirectToSignIn" in authResult &&
+    typeof authResult.redirectToSignIn === "function";
+
+  let db;
+  try {
+    db = createAdminClient();
+  } catch (err) {
+    const failure: AnalysisLoadFailure = {
+      reason: "admin_client_error",
+      message: err instanceof Error ? err.message : String(err),
+    };
+    logAnalysisLoadFailureDev(failure);
+    return { ok: false, failure };
+  }
+
+  const { data, error } = await db
+    .from("saved_analyses")
+    .select(
+      "id, url, level, result_json, is_shared, is_approved, created_at, user_id, is_public"
+    )
+    .eq("id", normalizedId)
+    .single();
+
+  if (error) {
+    const failure: AnalysisLoadFailure = {
+      reason: "db_error",
+      message: error.message,
+      code: typeof error.code === "string" ? error.code : undefined,
+    };
+    logAnalysisLoadFailureDev(failure);
+    return { ok: false, failure };
+  }
+
+  if (!data) {
+    const failure: AnalysisLoadFailure = { reason: "no_row" };
+    logAnalysisLoadFailureDev(failure);
+    return { ok: false, failure };
+  }
+
+  const row = data as AnalysisRow;
+
+  const isPublic = row.is_public;
+  const isGuestAnalysis = row.user_id == null;
+  const isOwnerAccess =
+    userId !== null && row.user_id != null && row.user_id === userId;
+
+  if (!isPublic && !isGuestAnalysis && !isOwnerAccess) {
+    const failure: AnalysisLoadFailure = {
+      reason: "access_denied",
+      isPublic,
+      rowUserId: row.user_id,
+      viewerUserId: userId,
+      redirectToSignInAvailable,
+    };
+    logAnalysisLoadFailureDev(failure);
+    return { ok: false, failure };
+  }
+
+  return {
+    ok: true,
+    analysis: {
+      id: row.id,
+      savedAt: row.created_at,
+      sourceUrl: row.url ?? undefined,
+      inputMode: row.url ? "url" : "text",
+      cefrLevel: row.level,
+      data: row.result_json,
+      isShared: row.is_shared ?? false,
+      isApproved: row.is_approved ?? false,
+      isPublic: row.is_public ?? false,
+      isOwner:
+        row.user_id != null && userId !== null && row.user_id === userId,
+    },
+  };
+}
+
+/**
+ * 未ログインでオーナー行にアクセスできない場合のみ、本番でサインインへリダイレクト。
+ * 開発時は呼び出し元でエラー表示するためスキップする。
+ */
+export async function maybeRedirectUnauthenticatedAnalysisAccess(
+  result: AnalysisDetailResult,
+  normalizedId: string
+): Promise<void> {
+  if (process.env.NODE_ENV === "development") return;
+  if (result.ok) return;
+  if (result.failure.reason !== "access_denied") return;
+  const f = result.failure;
+  if (f.viewerUserId) return;
+  if (f.rowUserId == null || f.isPublic) return;
+  if (!f.redirectToSignInAvailable) return;
+
+  const nextAuth = await auth();
+  if (
+    "redirectToSignIn" in nextAuth &&
+    typeof nextAuth.redirectToSignIn === "function"
+  ) {
+    nextAuth.redirectToSignIn({
+      returnBackUrl: `/analyses/${normalizedId}`,
+    });
+  }
+}
+
+/**
+ * 指定 ID の解析結果を取得する。アクセス制御は getAnalysisDetailResult と同じ。
+ * 本番ではアクセス拒否かつ未ログインのときサインインへリダイレクトする場合がある。
  */
 export async function getAnalysisAction(
   id: string
 ): Promise<AnalysisDetail | null> {
-  const { userId } = await auth();
-
-  let db;
-  try { db = createAdminClient(); } catch { return null; }
-
-  const { data, error } = await db
-    .from("saved_analyses")
-    .select("id, url, level, result_json, is_shared, is_approved, created_at, user_id, is_public")
-    .eq("id", id)
-    .single();
-
-  if (error || !data) return null;
-
-  const row = data as AnalysisRow;
-
-  // アクセス制御:
-  // - is_public=true → 誰でも閲覧可（ゲストにはページ側でペイウォールを表示）
-  // - is_public=false, user_id=null（ゲスト解析）→ UUID を知る誰でも閲覧可
-  // - is_public=false, user_id 一致 → オーナーのみ閲覧可
-  // - それ以外 → 閲覧不可
-  const isPublic = row.is_public;
-  const isGuestAnalysis = row.user_id === null;
-  const isOwnerAccess = row.user_id === userId;
-
-  if (!isPublic && !isGuestAnalysis && !isOwnerAccess) {
-    return null;
-  }
-
-  return {
-    id: row.id,
-    savedAt: row.created_at,
-    sourceUrl: row.url ?? undefined,
-    inputMode: row.url ? "url" : "text",
-    cefrLevel: row.level,
-    data: row.result_json,
-    isShared: row.is_shared ?? false,
-    isApproved: row.is_approved ?? false,
-    isPublic: row.is_public ?? false,
-    isOwner: row.user_id !== null && row.user_id === userId,
-  };
+  const normalizedId = normalizeAnalysisId(id);
+  const r = await getAnalysisDetailResult(id);
+  if (r.ok) return r.analysis;
+  await maybeRedirectUnauthenticatedAnalysisAccess(r, normalizedId);
+  return null;
 }
 
 // ─── OGP 用メタデータ取得（認証不要・公開情報のみ）─────────────────────────────
@@ -163,16 +277,30 @@ export async function getAnalysisMetadataAction(id: string): Promise<{
   sourceUrl: string | null;
   isPublic: boolean;
 } | null> {
+  const normalizedId = normalizeAnalysisId(id);
+  if (!normalizedId) return null;
+
   let db;
   try { db = createAdminClient(); } catch { return null; }
 
   const { data, error } = await db
     .from("saved_analyses")
     .select("level, result_json, url, is_public")
-    .eq("id", id)
+    .eq("id", normalizedId)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[getAnalysisMetadataAction]", {
+        normalizedId,
+        supabaseError: error
+          ? { message: error.message, code: error.code, details: error.details }
+          : null,
+        hasData: Boolean(data),
+      });
+    }
+    return null;
+  }
 
   const row = data as Pick<AnalysisRow, "level" | "result_json" | "url" | "is_public">;
   return {

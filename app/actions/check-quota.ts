@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { FREE_ANALYSIS_LIMIT } from "@/lib/quota-config";
+import type { AnalysisCountInfo } from "@/lib/quota-types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -10,12 +11,7 @@ export type QuotaResult =
   | { allowed: true;  isLoggedIn: boolean }
   | { allowed: false; isLoggedIn: boolean; reason: "guest" | "limit_reached" };
 
-export interface AnalysisCountInfo {
-  used: number;
-  limit: number;
-  isLoggedIn: boolean;
-  isUnlimited: boolean; // Pro / Admin は true
-}
+export type { AnalysisCountInfo };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

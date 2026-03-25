@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ExampleVideo } from "@/lib/examples-data";
 import type { PhraseResult } from "@/lib/types";
-import type { ExpressionType } from "@/app/actions/analyze";
+import type { ExpressionType } from "@/lib/types";
 import { savePhrase, getVocabulary, getVocabularyCount, getDailyRemaining, FREE_DAILY_LIMIT } from "@/lib/vocabulary";
 import { saveVocabularyAction } from "@/app/actions/vocabulary";
 import { useEffectiveAuth } from "@/lib/dev-auth";

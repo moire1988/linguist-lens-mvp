@@ -50,13 +50,15 @@ CREATE POLICY "delete_own_preferences" ON public.user_preferences
 
 CREATE TABLE IF NOT EXISTS public.saved_analyses (
   id          TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  user_id     TEXT        NOT NULL,                -- Clerk userId (sub クレーム)
+  user_id     TEXT,                                -- Clerk userId（ゲスト解析は NULL）
   title       TEXT,                               -- 記事・動画タイトル
   url         TEXT,                               -- ソースURL（テキストモード時は NULL）
   content     TEXT,                               -- 解析に使ったテキスト本文
   level       TEXT        NOT NULL
               CHECK (level IN ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')),
   result_json JSONB       NOT NULL,               -- AIが返した AnalysisResult 全体
+  is_public   BOOLEAN     NOT NULL DEFAULT false, -- 公開シェア用
+  is_featured BOOLEAN   NOT NULL DEFAULT false, -- トップ「注目」用
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
