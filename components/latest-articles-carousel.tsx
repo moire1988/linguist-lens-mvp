@@ -63,7 +63,7 @@ export function LatestArticlesCarousel() {
         <div className="flex items-center justify-between mb-5">
           <div>
             <p className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest mb-0.5">
-              Library
+              Learning Articles
             </p>
             <h2 className="text-sm font-semibold text-slate-700">
               最新の学習記事

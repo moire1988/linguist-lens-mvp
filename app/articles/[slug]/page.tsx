@@ -125,7 +125,7 @@ export default async function ArticlePage({
         {/* Breadcrumb */}
         <Breadcrumb
           items={[
-            { label: "Library", href: "/articles" },
+            { label: "Learning Articles", href: "/articles" },
             { label: article.titleEn },
           ]}
         />

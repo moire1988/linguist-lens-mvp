@@ -29,7 +29,7 @@ export default async function ArticlesPage() {
         {/* Page header */}
         <div className="mb-8">
           <p className="text-[10px] font-mono font-bold text-indigo-500 uppercase tracking-widest mb-2">
-            Library
+            Learning Articles
           </p>
           <h1 className="text-2xl sm:text-3xl font-extrabold font-mono text-slate-900 tracking-tight">
             英語学習記事
