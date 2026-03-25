@@ -33,6 +33,8 @@ interface ScriptViewerProps {
   isPro?: boolean;
   /** Remaining daily saves — passed to popup save button */
   dailyRemaining?: number;
+  /** カード見出し（解析例: 全文スクリプト） */
+  sectionTitle?: string;
 }
 
 // ─── Sanitizer ───────────────────────────────────────────────────────────────
@@ -153,6 +155,7 @@ export function ScriptViewer({
   showTranslate = false,
   isPro = false,
   dailyRemaining = 0,
+  sectionTitle = "スクリプト抜粋",
 }: ScriptViewerProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speed, setSpeed] = useState(1.0);
@@ -308,7 +311,7 @@ export function ScriptViewer({
           {/* Row 1: title + badge (left) / collapse toggle (right) */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <h2 className="text-sm font-bold text-slate-700">スクリプト抜粋</h2>
+              <h2 className="text-sm font-bold text-slate-700">{sectionTitle}</h2>
               <span className="text-[11px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 font-medium">
                 {phrases.length} 語ハイライト済み
               </span>

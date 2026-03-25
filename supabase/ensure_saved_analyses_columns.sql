@@ -13,6 +13,10 @@ ALTER TABLE public.saved_analyses
 ALTER TABLE public.saved_analyses
   ADD COLUMN IF NOT EXISTS is_featured BOOLEAN NOT NULL DEFAULT false;
 
+-- ユーザーが「みんなの解析に掲載」トグル ON（管理者承認待ち）
+ALTER TABLE public.saved_analyses
+  ADD COLUMN IF NOT EXISTS public_review_requested BOOLEAN NOT NULL DEFAULT false;
+
 -- ゲスト解析（user_id なし）を許可
 ALTER TABLE public.saved_analyses
   ALTER COLUMN user_id DROP NOT NULL;

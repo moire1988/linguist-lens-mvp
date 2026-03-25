@@ -33,7 +33,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // ── 公開シェアページ（Supabase から動的取得）───────────────
   const publicAnalyses = await getAllPublicAnalysisIds();
   const shareRoutes: MetadataRoute.Sitemap = publicAnalyses.map(({ id, createdAt }) => ({
-    url:             `${SITE_URL}/share/${id}`,
+    url:             `${SITE_URL}/analyses/${id}`,
     lastModified:    new Date(createdAt),
     changeFrequency: "never" as const,
     priority:        0.8,

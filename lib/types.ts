@@ -30,7 +30,10 @@ export interface AnalysisResult {
   total_count: number;
   /** 元コンテンツのタイトル（AI または取得元メタデータ） */
   title?: string;
+  /** 全文スクリプト（API により transcript / script_text / source_text のいずれか） */
   source_text?: string;
+  transcript?: string;
+  script_text?: string;
   full_script_with_highlight?: string;
   overall_level?: string;
 }

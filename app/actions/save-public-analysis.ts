@@ -70,6 +70,6 @@ export async function savePublicAnalysis(payload: {
   return {
     success:  true,
     id,
-    shareUrl: `${siteUrl}/share/${id}`,
+    shareUrl: `${siteUrl}/analyses/${id}`,
   };
 }

@@ -35,6 +35,8 @@ export function AnalysisDetailBody(props: {
   highlightedHtml?: string;
   showPaywall: boolean;
   totalCount: number;
+  /** スクリプト見出し（解析ページでは「全文スクリプト」） */
+  scriptSectionTitle?: string;
 }) {
   const {
     sourceUrl,
@@ -43,6 +45,7 @@ export function AnalysisDetailBody(props: {
     highlightedHtml,
     showPaywall,
     totalCount,
+    scriptSectionTitle = "全文スクリプト",
   } = props;
   const { isSignedIn } = useAuth();
   const { isPro } = useEffectiveAuth();
@@ -141,6 +144,7 @@ export function AnalysisDetailBody(props: {
           showTranslate
           isPro={isPro}
           dailyRemaining={dailyRemaining}
+          sectionTitle={scriptSectionTitle}
         />
       </div>
 
@@ -195,7 +199,7 @@ export function AnalysisDetailBody(props: {
           このカテゴリに該当する表現がありません。
         </p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           {visiblePhrases.map((phrase, i) =>
             phrase ? (
               <PhraseCard
@@ -214,7 +218,7 @@ export function AnalysisDetailBody(props: {
         <div className="mt-3 mb-8">
           {blurredPhrases.length > 0 && (
             <div className="relative">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 blur-[3px] opacity-50 pointer-events-none select-none">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 blur-[3px] opacity-50 pointer-events-none select-none">
                 {blurredPhrases.map((phrase, i) =>
                   phrase ? (
                     <PhraseCard

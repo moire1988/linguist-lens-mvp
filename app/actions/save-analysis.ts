@@ -91,6 +91,7 @@ interface AnalysisRow {
   is_approved: boolean;
   is_public: boolean;
   is_featured: boolean;
+  public_review_requested: boolean;
   created_at: string;
 }
 
@@ -135,6 +136,7 @@ export async function saveAnalysisAction(payload: {
       result_json: payload.data,
       is_public:   false,
       is_featured: false,
+      public_review_requested: false,
     })
     .select("id")
     .single();
@@ -153,6 +155,7 @@ export async function saveAnalysisAction(payload: {
     if (
       raw.includes("is_public") ||
       raw.includes("is_featured") ||
+      raw.includes("public_review_requested") ||
       raw.includes("schema cache")
     ) {
       return {
@@ -264,7 +267,10 @@ export async function getAnalysisDetailResult(
   const isOwnerAccess =
     userId !== null && row.user_id != null && row.user_id === userId;
 
-  if (!isPublic && !isGuestAnalysis && !isOwnerAccess) {
+  /** 一般公開（is_public）の解析は誰でも閲覧可。それ以外はゲスト解析 or オーナーのみ。 */
+  const canView = isPublic || isGuestAnalysis || isOwnerAccess;
+
+  if (!canView) {
     const failure: AnalysisLoadFailure = {
       reason: "access_denied",
       isPublic,
@@ -289,6 +295,7 @@ export async function getAnalysisDetailResult(
       isShared: row.is_shared ?? false,
       isApproved: row.is_approved ?? false,
       isPublic: row.is_public ?? false,
+      publicReviewRequested: row.public_review_requested ?? false,
       isOwner:
         row.user_id != null && userId !== null && row.user_id === userId,
     },
@@ -347,6 +354,8 @@ export async function getAnalysisMetadataAction(id: string): Promise<{
   phraseCount: number;
   sourceUrl: string | null;
   isPublic: boolean;
+  contentTitle: string | null;
+  resultTitle: string | null;
 } | null> {
   const normalizedId = normalizeAnalysisId(id);
   if (!normalizedId) return null;
@@ -356,7 +365,7 @@ export async function getAnalysisMetadataAction(id: string): Promise<{
 
   const { data, error } = await db
     .from("saved_analyses")
-    .select("level, result_json, url, is_public")
+    .select("level, result_json, url, is_public, title")
     .eq("id", normalizedId)
     .single();
 
@@ -373,20 +382,35 @@ export async function getAnalysisMetadataAction(id: string): Promise<{
     return null;
   }
 
-  const row = data as Pick<AnalysisRow, "level" | "result_json" | "url" | "is_public">;
+  const row = data as Pick<
+    AnalysisRow,
+    "level" | "result_json" | "url" | "is_public" | "title"
+  >;
+  const rj = row.result_json as AnalysisResult;
+  const rt =
+    typeof rj.title === "string" && rj.title.trim() !== ""
+      ? rj.title.trim()
+      : null;
   return {
     cefrLevel: row.level,
-    phraseCount: (row.result_json as AnalysisResult).total_count ?? 0,
+    phraseCount: rj.total_count ?? 0,
     sourceUrl: row.url,
     isPublic: row.is_public ?? false,
+    contentTitle: row.title?.trim() ? row.title.trim() : null,
+    resultTitle: rt,
   };
 }
 
 // ─── 公開 / 非公開を切り替え（オーナーのみ）──────────────────────────────────
 
+/**
+ * 「みんなの解析に掲載」トグル。
+ * ON: public_review_requested（承認待ち）のみ立てる。is_public は管理者承認まで false。
+ * OFF: 申請取消。既に is_public の場合は非公開に戻す。
+ */
 export async function toggleAnalysisPublicAction(
   id: string,
-  isPublic: boolean
+  enabled: boolean
 ): Promise<{ ok: boolean; error?: string }> {
   const { userId } = await auth();
   if (!userId) return { ok: false, error: "ログインが必要です" };
@@ -394,7 +418,6 @@ export async function toggleAnalysisPublicAction(
   let db;
   try { db = createAdminClient(); } catch { return { ok: false, error: "DB接続エラー" }; }
 
-  // オーナー確認（サービスロール経由でも user_id チェックを必ず行う）
   const { data: row } = await db
     .from("saved_analyses")
     .select("user_id")
@@ -407,7 +430,11 @@ export async function toggleAnalysisPublicAction(
 
   const { error } = await db
     .from("saved_analyses")
-    .update({ is_public: isPublic })
+    .update(
+      enabled
+        ? { public_review_requested: true }
+        : { public_review_requested: false, is_public: false }
+    )
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };
