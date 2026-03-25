@@ -1,148 +1,99 @@
 "use server";
 
-import crypto from "crypto";
 import { auth } from "@clerk/nextjs/server";
-import { cookies, headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase-admin";
+import { FREE_ANALYSIS_LIMIT } from "@/lib/quota-config";
 
-// ─── Config ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const ANALYSIS_DAILY_LIMIT = 1;  // guest & free tier: 1/day per session
-const IP_DAILY_LIMIT        = 5; // guest tier: 5/day per IP (all browsers)
+export type QuotaResult =
+  | { allowed: true;  isLoggedIn: boolean }
+  | { allowed: false; isLoggedIn: boolean; reason: "guest" | "limit_reached" };
 
-const GUEST_COOKIE = "ll_qg"; // httpOnly — not readable client-side
-
-function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+export interface AnalysisCountInfo {
+  used: number;
+  limit: number;
+  isLoggedIn: boolean;
+  isUnlimited: boolean; // Pro / Admin は true
 }
 
-// ─── IP helpers ───────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getClientIP(): string {
-  const h = headers();
-  return (
-    h.get("x-real-ip") ??
-    h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown"
-  );
+function isAdmin(userId: string): boolean {
+  const adminId = process.env.NEXT_PUBLIC_ADMIN_USER_ID;
+  return !!adminId && userId === adminId;
 }
 
-/** localhost / private-range IPs → skip IP quota (dev environment) */
-function isLocalIP(ip: string): boolean {
-  return (
-    ip === "unknown"  ||
-    ip === "127.0.0.1" ||
-    ip === "::1"
-  );
+/** ユーザーの累計解析数（saved_analyses の行数）を取得 */
+async function countUserAnalyses(userId: string): Promise<number> {
+  let db;
+  try { db = createAdminClient(); } catch { return 0; }
+
+  const { count } = await db
+    .from("saved_analyses")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  return count ?? 0;
 }
 
-/** One-way hash for storage — IP is never stored in plaintext */
-function hashIP(ip: string): string {
-  return crypto.createHash("sha256").update(ip).digest("hex").slice(0, 32);
-}
-
-// ─── Action ───────────────────────────────────────────────────────────────────
+// ─── Actions ──────────────────────────────────────────────────────────────────
 
 /**
- * Checks the daily analysis quota for the current requester.
+ * 解析を実行する前にクォータをチェックする。
  *
- * Guest  → cookie check (1/day per browser)
- *           + IP check  (5/day per IP — catches incognito / multi-browser)
- * Free   → Supabase user_quotas (1/day, identity-bound)
- * Pro    → always allowed (placeholder; billing not live yet)
+ * - Guest (未ログイン) → 即ブロック (reason: "guest")
+ * - Admin             → 常に許可
+ * - Pro               → 常に許可（将来実装）
+ * - Free              → 累計 saved_analyses 数が上限未満なら許可
  */
-export async function consumeQuotaAction(): Promise<{
-  allowed: boolean;
-  isLoggedIn: boolean;
-}> {
+export async function consumeQuotaAction(): Promise<QuotaResult> {
   const { userId } = await auth();
-  const today = todayUTC();
 
-  // ── Guest ─────────────────────────────────────────────────────────────────
+  // Guest: ログインを促す
   if (!userId) {
-    // 1. Cookie check (fast, no DB)
-    const jar = cookies();
-    const raw = jar.get(GUEST_COOKIE)?.value;
-    let rec: { d: string; n: number } = { d: "", n: 0 };
-    try { if (raw) rec = JSON.parse(raw) as { d: string; n: number }; } catch { /* ignore */ }
-
-    const cookieCount = rec.d === today ? rec.n : 0;
-    if (cookieCount >= ANALYSIS_DAILY_LIMIT) {
-      return { allowed: false, isLoggedIn: false };
-    }
-
-    // 2. IP check via Supabase (skipped for localhost / dev)
-    const ip = getClientIP();
-    if (!isLocalIP(ip)) {
-      let db;
-      try { db = createAdminClient(); } catch { /* fail open */ }
-
-      if (db) {
-        const ipHash = hashIP(ip);
-
-        const { data: ipRow } = await db
-          .from("ip_quotas")
-          .select("count")
-          .eq("ip_hash", ipHash)
-          .eq("date", today)
-          .maybeSingle();
-
-        const ipCount = (ipRow as { count: number } | null)?.count ?? 0;
-        if (ipCount >= IP_DAILY_LIMIT) {
-          return { allowed: false, isLoggedIn: false };
-        }
-
-        // Increment IP count
-        await db
-          .from("ip_quotas")
-          .upsert(
-            { ip_hash: ipHash, date: today, count: ipCount + 1 },
-            { onConflict: "ip_hash,date" }
-          );
-      }
-    }
-
-    // 3. Increment cookie count
-    jar.set(GUEST_COOKIE, JSON.stringify({ d: today, n: cookieCount + 1 }), {
-      path: "/",
-      maxAge: 60 * 60 * 48, // 48h (safely spans midnight)
-      httpOnly: true,
-      sameSite: "lax",
-    });
-    return { allowed: true, isLoggedIn: false };
+    return { allowed: false, isLoggedIn: false, reason: "guest" };
   }
 
-  // ── Pro (placeholder) ─────────────────────────────────────────────────────
-  // TODO: check user_preferences.is_pro once billing is live
+  // Admin: 無制限
+  if (isAdmin(userId)) {
+    return { allowed: true, isLoggedIn: true };
+  }
+
+  // Pro: 無制限（TODO: サブスクリプション確認）
   const isPro = false;
   if (isPro) return { allowed: true, isLoggedIn: true };
 
-  // ── Free logged-in ────────────────────────────────────────────────────────
-  let db;
-  try {
-    db = createAdminClient();
-  } catch {
-    return { allowed: true, isLoggedIn: true }; // fail open
+  // Free: 累計解析数チェック
+  const used = await countUserAnalyses(userId);
+  if (used >= FREE_ANALYSIS_LIMIT) {
+    return { allowed: false, isLoggedIn: true, reason: "limit_reached" };
   }
-
-  const { data } = await db
-    .from("user_quotas")
-    .select("count")
-    .eq("user_id", userId)
-    .eq("date", today)
-    .maybeSingle();
-
-  const current = (data as { count: number } | null)?.count ?? 0;
-  if (current >= ANALYSIS_DAILY_LIMIT) {
-    return { allowed: false, isLoggedIn: true };
-  }
-
-  await db
-    .from("user_quotas")
-    .upsert(
-      { user_id: userId, date: today, count: current + 1 },
-      { onConflict: "user_id,date" }
-    );
 
   return { allowed: true, isLoggedIn: true };
+}
+
+/**
+ * UI表示用: 現在のユーザーの解析利用状況を返す。
+ * Clerk の isSignedIn が確定してから呼ぶこと。
+ */
+export async function getUserAnalysisCountAction(): Promise<AnalysisCountInfo> {
+  const { userId } = await auth();
+
+  if (!userId) {
+    return { used: 0, limit: FREE_ANALYSIS_LIMIT, isLoggedIn: false, isUnlimited: false };
+  }
+
+  if (isAdmin(userId)) {
+    return { used: 0, limit: FREE_ANALYSIS_LIMIT, isLoggedIn: true, isUnlimited: true };
+  }
+
+  // TODO: Pro check
+  const isPro = false;
+  if (isPro) {
+    return { used: 0, limit: FREE_ANALYSIS_LIMIT, isLoggedIn: true, isUnlimited: true };
+  }
+
+  const used = await countUserAnalyses(userId);
+  return { used, limit: FREE_ANALYSIS_LIMIT, isLoggedIn: true, isUnlimited: false };
 }

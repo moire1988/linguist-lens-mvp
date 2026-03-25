@@ -179,6 +179,43 @@ export async function getRecentPublicAnalyses(
   }));
 }
 
+// ─── 注目のピックアップ（is_featured=true）──────────────────────────────────
+
+export interface FeaturedAnalysis {
+  id: string;
+  url: string | null;
+  level: string;
+  phrases: import("@/lib/types").PhraseResult[];
+  phraseCount: number;
+  createdAt: string;
+}
+
+/**
+ * トップページ「注目の解析記事」用:
+ * is_public = true かつ is_featured = true の最新 N 件を取得する。
+ */
+export async function getFeaturedAnalyses(
+  limit = 6
+): Promise<FeaturedAnalysis[]> {
+  const { data, error } = await supabase
+    .from("saved_analyses")
+    .select("id, url, level, result_json, created_at")
+    .eq("is_public", true)
+    .eq("is_featured", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) return [];
+  return (data as AnalysisRow[]).map((row) => ({
+    id: row.id,
+    url: row.url,
+    level: row.level,
+    phrases: (row.result_json?.phrases ?? []).slice(0, 2),
+    phraseCount: row.result_json?.total_count ?? 0,
+    createdAt: row.created_at,
+  }));
+}
+
 /**
  * サイトマップ用: is_public = true の全行 (id, created_at のみ) を取得する。
  */

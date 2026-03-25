@@ -30,7 +30,7 @@ export function SiteFooter() {
         {/* Right: nav links */}
         <nav className="flex items-center gap-5">
           <a
-            href="https://x.com"
+            href="https://x.com/LinguistLens"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="X (Twitter)"

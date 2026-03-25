@@ -25,7 +25,8 @@ const VARIANT_LABEL: Record<EnglishVariant, string> = {
 };
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
-const VARIANTS: EnglishVariant[] = ["US", "UK", "AU", "common"];
+// "common" はボタンに表示しない（フィルター選択時に OR 条件で自動包含される）
+const SELECTABLE_VARIANTS: Exclude<EnglishVariant, "common">[] = ["US", "UK", "AU"];
 
 // ─── Filter row ───────────────────────────────────────────────────────────────
 
@@ -87,6 +88,11 @@ function ArticleCard({ article }: { article: ArticleSummary }) {
         <span className={cn("text-[10px] font-mono font-bold px-2 py-0.5 rounded border", cefrStyle)}>
           {article.level}
         </span>
+        {article.englishVariant && (
+          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded border bg-slate-50 text-slate-500 border-slate-200">
+            {VARIANT_LABEL[article.englishVariant]}
+          </span>
+        )}
         {catStyle && (
           <span className={cn("text-[10px] font-mono font-semibold px-2 py-0.5 rounded border truncate max-w-[200px]", catStyle)}>
             {getArticleCategoryDisplayLabel(article.category)}
@@ -115,8 +121,12 @@ export function ArticleListClient({ articles }: { articles: ArticleSummary[] }) 
   const [categoryFilter, setCategoryFilter] = useState("all");
 
   const filtered = articles.filter((a) => {
-    if (levelFilter    !== "all" && a.level           !== levelFilter)    return false;
-    if (variantFilter  !== "all" && a.englishVariant  !== variantFilter)  return false;
+    if (levelFilter !== "all" && a.level !== levelFilter) return false;
+    // US/UK/AU 選択時は common 記事も含める（OR 条件）
+    if (variantFilter !== "all") {
+      const match = a.englishVariant === variantFilter || a.englishVariant === "common";
+      if (!match) return false;
+    }
     if (categoryFilter !== "all" && (a.category ?? "") !== categoryFilter) return false;
     return true;
   });
@@ -133,8 +143,14 @@ export function ArticleListClient({ articles }: { articles: ArticleSummary[] }) 
     )
   );
 
-  const levelOptions    = [{ value: "all", label: "すべて" }, ...LEVELS.filter((l) => articles.some((a) => a.level === l)).map((l) => ({ value: l, label: l }))];
-  const variantOptions  = [{ value: "all", label: "すべて" }, ...VARIANTS.filter((v) => articles.some((a) => a.englishVariant === v)).map((v) => ({ value: v, label: VARIANT_LABEL[v] }))];
+  const levelOptions   = [{ value: "all", label: "すべて" }, ...LEVELS.filter((l) => articles.some((a) => a.level === l)).map((l) => ({ value: l, label: l }))];
+  // common は選択肢に出さない。ボタンは すべて / US / UK / AU のみ
+  const variantOptions = [
+    { value: "all", label: "すべて" },
+    ...SELECTABLE_VARIANTS
+      .filter((v) => articles.some((a) => a.englishVariant === v || a.englishVariant === "common"))
+      .map((v) => ({ value: v, label: VARIANT_LABEL[v] })),
+  ];
   const categoryOptions = [
     { value: "all", label: "すべて" },
     ...existingCategories.map((c) => ({

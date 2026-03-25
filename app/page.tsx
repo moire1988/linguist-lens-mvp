@@ -14,14 +14,17 @@ import {
   ChevronRight,
   Tv,
   BookMarked,
-  Settings,
   Wand2,
-  Library,
 } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 import { saveAnalysisAction } from "@/app/actions/save-analysis";
-import { consumeQuotaAction } from "@/app/actions/check-quota";
+import {
+  consumeQuotaAction,
+  getUserAnalysisCountAction,
+  type AnalysisCountInfo,
+} from "@/app/actions/check-quota";
+import { FREE_ANALYSIS_LIMIT } from "@/lib/quota-config";
 import { UpgradeModal } from "@/components/upgrade-modal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -39,6 +42,7 @@ import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
 import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
+import { NavMenu } from "@/components/nav-menu";
 import {
   getSettings,
   saveSettings,
@@ -52,7 +56,9 @@ import {
 } from "@/lib/settings";
 import {
   getRecentPublicAnalysesAction,
+  getFeaturedAnalysesAction,
   type RecentPublicAnalysis,
+  type FeaturedAnalysis,
 } from "@/app/actions/public-analyses";
 import { RECOMMENDED_VIDEOS } from "@/lib/recommended-videos-data";
 
@@ -105,6 +111,7 @@ export default function HomePage() {
   const [msgVisible, setMsgVisible] = useState(true);
   const [vocabCount, setVocabCount] = useState(0);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [analysisQuota, setAnalysisQuota] = useState<AnalysisCountInfo | null>(null);
   const { isSignedIn } = useAuth();
   const { openSignIn } = useClerk();
   useEffectiveAuth(); // devAuthState を副作用で読み込む（将来的な機能フラグ用）
@@ -114,6 +121,7 @@ export default function HomePage() {
   const [devAuthState, setDevAuthState] = useState<DevAuthState>("real");
   const [isGenerating, setIsGenerating] = useState(false);
   const [recentPublicAnalyses, setRecentPublicAnalyses] = useState<RecentPublicAnalysis[]>([]);
+  const [featuredAnalyses, setFeaturedAnalyses] = useState<FeaturedAnalysis[]>([]);
   const [urlInputGlow, setUrlInputGlow] = useState(false);
   const [isUrlTyping, setIsUrlTyping] = useState(false);
   const urlTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -129,6 +137,7 @@ export default function HomePage() {
 
     // 公開済み解析フィードを取得
     getRecentPublicAnalysesAction(6).then(setRecentPublicAnalyses);
+    getFeaturedAnalysesAction(6).then(setFeaturedAnalyses);
   }, []);
 
   useEffect(() => {
@@ -137,6 +146,8 @@ export default function HomePage() {
     // ログイン済みならオンボーディング不要。万が一表示中の場合は閉じる
     if (isSignedIn) {
       setShowOnboarding(false);
+      // ログイン済みの場合は解析利用状況を取得
+      getUserAnalysisCountAction().then(setAnalysisQuota);
       return;
     }
     // 未ログインの場合のみ、オンボーディング完了 or 設定済みを確認してから表示
@@ -261,7 +272,13 @@ export default function HomePage() {
     setError(null);
     setErrorCode(null);
 
-    // ── 解析クォータチェック（devModeはスキップ）─────────────────────────
+    // ── Guest: ログインを促す（devModeはスキップ）────────────────────────
+    if (!isSignedIn && !devMode) {
+      openSignIn();
+      return;
+    }
+
+    // ── クォータチェック（devModeはスキップ）─────────────────────────────
     if (!devMode) {
       const quota = await consumeQuotaAction();
       if (!quota.allowed) {
@@ -312,13 +329,29 @@ export default function HomePage() {
         sourceUrl: inputMode === "url" ? url : undefined,
       });
     });
-  }, [inputValue, url, selectedLevel, inputMode, devMode, saveAndRedirect]);
+  }, [inputValue, url, selectedLevel, inputMode, devMode, isSignedIn, openSignIn, saveAndRedirect]);
 
   // AI記事生成 → そのまま解析
   const handleGenerateAndAnalyze = useCallback(async () => {
-    setIsGenerating(true);
     setError(null);
     setErrorCode(null);
+
+    // Guest: ログインを促す（devModeはスキップ）
+    if (!isSignedIn && !devMode) {
+      openSignIn();
+      return;
+    }
+
+    // クォータチェック（devModeはスキップ）
+    if (!devMode) {
+      const quota = await consumeQuotaAction();
+      if (!quota.allowed) {
+        setShowQuotaModal(true);
+        return;
+      }
+    }
+
+    setIsGenerating(true);
 
     const genResult = await generateArticle(selectedLevel, getSettings().accent);
 
@@ -354,7 +387,7 @@ export default function HomePage() {
         sourceUrl: undefined,
       });
     });
-  }, [selectedLevel, devMode, saveAndRedirect]);
+  }, [selectedLevel, devMode, isSignedIn, openSignIn, saveAndRedirect]);
 
   const canSubmit =
     inputMode === "url" ? url.trim().length > 0 : textInput.trim().length > 10;
@@ -363,7 +396,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen relative">
-      {showQuotaModal && <UpgradeModal reason="daily_limit" onClose={() => setShowQuotaModal(false)} />}
+      {showQuotaModal && <UpgradeModal reason="analysis_limit" onClose={() => setShowQuotaModal(false)} />}
       {showOnboarding && (
         <OnboardingModal
           initialLevel={"B1" as CefrLevel}
@@ -399,32 +432,27 @@ export default function HomePage() {
         }
         right={
           <>
-            <Link
-              href="/articles"
-              className="flex items-center gap-1 text-xs font-mono font-medium text-slate-500 hover:text-indigo-600 transition-colors"
-            >
-              <Library className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Library</span>
-            </Link>
-            <button
-              onClick={() => setShowSettings((v) => !v)}
-              className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-              title="設定"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
+            {/* マイ単語帳 */}
             <Link
               href="/vocabulary"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-100 transition-colors"
             >
               <BookMarked className="h-3.5 w-3.5" />
-              マイ単語帳
+              <span className="hidden sm:inline">マイ単語帳</span>
               {vocabCount > 0 && (
                 <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                   {vocabCount}
                 </span>
               )}
             </Link>
+
+            {/* ナビゲーションメニュー */}
+            <NavMenu
+              onSettings={() => setShowSettings((v) => !v)}
+              vocabCount={vocabCount}
+            />
+
+            {/* 認証 */}
             {isSignedIn ? (
               <UserButton />
             ) : (
@@ -741,6 +769,24 @@ export default function HomePage() {
                 </>
               )}
             </button>
+
+            {/* 解析残り回数インジケーター（Free会員のみ） */}
+            {isSignedIn && analysisQuota && !analysisQuota.isUnlimited && (
+              <div className="flex items-center justify-center gap-1.5 pt-1">
+                {Array.from({ length: analysisQuota.limit }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "h-1.5 w-6 rounded-full transition-colors",
+                      i < analysisQuota.used ? "bg-slate-200" : "bg-indigo-400"
+                    )}
+                  />
+                ))}
+                <span className="text-[11px] text-slate-400 ml-1.5 font-mono">
+                  残り{Math.max(0, analysisQuota.limit - analysisQuota.used)}/{analysisQuota.limit}回
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -905,6 +951,108 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10">
           <NewsletterBanner />
         </div>
+      )}
+
+      {/* ── 注目の解析記事（is_featured=true・コンテンツなし時のみ） ── */}
+      {!hasContent && featuredAnalyses.length > 0 && (
+        <section className="py-12 px-4 sm:px-6">
+          <div className="max-w-5xl mx-auto">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-xs font-mono font-bold text-indigo-600 uppercase tracking-widest">
+                ✦ Featured
+              </span>
+              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">
+                注目の解析記事
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {featuredAnalyses.map((item) => {
+                const ytId =
+                  item.url?.match(/[?&]v=([^&]{11})/)?.[1] ??
+                  item.url?.match(/youtu\.be\/([^?&]{11})/)?.[1];
+                const isYt = !!ytId;
+
+                const cefrBg: Record<string, string> = {
+                  A1: "bg-slate-100 text-slate-600",
+                  A2: "bg-green-100 text-green-700",
+                  B1: "bg-blue-100 text-blue-700",
+                  B2: "bg-indigo-100 text-indigo-700",
+                  C1: "bg-purple-100 text-purple-700",
+                  C2: "bg-rose-100 text-rose-700",
+                };
+
+                return (
+                  <a
+                    key={item.id}
+                    href={`/analyses/${item.id}`}
+                    className="group flex flex-col bg-white border border-slate-200 hover:border-indigo-300 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all"
+                  >
+                    {/* Thumbnail */}
+                    {ytId ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+                        alt="thumbnail"
+                        className="w-full h-36 object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-36 bg-gradient-to-br from-indigo-50 to-violet-50 flex items-center justify-center">
+                        <span className="text-3xl opacity-40">📄</span>
+                      </div>
+                    )}
+
+                    {/* Content */}
+                    <div className="flex flex-col flex-1 p-4">
+                      {/* Meta row */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <span
+                          className={cn(
+                            "text-[10px] font-bold font-mono px-2 py-0.5 rounded-full",
+                            cefrBg[item.level] ?? "bg-slate-100 text-slate-600"
+                          )}
+                        >
+                          {item.level}
+                        </span>
+                        {isYt && (
+                          <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                            <Youtube className="h-2.5 w-2.5 text-red-400" />
+                            YouTube
+                          </span>
+                        )}
+                        <span className="ml-auto text-[10px] text-slate-400">
+                          {item.phraseCount}個の表現
+                        </span>
+                      </div>
+
+                      {/* Expression previews */}
+                      <div className="flex-1 space-y-1 mb-3">
+                        {item.phrases.map((phrase, i) => (
+                          <p
+                            key={i}
+                            className="text-xs font-semibold text-slate-700 truncate"
+                          >
+                            · {phrase.expression}
+                          </p>
+                        ))}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <span className="text-[10px] text-slate-400">
+                          {new Date(item.createdAt).toLocaleDateString("ja-JP")}
+                        </span>
+                        <span className="text-xs font-semibold text-indigo-600 group-hover:text-indigo-700 flex items-center gap-0.5 transition-colors">
+                          詳しく見る
+                          <ChevronRight className="h-3 w-3" />
+                        </span>
+                      </div>
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        </section>
       )}
 
       {/* ── Recent Public Parses（コンテンツなし時のみ） ── */}
