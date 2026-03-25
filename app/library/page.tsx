@@ -15,6 +15,7 @@ import {
   Lock,
   Loader2,
   Sparkles,
+  Volume2,
 } from "lucide-react";
 import { useAuth, useClerk } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,8 @@ import { GlobalNav } from "@/components/global-nav";
 import type { ExpressionType } from "@/lib/types";
 import { savePhrase, getVocabulary } from "@/lib/vocabulary";
 import { getSettings } from "@/lib/settings";
+import { useAccentLang } from "@/hooks/use-accent-lang";
+import { isSpeechSynthesisSupported, speakEnglish } from "@/lib/speech";
 import {
   registerWaitlistLoggedInAction,
   registerWaitlistGuestAction,
@@ -1075,6 +1078,42 @@ const TYPE_LABELS: Record<ExpressionType, string> = {
   grammar_pattern: "文法パターン",
 };
 
+/** Read-aloud control: uses Web Speech API + accent from settings (US/UK/AU). */
+function SpeakLineButton({
+  text,
+  lang,
+  accentLabel,
+  ariaLabel,
+}: {
+  text: string;
+  lang: string;
+  accentLabel: string;
+  ariaLabel: string;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || !isSpeechSynthesisSupported()) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => speakEnglish(text, lang)}
+      className={cn(
+        "shrink-0 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5",
+        "text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/80 transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+      )}
+      aria-label={ariaLabel}
+      title={`読み上げ（設定: ${accentLabel} · ${lang}）`}
+    >
+      <Volume2 className="w-4 h-4" />
+    </button>
+  );
+}
+
 // ─── ExpressionCard ───────────────────────────────────────────────────────────
 
 function ExpressionCard({
@@ -1087,6 +1126,7 @@ function ExpressionCard({
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(isSavedInitially);
   const [flash, setFlash] = useState<"saved" | "dup" | "limit" | null>(null);
+  const { lang: speakLang, accent: accentSetting } = useAccentLang();
 
   const cfg = LEVEL_CONFIG[entry.level];
 
@@ -1139,10 +1179,18 @@ function ExpressionCard({
           </span>
         </div>
 
-        {/* Expression */}
-        <h3 className="text-xl font-extrabold text-slate-900 mb-1 tracking-tight">
-          {entry.expression}
-        </h3>
+        {/* Expression + read-aloud */}
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <h3 className="text-xl font-extrabold text-slate-900 tracking-tight min-w-0 flex-1">
+            {entry.expression}
+          </h3>
+          <SpeakLineButton
+            text={entry.expression}
+            lang={speakLang}
+            accentLabel={accentSetting}
+            ariaLabel={`表現「${entry.expression}」を読み上げ`}
+          />
+        </div>
         <p className="text-sm text-slate-500 mb-4">{entry.meaning_ja}</p>
 
         {/* Core image */}
@@ -1175,9 +1223,17 @@ function ExpressionCard({
           )}
           <div className="flex items-start gap-2">
             <Check className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-            <div>
-              <span className="text-slate-800 font-medium">{entry.goodExample}</span>
-              <p className="text-[11px] text-slate-400 mt-0.5">{entry.goodExampleJa}</p>
+            <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <span className="text-slate-800 font-medium">{entry.goodExample}</span>
+                <p className="text-[11px] text-slate-400 mt-0.5">{entry.goodExampleJa}</p>
+              </div>
+              <SpeakLineButton
+                text={entry.goodExample}
+                lang={speakLang}
+                accentLabel={accentSetting}
+                ariaLabel="例文を読み上げ"
+              />
             </div>
           </div>
         </div>
@@ -1390,8 +1446,8 @@ export default function LibraryPage() {
   const countByLevel = (lv: CefrKey) => LIBRARY.filter((e) => e.level === lv).length;
 
   // ── Score detail for selected single level ────────────────────────────────
-  const scoreDetailLevel =
-    selectedLevels.size === 1 ? [...selectedLevels][0] : null;
+  const scoreDetailLevel: CefrKey | null =
+    selectedLevels.size === 1 ? (Array.from(selectedLevels)[0] ?? null) : null;
 
   // ── Gatekeeping split ──────────────────────────────────────────────────────
   const visibleCards = isLoaded ? displayList.slice(0, visibleLimit) : displayList.slice(0, FREE_LIMIT);
