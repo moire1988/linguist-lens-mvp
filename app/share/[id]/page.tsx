@@ -1,40 +1,35 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ExternalLink, Youtube, Globe, FileText } from "lucide-react";
+import { ArrowLeft, ExternalLink, Youtube, Globe, FileText } from "lucide-react";
+import { auth } from "@clerk/nextjs/server";
 import { getPublicAnalysis } from "@/lib/db/analyses";
 import type { PhraseResult } from "@/lib/types";
-import { AdBanner } from "@/components/ad-banner";
 import { SiteHeader } from "@/components/site-header";
-
-// ─── 定数 ────────────────────────────────────────────────────────────────────
+import { GlobalNav } from "@/components/global-nav";
+import { AnalysisDetailBody } from "@/components/analysis-detail-body";
+import { fetchYoutubeOembedTitle } from "@/lib/youtube-oembed";
+import { normalizeAnalysisId } from "@/lib/analysis-id";
 
 const SITE_URL = "https://linguist-lens-mvp.vercel.app";
 
-const TYPE_LABELS: Record<string, string> = {
-  phrasal_verb:   "句動詞",
-  idiom:          "イディオム",
-  collocation:    "コロケーション",
-  grammar_pattern:"文法パターン",
-};
-
-const TYPE_COLORS: Record<string, string> = {
-  phrasal_verb:    "bg-violet-100 text-violet-700 border-violet-200",
-  idiom:           "bg-amber-100  text-amber-700  border-amber-200",
-  collocation:     "bg-sky-100    text-sky-700    border-sky-200",
-  grammar_pattern: "bg-emerald-100 text-emerald-700 border-emerald-200",
-};
+function fallbackLabelFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, "") || "Web";
+  } catch {
+    return "Web";
+  }
+}
 
 const CEFR_COLORS: Record<string, string> = {
-  A1: "bg-slate-100  text-slate-600",
-  A2: "bg-green-100  text-green-700",
-  B1: "bg-blue-100   text-blue-700",
+  A1: "bg-slate-100 text-slate-600",
+  A2: "bg-green-100 text-green-700",
+  B1: "bg-blue-100 text-blue-700",
   B2: "bg-indigo-100 text-indigo-700",
   C1: "bg-purple-100 text-purple-700",
-  C2: "bg-rose-100   text-rose-700",
+  C2: "bg-rose-100 text-rose-700",
 };
-
-// ─── ヘルパー ─────────────────────────────────────────────────────────────────
 
 function buildTitle(
   title: string | null,
@@ -70,14 +65,14 @@ function buildDescription(
   return `AIが${source}から抽出した${level}レベルの重要英語表現${totalCount}個を日本語で解説。${top3}など、日本人が使えるようになりたい句動詞・イディオムを厳選。`;
 }
 
-// ─── generateMetadata ─────────────────────────────────────────────────────────
-
 export async function generateMetadata({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-  const analysis = await getPublicAnalysis(params.id);
+  const resolved = await params;
+  const id = normalizeAnalysisId(resolved.id);
+  const analysis = id ? await getPublicAnalysis(id) : null;
   if (!analysis) return { title: "ページが見つかりません" };
 
   const pageTitle = buildTitle(
@@ -92,199 +87,208 @@ export async function generateMetadata({
     analysis.result.total_count,
     analysis.url
   );
-  const canonicalUrl = `${SITE_URL}/share/${params.id}`;
+  const canonicalUrl = `${SITE_URL}/share/${id}`;
 
   return {
     title: pageTitle,
     description,
     openGraph: {
-      type:        "article",
-      url:         canonicalUrl,
-      title:       `${pageTitle} | LinguistLens`,
+      type: "article",
+      url: canonicalUrl,
+      title: `${pageTitle} | LinguistLens`,
       description,
       images: [
         {
-          url:    `${SITE_URL}/share/${params.id}/opengraph-image`,
-          width:  1200,
+          url: `${SITE_URL}/share/${id}/opengraph-image`,
+          width: 1200,
           height: 630,
-          alt:    pageTitle,
+          alt: pageTitle,
         },
       ],
     },
     twitter: {
-      card:        "summary_large_image",
-      title:       `${pageTitle} | LinguistLens`,
+      card: "summary_large_image",
+      title: `${pageTitle} | LinguistLens`,
       description,
-      images: [`${SITE_URL}/share/${params.id}/opengraph-image`],
+      images: [`${SITE_URL}/share/${id}/opengraph-image`],
     },
     alternates: { canonical: canonicalUrl },
   };
 }
 
-// ─── PhraseCard（サーバー側 read-only）────────────────────────────────────────
-
-function PhraseCard({ phrase }: { phrase: PhraseResult }) {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        <span
-          className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
-            TYPE_COLORS[phrase.type] ?? "bg-slate-100 text-slate-600 border-slate-200"
-          }`}
-        >
-          {TYPE_LABELS[phrase.type] ?? phrase.type}
-        </span>
-        <span
-          className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-            CEFR_COLORS[phrase.cefr_level] ?? "bg-slate-100 text-slate-600"
-          }`}
-        >
-          {phrase.cefr_level}
-        </span>
-      </div>
-
-      <h3 className="text-lg font-bold text-slate-900 leading-tight mb-0.5">
-        {phrase.expression}
-      </h3>
-      <p className="text-sm text-slate-500 mb-3 leading-snug">{phrase.meaning_ja}</p>
-
-      <div className="bg-indigo-50 rounded-xl px-3 py-2 mb-2">
-        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">
-          例文
-        </p>
-        <p className="text-xs text-indigo-700 font-medium leading-relaxed">
-          {phrase.example}
-        </p>
-      </div>
-
-      {phrase.nuance && (
-        <p className="text-xs text-slate-400 leading-relaxed">{phrase.nuance}</p>
-      )}
-    </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+export const dynamic = "force-dynamic";
 
 export default async function SharePage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const analysis = await getPublicAnalysis(params.id);
+  const resolved = await params;
+  const id = normalizeAnalysisId(resolved.id);
+  const analysis = id ? await getPublicAnalysis(id) : null;
   if (!analysis) notFound();
 
-  const { title, url, level, result, createdAt } = analysis;
-  const pageTitle = buildTitle(title, url, level, result.total_count);
+  const { userId } = await auth();
+  const showPaywall = !userId;
 
-  const isYoutube = url?.includes("youtube.com") || url?.includes("youtu.be");
-  const isWeb     = url && !isYoutube;
+  const { title, url, level, result, createdAt } = analysis;
+  const phrasesList = Array.isArray(result.phrases) ? result.phrases : [];
+  const totalCount =
+    typeof result.total_count === "number" && Number.isFinite(result.total_count)
+      ? result.total_count
+      : phrasesList.length;
+
+  const isYoutube = result.source_type === "youtube";
+  const ytId =
+    url?.match(/[?&]v=([^&]{11})/)?.[1] ??
+    url?.match(/youtu\.be\/([^?&]{11})/)?.[1];
+
+  let headingTitle: string | null =
+    (typeof result.title === "string" && result.title.trim() !== ""
+      ? result.title.trim()
+      : null) ?? (title?.trim() || null);
+
+  if (!headingTitle && url && isYoutube) {
+    headingTitle = await fetchYoutubeOembedTitle(url);
+  }
+  if (!headingTitle && url) {
+    headingTitle = isYoutube ? "YouTube 動画" : fallbackLabelFromUrl(url);
+  }
+  if (!headingTitle) {
+    headingTitle = "貼り付けテキスト";
+  }
+
+  const sourceTextForScript = result.source_text ?? "";
 
   return (
     <div className="min-h-screen relative">
-      <SiteHeader
-        maxWidth="3xl"
-        right={
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors"
-          >
-            無料で試す →
-          </Link>
-        }
-      />
+      <SiteHeader maxWidth="5xl" right={<GlobalNav />} />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-        {/* Hero */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${CEFR_COLORS[level] ?? "bg-slate-100 text-slate-600"}`}>
-              {level}
-            </span>
-            <span className="text-xs text-slate-400">
-              {new Date(createdAt).toLocaleDateString("ja-JP")}
-            </span>
-          </div>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-6"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          別の動画を解析する
+        </Link>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-tight mb-4">
-            {pageTitle}
-          </h1>
-
-          {/* Source link */}
-          {url && (
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 transition-colors bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5"
-            >
-              {isYoutube ? (
-                <Youtube className="h-3.5 w-3.5 text-red-500" />
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              {ytId ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
+                  alt={headingTitle}
+                  className="w-[120px] h-[68px] object-cover rounded-xl flex-shrink-0 shadow-sm"
+                />
+              ) : isYoutube ? (
+                <div className="w-[120px] h-[68px] rounded-xl flex-shrink-0 border border-slate-200 bg-slate-50 flex items-center justify-center shadow-sm">
+                  <Youtube className="h-8 w-8 text-red-400" />
+                </div>
+              ) : url ? (
+                <div className="w-[120px] h-[68px] rounded-xl flex-shrink-0 border border-slate-200 bg-slate-50 flex items-center justify-center shadow-sm">
+                  <Globe className="h-8 w-8 text-slate-300" />
+                </div>
               ) : (
-                <Globe className="h-3.5 w-3.5 text-indigo-500" />
+                <div className="w-[120px] h-[68px] rounded-xl flex-shrink-0 border border-slate-200 bg-slate-50 flex items-center justify-center shadow-sm">
+                  <FileText className="h-8 w-8 text-slate-300" />
+                </div>
               )}
-              <span className="truncate max-w-[280px]">{url}</span>
-              <ExternalLink className="h-3 w-3 flex-shrink-0" />
-            </a>
-          )}
-          {!url && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-              <FileText className="h-3.5 w-3.5" />
-              テキスト入力
-            </span>
-          )}
+              <div className="min-w-0">
+                <h1 className="text-xl font-extrabold text-slate-900 leading-tight truncate">
+                  {headingTitle}
+                </h1>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  {level}レベルの英語表現 {totalCount}選
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+              <span
+                className={`text-xs font-extrabold px-3 py-1.5 rounded-full border border-slate-200 ${
+                  CEFR_COLORS[level] ?? "bg-slate-100 text-slate-600"
+                }`}
+              >
+                対象 {level}
+              </span>
+              {result.overall_level && (
+                <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                  全体 {result.overall_level}
+                </span>
+              )}
+              <span className="text-xs text-slate-400">
+                {new Date(createdAt).toLocaleDateString("ja-JP")}
+              </span>
+              {url ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-red-500 transition-colors"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  {isYoutube ? "YouTube" : "Web"}
+                </a>
+              ) : (
+                <span className="text-xs text-slate-500">テキスト入力</span>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Stats bar */}
         <div className="flex items-center gap-4 bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-3.5 mb-8">
           <div className="text-center">
-            <p className="text-2xl font-extrabold text-indigo-600">{result.total_count}</p>
+            <p className="text-2xl font-extrabold text-indigo-600">{totalCount}</p>
             <p className="text-[10px] text-indigo-400 font-medium">抽出表現</p>
           </div>
           {result.overall_level && (
             <>
               <div className="w-px h-8 bg-indigo-200" />
               <div className="text-center">
-                <p className="text-2xl font-extrabold text-indigo-600">{result.overall_level}</p>
-                <p className="text-[10px] text-indigo-400 font-medium">コンテンツレベル</p>
+                <p className="text-2xl font-extrabold text-indigo-600">
+                  {result.overall_level}
+                </p>
+                <p className="text-[10px] text-indigo-400 font-medium">
+                  コンテンツレベル
+                </p>
               </div>
             </>
           )}
           <div className="w-px h-8 bg-indigo-200" />
-          <div className="text-sm text-indigo-700 font-medium">
-            AIが{level}レベルに合わせて抽出した重要フレーズ集です
+          <div className="text-sm text-indigo-700 font-medium flex-1">
+            {level}レベルに合わせて抽出した重要フレーズ集
           </div>
         </div>
 
-        {/* Ad */}
-        <AdBanner className="mb-8" />
+        <AnalysisDetailBody
+          sourceUrl={url ?? ""}
+          phrases={phrasesList}
+          sourceText={sourceTextForScript}
+          highlightedHtml={result.full_script_with_highlight}
+          showPaywall={showPaywall}
+          totalCount={totalCount}
+        />
 
-        {/* Phrase list */}
-        <div className="space-y-3 mb-12">
-          {result.phrases.map((phrase, i) => (
-            <PhraseCard key={i} phrase={phrase} />
-          ))}
-        </div>
-
-        {/* CTA */}
-        <div className="bg-gradient-to-br from-indigo-600 to-violet-600 rounded-3xl p-8 text-center text-white">
-          <h2 className="text-xl font-extrabold mb-2">
-            あなたのレベルで解析してみよう
-          </h2>
-          <p className="text-indigo-200 text-sm mb-6 leading-relaxed">
-            YouTubeやWeb記事のURLを貼るだけ。AIがあなたのCEFRレベルに合わせて<br />
-            重要フレーズを自動抽出・日本語解説します。
-          </p>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-white text-indigo-700 rounded-xl font-bold text-sm hover:bg-indigo-50 transition-colors shadow-lg"
-          >
-            無料で始める →
-          </Link>
-        </div>
+        {!showPaywall && (
+          <div className="flex justify-center gap-3 mt-10 mb-16">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              別の動画を解析する
+            </Link>
+            <Link
+              href="/mypage"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
+            >
+              マイ単語帳を見る
+            </Link>
+          </div>
+        )}
       </main>
-
-
     </div>
   );
 }

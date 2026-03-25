@@ -18,7 +18,10 @@ import {
 } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { useEffectiveAuth } from "@/lib/dev-auth";
-import { saveAnalysisAction } from "@/app/actions/save-analysis";
+import {
+  saveAnalysisAction,
+  checkExistingAnalysisAction,
+} from "@/app/actions/save-analysis";
 import {
   consumeQuotaAction,
   getUserAnalysisCountAction,
@@ -38,6 +41,7 @@ import { OnboardingModal } from "@/components/onboarding-modal";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
 import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
+import { CommunityAnalysesCarousel } from "@/components/community-analyses-carousel";
 import { SiteHeader, HeaderLogo } from "@/components/site-header";
 import { NavMenu } from "@/components/nav-menu";
 import {
@@ -56,7 +60,10 @@ import {
   getFeaturedAnalysesAction,
 } from "@/app/actions/public-analyses";
 import type { FeaturedAnalysis, RecentPublicAnalysis } from "@/lib/public-analyses-types";
-import { RECOMMENDED_VIDEOS } from "@/lib/recommended-videos-data";
+import {
+  RECOMMENDED_VIDEOS,
+  getRecommendedVideoTargetPathByUrl,
+} from "@/lib/recommended-videos-data";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -76,6 +83,9 @@ const LOADING_STEPS = [
   "あなた専用のリストを生成しています...",
   "結果を保存しています...",
 ];
+
+/** おすすめURLフェイク解析の待機時間（ms）— LOADING_STEPS の雰囲気用 */
+const RECOMMENDED_FAKE_LOAD_MS = 3500;
 
 /** `recommended-videos-data` から YouTube 視聴 URL の候補を生成 */
 function getRecommendedVideoUrlCandidates(): string[] {
@@ -300,6 +310,23 @@ export default function HomePage() {
       return;
     }
 
+    // ── おすすめURL（RECOMMENDED_VIDEOS と同一動画）→ API なし・演出後に既存ページへ
+    if (inputMode === "url" && url.trim()) {
+      const fakeTarget = getRecommendedVideoTargetPathByUrl(url.trim());
+      if (fakeTarget) {
+        setIsLoading(true);
+        try {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, RECOMMENDED_FAKE_LOAD_MS);
+          });
+          router.push(fakeTarget);
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
+    }
+
     // ── クォータチェック（devModeはスキップ）─────────────────────────────
     if (!devMode) {
       const quota = await consumeQuotaAction();
@@ -327,6 +354,32 @@ export default function HomePage() {
           setIsLoading(false);
         }
         return;
+      }
+
+      try {
+        const dbCached = await checkExistingAnalysisAction(
+          url.trim(),
+          selectedLevel
+        );
+        if (dbCached.hit) {
+          setCachedResult(url.trim(), selectedLevel, dbCached.data);
+          toast.success("✨ 過去の解析データを高速ロードしました！");
+          setIsLoading(true);
+          try {
+            await saveAndRedirect(dbCached.data, {
+              inputMode,
+              cefrLevel: selectedLevel,
+              sourceUrl: url,
+            });
+          } finally {
+            setIsLoading(false);
+          }
+          return;
+        }
+      } catch (err: unknown) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("[handleSubmit] checkExistingAnalysisAction", err);
+        }
       }
     }
 
@@ -398,7 +451,17 @@ export default function HomePage() {
         }
       })();
     });
-  }, [inputValue, url, selectedLevel, inputMode, devMode, isSignedIn, openSignIn, saveAndRedirect]);
+  }, [
+    inputValue,
+    url,
+    selectedLevel,
+    inputMode,
+    devMode,
+    isSignedIn,
+    openSignIn,
+    router,
+    saveAndRedirect,
+  ]);
 
   // AI記事生成 → そのまま解析
   const handleGenerateAndAnalyze = useCallback(async () => {
@@ -1088,6 +1151,11 @@ export default function HomePage() {
       {/* ── Recommended Carousel（コンテンツなし時のみ） ── */}
       {!hasContent && <RecommendedCarousel />}
 
+      {/* ── みんなの最新の解析（Examples 同様の横スクロールカルーセル） ── */}
+      {!hasContent && recentPublicAnalyses.length > 0 && (
+        <CommunityAnalysesCarousel items={recentPublicAnalyses} />
+      )}
+
       {/* ── Latest Articles Carousel（コンテンツなし時のみ） ── */}
       {!hasContent && <LatestArticlesCarousel />}
 
@@ -1102,11 +1170,11 @@ export default function HomePage() {
       {!hasContent && featuredAnalyses.length > 0 && (
         <section className="py-12 px-4 sm:px-6">
           <div className="max-w-5xl mx-auto">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-xs font-mono font-bold text-indigo-600 uppercase tracking-widest">
+            <div className="mb-6">
+              <p className="text-[10px] font-mono font-bold text-indigo-600 uppercase tracking-widest mb-0.5">
                 ✦ Featured
-              </span>
-              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">
+              </p>
+              <h2 className="text-sm font-semibold text-slate-700">
                 注目の解析記事
               </h2>
             </div>
@@ -1195,77 +1263,6 @@ export default function HomePage() {
                   </a>
                 );
               })}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── Recent Public Parses（コンテンツなし時のみ） ── */}
-      {!hasContent && recentPublicAnalyses.length > 0 && (
-        <section className="bg-slate-950 py-10 px-4 sm:px-6">
-          <div className="max-w-5xl mx-auto">
-            <h2 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest mb-5">
-              みんなの最新の解析{" "}
-              <span className="text-slate-600">/ Recent Public Parses</span>
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {recentPublicAnalyses.map((item) => (
-                <a
-                  key={item.id}
-                  href={`/share/${item.id}`}
-                  className="group block bg-slate-900 border border-slate-700/50 hover:border-indigo-500/60 rounded-xl p-4 transition-all"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span
-                      className={cn(
-                        "px-1.5 py-0.5 rounded text-[10px] font-bold font-mono border",
-                        {
-                          "bg-slate-800 text-slate-400 border-slate-700": item.level === "A1",
-                          "bg-green-950 text-green-400 border-green-900": item.level === "A2",
-                          "bg-blue-950 text-blue-400 border-blue-900": item.level === "B1",
-                          "bg-indigo-950 text-indigo-400 border-indigo-900": item.level === "B2",
-                          "bg-purple-950 text-purple-400 border-purple-900": item.level === "C1",
-                          "bg-rose-950 text-rose-400 border-rose-900": item.level === "C2",
-                        }
-                      )}
-                    >
-                      {item.level}
-                    </span>
-                    <span className="text-[10px] text-slate-600 ml-auto font-mono">
-                      {new Date(item.createdAt).toLocaleDateString("ja-JP", {
-                        year: "numeric",
-                        month: "numeric",
-                        day: "numeric",
-                      })}
-                    </span>
-                  </div>
-
-                  {item.title && (
-                    <p className="text-slate-200 font-mono text-xs font-medium truncate mb-2 leading-snug">
-                      {item.title}
-                    </p>
-                  )}
-
-                  <div className="space-y-0.5 mb-3">
-                    {item.phrases.slice(0, 2).map((phrase, i) => (
-                      <p key={i} className="text-indigo-400 font-mono text-xs truncate">
-                        {phrase.expression}
-                      </p>
-                    ))}
-                    {item.phrases.length > 2 && (
-                      <p className="text-slate-600 font-mono text-xs">
-                        +{item.phrases.length - 2} more
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-end">
-                    <span className="text-[10px] font-mono text-slate-600 group-hover:text-indigo-400 transition-colors">
-                      →
-                    </span>
-                  </div>
-                </a>
-              ))}
             </div>
           </div>
         </section>

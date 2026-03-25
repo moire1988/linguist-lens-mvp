@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { normalizeAnalysisId } from "@/lib/analysis-id";
 import { createAdminClient } from "@/lib/supabase-admin";
+import { fetchYoutubeOembedTitle } from "@/lib/youtube-oembed";
 import type { AnalysisResult } from "@/lib/types";
 import type { SavedAnalysis } from "@/lib/saved-analyses";
 import type {
@@ -17,12 +18,73 @@ export type SaveAnalysisResult =
   | { success: true; id: string }
   | { success: false; error: string };
 
+/** グローバルDBキャッシュ（同一 URL・同一レベルの最新解析） */
+export type CheckExistingAnalysisResult =
+  | { hit: true; data: AnalysisResult }
+  | { hit: false };
+
+function isValidCachedAnalysisResult(data: unknown): data is AnalysisResult {
+  if (!data || typeof data !== "object") return false;
+  const d = data as AnalysisResult;
+  if (!Array.isArray(d.phrases)) return false;
+  if (typeof d.total_count !== "number" || !Number.isFinite(d.total_count)) {
+    return false;
+  }
+  if (d.total_count < 1) return false;
+  return true;
+}
+
+/**
+ * `saved_analyses` に同一 url・level の行があれば、最新の `result_json` を返す（作成者は問わない）。
+ * API コスト削減用。失敗時は hit: false（フォールスルーしてフル解析へ）。
+ */
+export async function checkExistingAnalysisAction(
+  url: string,
+  level: string
+): Promise<CheckExistingAnalysisResult> {
+  const normalizedUrl = url.trim();
+  const normalizedLevel = level.trim();
+  if (!normalizedUrl || !normalizedLevel) {
+    return { hit: false };
+  }
+
+  let db;
+  try {
+    db = createAdminClient();
+  } catch {
+    return { hit: false };
+  }
+
+  const { data, error } = await db
+    .from("saved_analyses")
+    .select("result_json")
+    .eq("url", normalizedUrl)
+    .eq("level", normalizedLevel)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[checkExistingAnalysisAction]", error.message);
+    }
+    return { hit: false };
+  }
+
+  const row = data?.[0] as { result_json: unknown } | undefined;
+  if (!row || !isValidCachedAnalysisResult(row.result_json)) {
+    return { hit: false };
+  }
+
+  return { hit: true, data: row.result_json };
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface AnalysisRow {
   id: string;
   user_id: string | null;
   url: string | null;
+  title: string | null;
   level: string;
   result_json: AnalysisResult;
   is_shared: boolean;
@@ -47,6 +109,14 @@ export async function saveAnalysisAction(payload: {
 }): Promise<SaveAnalysisResult> {
   const { userId } = await auth();
 
+  let resolvedTitle: string | null = null;
+  if (
+    payload.data.source_type === "youtube" &&
+    payload.sourceUrl?.trim()
+  ) {
+    resolvedTitle = await fetchYoutubeOembedTitle(payload.sourceUrl.trim());
+  }
+
   let db;
   try {
     db = createAdminClient();
@@ -60,7 +130,7 @@ export async function saveAnalysisAction(payload: {
       user_id:     userId ?? null,
       url:         payload.sourceUrl ?? null,
       content:     null,
-      title:       null,
+      title:       resolvedTitle,
       level:       payload.cefrLevel,
       result_json: payload.data,
       is_public:   false,
@@ -166,7 +236,7 @@ export async function getAnalysisDetailResult(
   const { data, error } = await db
     .from("saved_analyses")
     .select(
-      "id, url, level, result_json, is_shared, is_approved, created_at, user_id, is_public"
+      "id, url, title, level, result_json, is_shared, is_approved, created_at, user_id, is_public"
     )
     .eq("id", normalizedId)
     .single();
@@ -212,6 +282,7 @@ export async function getAnalysisDetailResult(
       id: row.id,
       savedAt: row.created_at,
       sourceUrl: row.url ?? undefined,
+      contentTitle: row.title,
       inputMode: row.url ? "url" : "text",
       cefrLevel: row.level,
       data: row.result_json,

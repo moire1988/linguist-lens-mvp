@@ -56,7 +56,7 @@ export function RecommendedCarousel() {
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>
-            <p className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest mb-0.5">
+            <p className="text-[10px] font-mono font-bold text-indigo-600 uppercase tracking-widest mb-0.5">
               Examples
             </p>
             <h2 className="text-sm font-semibold text-slate-700">
