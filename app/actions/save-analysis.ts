@@ -2,8 +2,10 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { normalizeAnalysisId } from "@/lib/analysis-id";
+import { findExistingSavedAnalysisId } from "@/lib/find-existing-analysis";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { fetchYoutubeOembedTitle } from "@/lib/youtube-oembed";
+import { extractYouTubeVideoId } from "@/lib/youtube-url";
 import type { AnalysisResult } from "@/lib/types";
 import type { SavedAnalysis } from "@/lib/saved-analyses";
 import type {
@@ -18,64 +20,16 @@ export type SaveAnalysisResult =
   | { success: true; id: string }
   | { success: false; error: string };
 
-/** グローバルDBキャッシュ（同一 URL・同一レベルの最新解析） */
-export type CheckExistingAnalysisResult =
-  | { hit: true; data: AnalysisResult }
-  | { hit: false };
-
-function isValidCachedAnalysisResult(data: unknown): data is AnalysisResult {
-  if (!data || typeof data !== "object") return false;
-  const d = data as AnalysisResult;
-  if (!Array.isArray(d.phrases)) return false;
-  if (typeof d.total_count !== "number" || !Number.isFinite(d.total_count)) {
-    return false;
-  }
-  if (d.total_count < 1) return false;
-  return true;
-}
-
 /**
- * `saved_analyses` に同一 url・level の行があれば、最新の `result_json` を返す（作成者は問わない）。
- * API コスト削減用。失敗時は hit: false（フォールスルーしてフル解析へ）。
+ * 同一 YouTube（video_id）＋同一レベル、または同一 URL 文字列＋レベルで
+ * 既存の解析ページがあればその id を返す（LLM 前のキャッシュ再利用用）。
+ * 失敗時は null（フル解析へ）。
  */
-export async function checkExistingAnalysisAction(
+export async function findExistingAnalysisIdAction(
   url: string,
   level: string
-): Promise<CheckExistingAnalysisResult> {
-  const normalizedUrl = url.trim();
-  const normalizedLevel = level.trim();
-  if (!normalizedUrl || !normalizedLevel) {
-    return { hit: false };
-  }
-
-  let db;
-  try {
-    db = createAdminClient();
-  } catch {
-    return { hit: false };
-  }
-
-  const { data, error } = await db
-    .from("saved_analyses")
-    .select("result_json")
-    .eq("url", normalizedUrl)
-    .eq("level", normalizedLevel)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("[checkExistingAnalysisAction]", error.message);
-    }
-    return { hit: false };
-  }
-
-  const row = data?.[0] as { result_json: unknown } | undefined;
-  if (!row || !isValidCachedAnalysisResult(row.result_json)) {
-    return { hit: false };
-  }
-
-  return { hit: true, data: row.result_json };
+): Promise<string | null> {
+  return findExistingSavedAnalysisId(url, level);
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -125,11 +79,18 @@ export async function saveAnalysisAction(payload: {
     return { success: false, error: err instanceof Error ? err.message : "DB接続エラー" };
   }
 
+  const sourceUrl = payload.sourceUrl?.trim() ?? null;
+  const videoId =
+    payload.data.source_type === "youtube" && sourceUrl
+      ? extractYouTubeVideoId(sourceUrl)
+      : null;
+
   const { data, error } = await db
     .from("saved_analyses")
     .insert({
       user_id:     userId ?? null,
-      url:         payload.sourceUrl ?? null,
+      url:         sourceUrl,
+      video_id:    videoId,
       content:     null,
       title:       resolvedTitle,
       level:       payload.cefrLevel,
@@ -156,6 +117,7 @@ export async function saveAnalysisAction(payload: {
       raw.includes("is_public") ||
       raw.includes("is_featured") ||
       raw.includes("public_review_requested") ||
+      raw.includes("video_id") ||
       raw.includes("schema cache")
     ) {
       return {

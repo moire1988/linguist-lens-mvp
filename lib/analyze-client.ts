@@ -2,6 +2,7 @@ import type { AnalysisResult, AnalyzeErrorCode } from "@/lib/types";
 
 export type AnalyzeContentResult =
   | { success: true; data: AnalysisResult }
+  | { success: true; existingAnalysisId: string }
   | { success: false; error: string; errorCode: AnalyzeErrorCode };
 
 /**

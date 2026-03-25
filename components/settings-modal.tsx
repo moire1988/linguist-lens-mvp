@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   getSettings,
@@ -11,7 +12,11 @@ import {
   type CefrLevel,
   type DevAuthState,
 } from "@/lib/settings";
-import { getDbPreferences, upsertDbPreferences } from "@/lib/db/preferences";
+import {
+  getDbPreferences,
+  upsertDbPreferences,
+  USER_PREFERENCES_CHANGED_EVENT,
+} from "@/lib/db/preferences";
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -44,13 +49,21 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [devUnlocked, setDevUnlocked] = useState(initial.devMode);
   const [versionClicks, setVersionClicks] = useState(0);
   const [lastClickTime, setLastClickTime] = useState(0);
+  const [wantsEmail, setWantsEmail] = useState(false);
+  const [newsletterPrefsLoaded, setNewsletterPrefsLoaded] = useState(false);
 
   // ログイン済みなら Supabase から設定を読み込む
   useEffect(() => {
-    if (!isSignedIn || !userId) return;
+    if (!isSignedIn || !userId) {
+      setNewsletterPrefsLoaded(false);
+      return;
+    }
     (async () => {
       const token = await getToken({ template: "supabase" });
-      if (!token) return;
+      if (!token) {
+        setNewsletterPrefsLoaded(true);
+        return;
+      }
       const prefs = await getDbPreferences(token, userId);
       if (prefs) {
         setAccent(prefs.accent);
@@ -58,6 +71,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         // localStorage にも同期しておく（TTS などのローカル読み取り用）
         saveSettings({ accent: prefs.accent, defaultLevel: prefs.defaultLevel });
       }
+      setWantsEmail(prefs?.wantsEmail ?? false);
+      setNewsletterPrefsLoaded(true);
     })();
   }, [isSignedIn, userId, getToken]);
 
@@ -66,7 +81,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     saveSettings({ accent: a });
     if (isSignedIn && userId) {
       const token = await getToken({ template: "supabase" });
-      if (token) await upsertDbPreferences(token, userId, { accent: a });
+      if (token) void upsertDbPreferences(token, userId, { accent: a });
     }
   };
 
@@ -75,7 +90,30 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     saveSettings({ defaultLevel: l });
     if (isSignedIn && userId) {
       const token = await getToken({ template: "supabase" });
-      if (token) await upsertDbPreferences(token, userId, { defaultLevel: l });
+      if (token) void upsertDbPreferences(token, userId, { defaultLevel: l });
+    }
+  };
+
+  const handleNewsletterToggle = async () => {
+    const next = !wantsEmail;
+    const prev = wantsEmail;
+    setWantsEmail(next);
+    if (isSignedIn && userId) {
+      const token = await getToken({ template: "supabase" });
+      if (!token) {
+        setWantsEmail(prev);
+        toast.error("認証トークンを取得できませんでした。");
+        return;
+      }
+      const { error } = await upsertDbPreferences(token, userId, {
+        wantsEmail: next,
+      });
+      if (error) {
+        setWantsEmail(prev);
+        toast.error("メール設定の保存に失敗しました。もう一度お試しください。");
+        return;
+      }
+      window.dispatchEvent(new CustomEvent(USER_PREFERENCES_CHANGED_EVENT));
     }
   };
 
@@ -196,6 +234,48 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 ))}
               </div>
             </div>
+
+            {/* ── メールマガジン ── */}
+            {isSignedIn && (
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">
+                  メールマガジン
+                </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-700 leading-snug">
+                        メールマガジンから最新情報を受け取る
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                        新着コンテンツや機能のお知らせをメールでお届けします
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newsletterPrefsLoaded) void handleNewsletterToggle();
+                      }}
+                      disabled={!newsletterPrefsLoaded}
+                      className={cn(
+                        "flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                        wantsEmail ? "bg-indigo-600" : "bg-slate-300",
+                        !newsletterPrefsLoaded && "opacity-50 cursor-not-allowed"
+                      )}
+                      aria-pressed={wantsEmail}
+                      aria-label="メールマガジンから最新情報を受け取る"
+                    >
+                      <span
+                        className={cn(
+                          "inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform",
+                          wantsEmail ? "translate-x-[18px]" : "translate-x-[2px]"
+                        )}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── Dev Mode (hidden until unlocked) ── */}
             {devUnlocked && (

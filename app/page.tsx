@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useTransition,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -20,7 +27,7 @@ import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 import {
   saveAnalysisAction,
-  checkExistingAnalysisAction,
+  findExistingAnalysisIdAction,
 } from "@/app/actions/save-analysis";
 import {
   consumeQuotaAction,
@@ -35,7 +42,7 @@ import type { AnalysisResult, AnalyzeErrorCode } from "@/lib/types";
 import { callAnalyzeApi } from "@/lib/analyze-client";
 import { generateArticle } from "@/app/actions/generate-article";
 import { getVocabularyCount } from "@/lib/vocabulary";
-import { getCachedResult, setCachedResult } from "@/lib/cache";
+import { getCachedEntry, setCachedResult } from "@/lib/cache";
 import { SettingsModal } from "@/components/settings-modal";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import { NewsletterBanner } from "@/components/newsletter-banner";
@@ -75,15 +82,24 @@ const CEFR_LEVELS = [
   { value: "C2", label: "C2", description: "熟達",   toeic: null,         toefl: null,      color: "rose"   },
 ];
 
-const LOADING_STEPS = [
-  "AIが文脈を深く読み取っています...",
-  "ネイティブ特有のニュアンスを解析中...",
-  "本当に使える表現を厳選しています...",
-  "あなた専用のリストを生成しています...",
-  "結果を保存しています...",
+/** 送信ボタン内プログレス：約60秒で99%まで（完了時はリセット） */
+const SUBMIT_PROGRESS_MS = 60_000;
+
+const SUBMIT_LOAD_LABELS_URL = [
+  "動画を取得中...",
+  "AIが表現を抽出中...",
+  "単語帳を作成中...",
+  "結果を保存中...",
 ];
 
-/** おすすめURLフェイク解析の待機時間（ms）— LOADING_STEPS の雰囲気用 */
+const SUBMIT_LOAD_LABELS_TEXT = [
+  "テキストを読み込み中...",
+  "AIが表現を抽出中...",
+  "単語帳を作成中...",
+  "結果を保存中...",
+];
+
+/** おすすめURLフェイク解析の待機時間（ms） */
 const RECOMMENDED_FAKE_LOAD_MS = 3500;
 
 /** `recommended-videos-data` から YouTube 視聴 URL の候補を生成 */
@@ -113,8 +129,8 @@ export default function HomePage() {
   const [selectedLevel, setSelectedLevel] = useState("B2");
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<AnalyzeErrorCode | null>(null);
-  const [stepIndex, setStepIndex] = useState(0);
-  const [msgVisible, setMsgVisible] = useState(true);
+  /** 送信ボタン内の擬似進捗（0–99、完了でリセット） */
+  const [submitProgress, setSubmitProgress] = useState(0);
   const [vocabCount, setVocabCount] = useState(0);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [analysisQuota, setAnalysisQuota] = useState<AnalysisCountInfo | null>(null);
@@ -230,26 +246,27 @@ export default function HomePage() {
       ? "web"
       : null;
 
-  // Animate loading steps with fade（解析 API 〜 保存 〜 router.push まで継続）
   useEffect(() => {
     if (!analysisBusy) {
-      setStepIndex(0);
-      setMsgVisible(true);
+      setSubmitProgress(0);
       return;
     }
-    setStepIndex(0);
-    setMsgVisible(true);
-    let idx = 0;
-    const interval = setInterval(() => {
-      setMsgVisible(false);
-      setTimeout(() => {
-        idx = (idx + 1) % LOADING_STEPS.length;
-        setStepIndex(idx);
-        setMsgVisible(true);
-      }, 400);
-    }, 3000);
-    return () => clearInterval(interval);
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      const elapsed = Date.now() - started;
+      const pct = Math.min(99, Math.floor((elapsed / SUBMIT_PROGRESS_MS) * 100));
+      setSubmitProgress(pct);
+    }, 120);
+    return () => window.clearInterval(id);
   }, [analysisBusy]);
+
+  const submitLoadLabel = useMemo(() => {
+    if (!analysisBusy) return "";
+    const labels =
+      inputMode === "url" ? SUBMIT_LOAD_LABELS_URL : SUBMIT_LOAD_LABELS_TEXT;
+    const idx = Math.min(labels.length - 1, Math.floor(submitProgress / 25));
+    return labels[idx] ?? labels[0];
+  }, [analysisBusy, inputMode, submitProgress]);
 
   /** 解析完了後、DB に保存して /analyses/[id] へ遷移 */
   const saveAndRedirect = useCallback(
@@ -282,6 +299,14 @@ export default function HomePage() {
         // 成功時の処理
         if (result.id) {
           storeGuestAnalysisId(result.id);
+          if (opts.inputMode === "url" && opts.sourceUrl?.trim()) {
+            setCachedResult(
+              opts.sourceUrl.trim(),
+              opts.cefrLevel,
+              data,
+              result.id
+            );
+          }
           router.push(`/analyses/${result.id}`);
         } else {
           throw new Error("保存は成功しましたが、IDが返却されませんでした。");
@@ -324,25 +349,42 @@ export default function HomePage() {
       }
     }
 
-    // ── クォータチェック（devModeはスキップ）─────────────────────────────
-    if (!devMode) {
-      const quota = await consumeQuotaAction();
-      if (!quota?.allowed) {
-        setShowQuotaModal(true);
-        return;
-      }
-    }
-
-    // キャッシュチェック（URLモードのみ・devModeはスキップ）
+    // ── DB 既存行（同一 video_id × 同一レベル）→ INSERT なしで遷移 ───────────
     if (inputMode === "url" && url.trim() && !devMode) {
-      const cached = getCachedResult(url.trim(), selectedLevel);
-      if (cached) {
-        toast?.success?.("キャッシュから読み込みました", {
-          description: "API呼び出しをスキップしました（7日間有効）",
+      try {
+        const existingId = await findExistingAnalysisIdAction(
+          url.trim(),
+          selectedLevel
+        );
+        if (existingId) {
+          toast.success("✨ 過去の解析ページを再表示します（同一動画・同一レベル）");
+          storeGuestAnalysisId(existingId);
+          router.push(`/analyses/${existingId}`);
+          return;
+        }
+      } catch (err: unknown) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("[handleSubmit] findExistingAnalysisIdAction", err);
+        }
+      }
+
+      // ── ローカル7日キャッシュ（保存済み ID があれば INSERT せずそのページへ） ──
+      const cacheEntry = getCachedEntry(url.trim(), selectedLevel);
+      if (cacheEntry?.data) {
+        if (cacheEntry.analysisId) {
+          toast.success("キャッシュから読み込みました", {
+            description: "保存済みの解析ページへ移動します（7日間有効）",
+          });
+          storeGuestAnalysisId(cacheEntry.analysisId);
+          router.push(`/analyses/${cacheEntry.analysisId}`);
+          return;
+        }
+        toast.success("キャッシュから読み込みました", {
+          description: "解析結果を保存しています…（7日間有効）",
         });
         setIsLoading(true);
         try {
-          await saveAndRedirect(cached, {
+          await saveAndRedirect(cacheEntry.data, {
             inputMode,
             cefrLevel: selectedLevel,
             sourceUrl: url,
@@ -352,31 +394,14 @@ export default function HomePage() {
         }
         return;
       }
+    }
 
-      try {
-        const dbCached = await checkExistingAnalysisAction(
-          url.trim(),
-          selectedLevel
-        );
-        if (dbCached.hit) {
-          setCachedResult(url.trim(), selectedLevel, dbCached.data);
-          toast.success("✨ 過去の解析データを高速ロードしました！");
-          setIsLoading(true);
-          try {
-            await saveAndRedirect(dbCached.data, {
-              inputMode,
-              cefrLevel: selectedLevel,
-              sourceUrl: url,
-            });
-          } finally {
-            setIsLoading(false);
-          }
-          return;
-        }
-      } catch (err: unknown) {
-        if (process.env.NODE_ENV === "development") {
-          console.error("[handleSubmit] checkExistingAnalysisAction", err);
-        }
+    // ── クォータチェック（devModeはスキップ）─────────────────────────────
+    if (!devMode) {
+      const quota = await consumeQuotaAction();
+      if (!quota?.allowed) {
+        setShowQuotaModal(true);
+        return;
       }
     }
 
@@ -405,7 +430,21 @@ export default function HomePage() {
             return;
           }
 
-          const totalCount = result.data?.total_count;
+          if ("existingAnalysisId" in result && result.existingAnalysisId) {
+            toast.success("✨ 既存の解析結果を利用します（同一動画・同一レベル）");
+            storeGuestAnalysisId(result.existingAnalysisId);
+            router.push(`/analyses/${result.existingAnalysisId}`);
+            return;
+          }
+
+          if (!("data" in result) || !result.data) {
+            setError("解析データがありません。もう一度お試しください。");
+            setErrorCode("generic");
+            return;
+          }
+
+          const analysisData = result.data;
+          const totalCount = analysisData.total_count;
           if (typeof totalCount !== "number" || !Number.isFinite(totalCount)) {
             setError("解析結果の形式が不正です。もう一度お試しください。");
             setErrorCode("generic");
@@ -418,18 +457,6 @@ export default function HomePage() {
             );
             setErrorCode("generic");
             return;
-          }
-
-          const analysisData = result.data;
-          if (!analysisData) {
-            setError("解析データがありません。もう一度お試しください。");
-            setErrorCode("generic");
-            return;
-          }
-
-          // URLモードの結果をキャッシュ保存（devModeはスキップ）
-          if (inputMode === "url" && url.trim() && !devMode) {
-            setCachedResult(url.trim(), selectedLevel, analysisData);
           }
 
           await saveAndRedirect(analysisData, {
@@ -552,7 +579,20 @@ export default function HomePage() {
             return;
           }
 
-          const totalCount = result.data?.total_count;
+          if ("existingAnalysisId" in result && result.existingAnalysisId) {
+            storeGuestAnalysisId(result.existingAnalysisId);
+            router.push(`/analyses/${result.existingAnalysisId}`);
+            return;
+          }
+
+          if (!("data" in result) || !result.data) {
+            setError("解析データがありません。もう一度お試しください。");
+            setErrorCode("generic");
+            return;
+          }
+
+          const analysisData = result.data;
+          const totalCount = analysisData.total_count;
           if (typeof totalCount !== "number" || !Number.isFinite(totalCount)) {
             setError("解析結果の形式が不正です。もう一度お試しください。");
             setErrorCode("generic");
@@ -563,13 +603,6 @@ export default function HomePage() {
             setError(
               "抽出できる表現が見つかりませんでした。別のコンテンツをお試しください。"
             );
-            setErrorCode("generic");
-            return;
-          }
-
-          const analysisData = result.data;
-          if (!analysisData) {
-            setError("解析データがありません。もう一度お試しください。");
             setErrorCode("generic");
             return;
           }
@@ -929,31 +962,49 @@ export default function HomePage() {
               })()}
             </div>
 
-            {/* Submit button */}
+            {/* Submit button（ローディングはボタン内で完結） */}
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={!canSubmit || analysisBusy}
+              aria-busy={analysisBusy}
+              aria-label={
+                analysisBusy ? "解析を実行しています" : "AIで表現を抽出する"
+              }
               className={cn(
-                "w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl",
-                "font-semibold text-sm transition-all",
-                canSubmit && !analysisBusy
-                  ? "bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white shadow-sm hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)] active:scale-[0.99]"
-                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                "w-full rounded-xl transition-all",
+                "min-h-[3.25rem] min-w-[18rem] sm:min-w-[22rem] mx-auto",
+                "font-semibold text-sm",
+                analysisBusy && "cursor-wait bg-transparent p-0 shadow-none ring-0",
+                !analysisBusy &&
+                  canSubmit &&
+                  "bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white shadow-sm hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)] active:scale-[0.99]",
+                !analysisBusy &&
+                  !canSubmit &&
+                  "bg-slate-100 text-slate-400 cursor-not-allowed"
               )}
             >
               {analysisBusy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  解析中...
-                </>
+                <span className="flex w-full items-center gap-2.5 py-3.5 px-4 sm:px-5 text-white bg-gradient-to-r from-violet-500 to-indigo-600 rounded-xl">
+                  <Loader2
+                    className="h-4 w-4 shrink-0 animate-spin text-white/95"
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1 text-center text-[13px] sm:text-sm font-medium leading-tight truncate">
+                    {submitLoadLabel}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-xs font-mono text-white/90 w-[2.5rem] text-right">
+                    {submitProgress}%
+                  </span>
+                </span>
               ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  AIで表現を抽出する
+                <span className="flex w-full items-center justify-center gap-2 py-3.5 px-6">
+                  <Sparkles className="h-4 w-4 shrink-0" />
+                  <span className="flex-1 text-center">AIで表現を抽出する</span>
                   {canSubmit && (
-                    <ChevronRight className="h-4 w-4 ml-auto" />
+                    <ChevronRight className="h-4 w-4 shrink-0 ml-auto" />
                   )}
-                </>
+                </span>
               )}
             </button>
 
@@ -976,81 +1027,6 @@ export default function HomePage() {
             )}
           </div>
         </div>
-
-
-        {/* ── Analysis Loading Overlay ── */}
-        {analysisBusy && (
-          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/55 backdrop-blur-sm">
-
-            {/* Ring system */}
-            <div className="relative flex items-center justify-center mb-10">
-
-              {/* Outer glow pulse */}
-              <div className="absolute w-48 h-48 rounded-full bg-violet-500/10 animate-pulse" />
-
-              {/* Ring 1 – slow outer */}
-              <div
-                className="absolute w-40 h-40 rounded-full border border-violet-400/25 border-t-violet-500/80"
-                style={{ animation: "spin 4s linear infinite" }}
-              />
-
-              {/* Ring 2 – medium counter-rotate */}
-              <div
-                className="absolute w-28 h-28 rounded-full border border-indigo-400/20 border-b-indigo-400/90"
-                style={{ animation: "spin 2.5s linear infinite reverse" }}
-              />
-
-              {/* Ring 3 – fast inner */}
-              <div
-                className="absolute w-16 h-16 rounded-full border border-violet-300/30 border-l-violet-300/80"
-                style={{ animation: "spin 1.6s linear infinite" }}
-              />
-
-              {/* Orbiting particles */}
-              {[0, 60, 120, 180, 240, 300].map((deg, i) => (
-                <div
-                  key={i}
-                  className="absolute w-1.5 h-1.5 rounded-full bg-violet-400/70"
-                  style={{
-                    transform: `rotate(${deg}deg) translateX(54px)`,
-                    animation: `ping 1.5s cubic-bezier(0,0,0.2,1) infinite`,
-                    animationDelay: `${i * 0.25}s`,
-                    opacity: 0.6,
-                  }}
-                />
-              ))}
-
-              {/* Center icon */}
-              <Sparkles className="relative h-9 w-9 text-violet-300 animate-pulse" />
-            </div>
-
-            {/* Fading message */}
-            <div
-              className="transition-opacity duration-400 text-center px-6"
-              style={{ opacity: msgVisible ? 1 : 0, transitionDuration: "400ms" }}
-            >
-              <p className="text-white/90 text-base sm:text-lg font-medium tracking-wide">
-                {LOADING_STEPS[stepIndex]}
-              </p>
-            </div>
-
-            {/* Progress dots */}
-            <div className="flex gap-2 mt-6">
-              {LOADING_STEPS.map((_, i) => (
-                <div
-                  key={i}
-                  className="h-1.5 rounded-full transition-all duration-500"
-                  style={{
-                    width: i === stepIndex ? "24px" : "6px",
-                    background: i === stepIndex ? "rgb(167 139 250)" : "rgba(255,255,255,0.2)",
-                  }}
-                />
-              ))}
-            </div>
-
-          </div>
-        )}
-
         {/* ── Error ── */}
         {error && !analysisBusy && (() => {
           const isNoSubs  = errorCode === "no_subtitles";

@@ -6,6 +6,7 @@ import path from "path";
 import { fetchTranscript } from "youtube-transcript";
 import type { AnalyzeErrorCode, PhraseResult, AnalysisResult } from "@/lib/types";
 import { DEV_TEST_VIDEO_ID } from "@/lib/settings";
+import { findExistingSavedAnalysisId } from "@/lib/find-existing-analysis";
 import { extractYouTubeVideoId } from "@/lib/youtube-url";
 
 export type {
@@ -591,6 +592,7 @@ export async function analyzeContent(
   devMode?: boolean
 ): Promise<
   | { success: true; data: AnalysisResult }
+  | { success: true; existingAnalysisId: string }
   | { success: false; error: string; errorCode: AnalyzeErrorCode }
 > {
   try {
@@ -642,7 +644,15 @@ export async function analyzeContent(
       };
     }
 
-    // URL mode
+    // URL mode: 同一 YouTube video_id + 同一レベル（または同一 URL 文字列）の既存解析があれば LLM を呼ばない
+    if (!devMode) {
+      const existingId = await findExistingSavedAnalysisId(input.trim(), cefrLevel);
+      if (existingId) {
+        return { success: true, existingAnalysisId: existingId };
+      }
+    }
+
+    // URL mode（新規のみ）
     const { text, sourceType, phrases, fullScriptWithHighlight, overallLevel } =
       await runUrlAnalysis(input.trim(), cefrLevel);
 

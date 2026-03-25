@@ -17,6 +17,10 @@ ALTER TABLE public.saved_analyses
 ALTER TABLE public.saved_analyses
   ADD COLUMN IF NOT EXISTS public_review_requested BOOLEAN NOT NULL DEFAULT false;
 
+-- YouTube 動画 ID（11桁）— 同一動画・同一レベルのキャッシュキー
+ALTER TABLE public.saved_analyses
+  ADD COLUMN IF NOT EXISTS video_id TEXT;
+
 -- ゲスト解析（user_id なし）を許可
 ALTER TABLE public.saved_analyses
   ALTER COLUMN user_id DROP NOT NULL;
@@ -33,6 +37,10 @@ CREATE INDEX IF NOT EXISTS idx_saved_analyses_guest
 CREATE INDEX IF NOT EXISTS idx_saved_analyses_featured
   ON public.saved_analyses (created_at DESC)
   WHERE is_featured = true;
+
+CREATE INDEX IF NOT EXISTS idx_saved_analyses_video_id_level
+  ON public.saved_analyses (video_id, level)
+  WHERE video_id IS NOT NULL;
 
 -- 未認証でも公開行のみ読める
 DROP POLICY IF EXISTS "anon_select_public_analyses" ON public.saved_analyses;
