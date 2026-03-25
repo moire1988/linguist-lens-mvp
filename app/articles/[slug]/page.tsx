@@ -7,7 +7,8 @@ import { VariantBadge } from "@/components/variant-badge";
 import { AdBanner } from "@/components/ad-banner";
 import { ArticleTts } from "@/components/article-tts";
 import { ArticleBody, ArticleVocabCard } from "@/components/article-body";
-import { ArticleHeader } from "@/components/article-header";
+import { SiteHeader } from "@/components/site-header";
+import { GlobalNav } from "@/components/global-nav";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { Breadcrumb } from "@/components/breadcrumb";
 import type { ArticleSummary } from "@/lib/article-types";
@@ -118,7 +119,7 @@ export default async function ArticlePage({
 
   return (
     <div className="min-h-screen relative">
-      <ArticleHeader />
+      <SiteHeader maxWidth="5xl" right={<GlobalNav showVocabularyLink />} />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
 

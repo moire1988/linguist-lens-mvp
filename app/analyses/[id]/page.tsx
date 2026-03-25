@@ -207,7 +207,7 @@ export default async function AnalysisDetailPage({ params }: Props) {
 
   return (
     <div className="min-h-screen relative">
-      <SiteHeader maxWidth="5xl" right={<GlobalNav />} />
+      <SiteHeader maxWidth="5xl" right={<GlobalNav showVocabularyLink />} />
 
       <main className="relative max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
         <Link

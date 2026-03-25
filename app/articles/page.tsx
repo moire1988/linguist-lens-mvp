@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getAllPublishedArticles } from "@/lib/db/articles";
-import { ArticleHeader } from "@/components/article-header";
+import { SiteHeader } from "@/components/site-header";
+import { GlobalNav } from "@/components/global-nav";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { ArticleListClient } from "./article-list-client";
 
@@ -22,7 +23,7 @@ export default async function ArticlesPage() {
 
   return (
     <div className="min-h-screen relative">
-      <ArticleHeader />
+      <SiteHeader maxWidth="5xl" right={<GlobalNav showVocabularyLink />} />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
 
