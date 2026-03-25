@@ -6,7 +6,10 @@ import { EXAMPLES } from "@/lib/examples-data";
 const SITE_URL = "https://linguist-lens-mvp.vercel.app";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy')) {
+  if (
+    (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_SUPABASE_URL) ||
+    (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy'))
+  ) {
     return [];
   }
   // ── 固定ページ ──────────────────────────────────────────────
