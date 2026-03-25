@@ -25,6 +25,10 @@ import {
   FileText,
   Quote,
   CheckCheck,
+  Flame,
+  ScanSearch,
+  Trophy,
+  LibraryBig,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
@@ -564,6 +568,116 @@ function FlashCard({
   );
 }
 
+// ─── Learning Dashboard ────────────────────────────────────────────────────
+
+function MasteryBar({ rate }: { rate: number }) {
+  return (
+    <div className="mt-2.5">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-mono text-slate-400">0%</span>
+        <span className="text-[10px] font-mono text-indigo-600 font-bold">{rate}%</span>
+        <span className="text-[10px] font-mono text-slate-400">100%</span>
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
+          style={{ width: `${rate}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+interface DashboardProps {
+  total: number;
+  mastered: number;
+  analysisCount: number;
+}
+
+function LearningDashboard({ total, mastered, analysisCount }: DashboardProps) {
+  const masteryRate = total > 0 ? Math.round((mastered / total) * 100) : 0;
+
+  const stats = [
+    {
+      icon: LibraryBig,
+      label: "総保存単語数",
+      value: total,
+      unit: "語",
+      accent: "text-indigo-600",
+      iconBg: "bg-indigo-50",
+      extra: null as React.ReactNode,
+    },
+    {
+      icon: Trophy,
+      label: "マスター定着率",
+      value: masteryRate,
+      unit: "%",
+      accent: "text-violet-600",
+      iconBg: "bg-violet-50",
+      extra: <MasteryBar rate={masteryRate} />,
+    },
+    {
+      icon: ScanSearch,
+      label: "累計解析回数",
+      value: analysisCount,
+      unit: "回",
+      accent: "text-cyan-600",
+      iconBg: "bg-cyan-50",
+      extra: null as React.ReactNode,
+    },
+    {
+      icon: Flame,
+      label: "連続学習日数",
+      value: null as number | null,
+      unit: "Days",
+      accent: "text-orange-500",
+      iconBg: "bg-orange-50",
+      extra: (
+        <p className="text-[10px] text-slate-400 mt-1.5 font-mono">準備中...</p>
+      ),
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      {stats.map((s) => {
+        const Icon = s.icon;
+        return (
+          <div
+            key={s.label}
+            className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col gap-1.5"
+          >
+            {/* Icon */}
+            <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center mb-0.5", s.iconBg)}>
+              <Icon className={cn("w-4 h-4", s.accent)} />
+            </div>
+
+            {/* Value */}
+            <div className="flex items-end gap-1 leading-none">
+              {s.value !== null ? (
+                <>
+                  <span className={cn("text-2xl font-extrabold tracking-tight", s.accent)}>
+                    {s.value}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-400 mb-0.5">{s.unit}</span>
+                </>
+              ) : (
+                <span className="text-2xl font-extrabold tracking-tight text-slate-300">—</span>
+              )}
+            </div>
+
+            {/* Label */}
+            <p className="text-[11px] text-slate-500 font-medium leading-tight">{s.label}</p>
+
+            {/* Extra (progress bar / sub text) */}
+            {s.extra}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function VocabularyPage() {
@@ -824,6 +938,13 @@ export default function VocabularyPage() {
             </div>
           )}
         </div>
+
+        {/* ── 学習ダッシュボード ── */}
+        <LearningDashboard
+          total={vocabulary.length}
+          mastered={archivedVocab.length}
+          analysisCount={savedAnalyses.length}
+        />
 
         {/* ── 保存した解析結果 ── */}
         <div className="mb-8">
