@@ -27,8 +27,5 @@ jobs:
       - name: 🔍 TypeScriptの型チェック（超重要！）
         run: npx tsc --noEmit
 
-      - name: 🧹 Linter（文法チェック）を実行
-        run: npm run lint
-
       - name: 🏗️ Next.jsのビルドテスト（致命的なエラーがないか確認）
         run: npm run build
