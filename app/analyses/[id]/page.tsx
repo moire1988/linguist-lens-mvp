@@ -2,25 +2,52 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Youtube, Globe, FileText } from "lucide-react";
-import { getAnalysisAction } from "@/app/actions/save-analysis";
+import { auth } from "@clerk/nextjs/server";
+import { getAnalysisAction, getAnalysisMetadataAction } from "@/app/actions/save-analysis";
+import { AnalysisSharePanel } from "@/components/analysis-share-panel";
+import { PaywallCTA } from "@/components/paywall-cta";
 import type { PhraseResult } from "@/lib/types";
 import { SiteHeader } from "@/components/site-header";
+import { GlobalNav } from "@/components/global-nav";
 
 const SITE_URL = "https://linguist-lens-mvp.vercel.app";
+const PAYWALL_THRESHOLD = 3; // ゲストに無料表示するフレーズ数
+
+// ─── 動的メタデータ ────────────────────────────────────────────────────────────
 
 export async function generateMetadata({
   params,
 }: {
   params: { id: string };
 }): Promise<Metadata> {
-  const ogImageUrl = `${SITE_URL}/analyses/${params.id}/opengraph-image`;
+  const meta = await getAnalysisMetadataAction(params.id);
+
+  const title = meta
+    ? `${meta.cefrLevel}レベルの英語表現 ${meta.phraseCount}選 | LinguistLens`
+    : "解析結果 | LinguistLens";
+
+  const description = meta
+    ? `英語コンテンツから抽出した${meta.phraseCount}個の重要フレーズ（${meta.cefrLevel}レベル）。句動詞・イディオム・コロケーションをニュアンス解説付きで学べます。`
+    : "LinguistLensで英語コンテンツを解析し、本当に使える表現を学びましょう。";
+
+  const ogImage = `${SITE_URL}/og`;
+
   return {
+    title,
+    description,
     openGraph: {
-      images: [{ url: ogImageUrl, width: 1200, height: 630 }],
+      title,
+      description,
+      url: `${SITE_URL}/analyses/${params.id}`,
+      siteName: "LinguistLens",
+      images: [{ url: ogImage, width: 1200, height: 630, alt: "LinguistLens" }],
+      type: "article",
     },
     twitter: {
-      card:   "summary_large_image",
-      images: [ogImageUrl],
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
     },
   };
 }
@@ -100,15 +127,21 @@ export default async function AnalysisDetailPage({
 }: {
   params: { id: string };
 }) {
+  const { userId } = await auth();
+
   // getAnalysisAction 内で auth() によるアクセス制御を実施。
-  // - ゲスト解析（user_id=NULL）は UUID を知る誰でも閲覧可
-  // - ログイン済みユーザーは自分の解析のみ閲覧可
+  // - is_public=true → 誰でも閲覧可（ゲストにはペイウォールを表示）
+  // - is_public=false, ゲスト解析（user_id=NULL）→ UUID を知る誰でも閲覧可
+  // - is_public=false, user_id 付き → オーナーのみ閲覧可
   const analysis = await getAnalysisAction(params.id);
   if (!analysis) notFound();
 
-  const { sourceUrl, cefrLevel, savedAt, data } = analysis;
+  const { sourceUrl, cefrLevel, savedAt, data, isPublic, isOwner } = analysis;
+
+  // ペイウォール判定: ゲスト（未ログイン）かつ公開記事の場合
+  const showPaywall = !userId;
+
   const isYoutube = data.source_type === "youtube";
-  const isWeb     = data.source_type === "web" || (!isYoutube && !!sourceUrl);
 
   const ytId = sourceUrl?.match(/[?&]v=([^&]{11})/)?.[1]
     ?? sourceUrl?.match(/youtu\.be\/([^?&]{11})/)?.[1];
@@ -117,9 +150,19 @@ export default async function AnalysisDetailPage({
     ? sourceUrl.slice(0, 57) + "…"
     : sourceUrl;
 
+  const shareUrl = `${SITE_URL}/analyses/${params.id}`;
+
+  // ペイウォール用: 表示するフレーズと隠すフレーズを分割
+  const visiblePhrases = showPaywall
+    ? data.phrases.slice(0, PAYWALL_THRESHOLD)
+    : data.phrases;
+  const blurredPhrases = showPaywall
+    ? data.phrases.slice(PAYWALL_THRESHOLD, PAYWALL_THRESHOLD + 2)
+    : [];
+
   return (
     <div className="min-h-screen relative">
-      <SiteHeader maxWidth="3xl" />
+      <SiteHeader maxWidth="3xl" right={<GlobalNav />} />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {/* Back link */}
@@ -155,7 +198,7 @@ export default async function AnalysisDetailPage({
           </div>
 
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight leading-tight mb-4">
-            保存した解析結果
+            {cefrLevel}レベルの英語表現 {data.total_count}選
           </h1>
 
           {/* Source link */}
@@ -182,6 +225,16 @@ export default async function AnalysisDetailPage({
           )}
         </div>
 
+        {/* ── シェアパネル（オーナーのみ表示） ── */}
+        <AnalysisSharePanel
+          analysisId={params.id}
+          initialIsPublic={isPublic}
+          isOwner={isOwner}
+          shareUrl={shareUrl}
+          phraseCount={data.total_count}
+          cefrLevel={cefrLevel}
+        />
+
         {/* Stats bar */}
         <div className="flex items-center gap-4 bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-3.5 mb-8">
           <div className="text-center">
@@ -203,32 +256,67 @@ export default async function AnalysisDetailPage({
           </div>
         </div>
 
-        {/* Phrase list */}
-        <div className="space-y-3 mb-12">
-          {data.phrases.map((phrase, i) => (
-            <PhraseCard key={i} phrase={phrase} />
-          ))}
+        {/* ── Phrase list ── */}
+        <div className="mb-12">
+          {/* 全表示フレーズ（ログイン済み or ゲストの先頭 N 件） */}
+          <div className="space-y-3">
+            {visiblePhrases.map((phrase, i) => (
+              <PhraseCard key={i} phrase={phrase} />
+            ))}
+          </div>
+
+          {/* ペイウォール: ゲストに残りをチラ見せ → CTA */}
+          {showPaywall && data.total_count > PAYWALL_THRESHOLD && (
+            <div className="mt-3">
+              {/* ぼかしプレビュー */}
+              {blurredPhrases.length > 0 && (
+                <div className="relative">
+                  <div className="space-y-3 blur-[3px] opacity-50 pointer-events-none select-none">
+                    {blurredPhrases.map((phrase, i) => (
+                      <PhraseCard key={i} phrase={phrase} />
+                    ))}
+                  </div>
+                  {/* フェードアウトグラデーション */}
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      background:
+                        "linear-gradient(to bottom, transparent 0%, #f7f8ff 80%)",
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* CTA カード */}
+              <div className="mt-4">
+                <PaywallCTA
+                  totalCount={data.total_count}
+                  shownCount={PAYWALL_THRESHOLD}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Bottom nav */}
-        <div className="flex justify-center gap-3">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            別の動画を解析する
-          </Link>
-          <Link
-            href="/vocabulary"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
-          >
-            マイ単語帳を見る
-          </Link>
-        </div>
+        {/* Bottom nav（ログイン済みのみ） */}
+        {!showPaywall && (
+          <div className="flex justify-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              別の動画を解析する
+            </Link>
+            <Link
+              href="/vocabulary"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
+            >
+              マイ単語帳を見る
+            </Link>
+          </div>
+        )}
       </main>
-
-
     </div>
   );
 }

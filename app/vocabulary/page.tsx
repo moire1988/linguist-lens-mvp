@@ -43,6 +43,7 @@ import {
 import { useAuth } from "@clerk/nextjs";
 import { AdPlaceholder } from "@/components/ad-placeholder";
 import { SiteHeader } from "@/components/site-header";
+import { NavMenu } from "@/components/nav-menu";
 import { CoachModal } from "@/components/coach-modal";
 import { TranslationAccordion } from "@/components/translation-accordion";
 import {
@@ -747,6 +748,7 @@ export default function VocabularyPage() {
               <BookMarked className="h-3 w-3 inline mr-1" />
               {vocabulary.length}語
             </span>
+            <NavMenu />
           </>
         }
       />

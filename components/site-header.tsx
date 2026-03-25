@@ -37,7 +37,7 @@ export function HeaderLogo() {
 
 export function SiteHeader({ maxWidth = "5xl", left, right }: SiteHeaderProps) {
   return (
-    <header className="border-b border-slate-100 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+    <header className="border-b border-slate-100 bg-white/80 backdrop-blur-sm sticky top-0 z-40">
       <div
         className={`${MAX_W[maxWidth]} mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3`}
       >

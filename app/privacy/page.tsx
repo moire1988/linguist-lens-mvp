@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
+import { GlobalNav } from "@/components/global-nav";
 
 export const metadata: Metadata = {
   title: "プライバシーポリシー",
@@ -12,7 +13,7 @@ const LAST_UPDATED = "2026年3月24日";
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen">
-      <SiteHeader maxWidth="3xl" />
+      <SiteHeader maxWidth="3xl" right={<GlobalNav />} />
 
       <main className="max-w-3xl mx-auto px-5 sm:px-6 py-10 sm:py-16">
         {/* Header */}

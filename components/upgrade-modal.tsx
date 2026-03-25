@@ -11,7 +11,7 @@ import { FREE_DAILY_LIMIT } from "@/lib/vocabulary";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type UpgradeReason = "vocab_limit" | "daily_limit" | "pro_feature";
+export type UpgradeReason = "vocab_limit" | "daily_limit" | "analysis_limit" | "pro_feature";
 
 interface UpgradeModalProps {
   onClose: () => void;
@@ -28,6 +28,10 @@ const NOTICE: Record<UpgradeReason, { title: string; sub: string }> = {
   daily_limit: {
     title: "今日の無料枠（1回）を使い切りました",
     sub:   "明日 0:00 にリセットされます",
+  },
+  analysis_limit: {
+    title: "無料枠（累計3回）の解析上限に達しました",
+    sub:   "Proプランにアップグレードすると解析回数が無制限になります",
   },
   pro_feature: {
     title: "この機能はProプランで利用可能です",
