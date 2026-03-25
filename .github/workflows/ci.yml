@@ -18,8 +18,8 @@ jobs:
       - name: Node.js をセットアップ
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # お使いのNodeバージョンに合わせてください
-          cache: 'npm'
+          node-version: "20" # お使いのNodeバージョンに合わせてください
+          cache: "npm"
 
       - name: パッケージをインストール
         run: npm ci # または npm install
@@ -28,14 +28,5 @@ jobs:
         run: npx tsc --noEmit
 
       - name: 🏗️ Next.jsのビルドテスト
+        # 型チェックを無視して、とにかく「ビルドが走るか」だけを確認
         run: npm run build
-        env:
-          # Supabase（前回分）
-          NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-key
-          SUPABASE_SERVICE_ROLE_KEY: dummy-key
-          # Clerk（今回の犯人）
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dummy
-          CLERK_SECRET_KEY: sk_test_dummy
-          # その他、もしコード内で使っているならこれも
-          NEXT_PUBLIC_APP_URL: http://localhost:3000
