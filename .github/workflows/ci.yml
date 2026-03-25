@@ -27,5 +27,11 @@ jobs:
       - name: 🔍 TypeScriptの型チェック（超重要！）
         run: npx tsc --noEmit
 
-      - name: 🏗️ Next.jsのビルドテスト（致命的なエラーがないか確認）
+      - name: 🏗️ Next.jsのビルドテスト
         run: npm run build
+        env:
+          # ビルド時に必要な環境変数の「ダミー」を入れておく
+          NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-key
+          SUPABASE_SERVICE_ROLE_KEY: dummy-key
+          # もし他にも必須な変数があればここに追加
