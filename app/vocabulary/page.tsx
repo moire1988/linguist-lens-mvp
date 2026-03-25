@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -691,7 +692,8 @@ export default function VocabularyPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [cefrFilter, setCefrFilter] = useState<string>("all");
   const [showFlashcard, setShowFlashcard] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  /** 0=閉じる / 1=説明＆「削除に進む」 / 2=最終確認「はい、削除する」で実行 */
+  const [clearAllModalStep, setClearAllModalStep] = useState<0 | 1 | 2>(0);
   const [showCoach, setShowCoach] = useState(false);
 
   // /examples 静的データから example_translation を補完するためのルックアップマップ
@@ -798,7 +800,7 @@ export default function VocabularyPage() {
   const handleClearByStatus = useCallback(() => {
     const updated = clearByStatus(statusTab);
     setVocabulary(updated);
-    setShowClearConfirm(false);
+    setClearAllModalStep(0);
     if (isSignedIn) void clearVocabularyAction(statusTab);
     toast.success(statusTab === 'learning' ? "学習中の単語をすべて削除しました" : "マスター済みの単語をすべて削除しました");
   }, [statusTab, isSignedIn]);
@@ -910,13 +912,6 @@ export default function VocabularyPage() {
                 >
                   <Eye className="h-4 w-4" />
                   フラッシュカード
-                </button>
-                <button
-                  onClick={() => setShowClearConfirm(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-rose-200 hover:text-rose-500 rounded-xl text-sm font-medium text-slate-400 transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  全削除
                 </button>
               </div>
               <div className="flex items-center gap-3 text-[11px] text-slate-400">
@@ -1183,6 +1178,27 @@ export default function VocabularyPage() {
               </p>
             )}
 
+            {/* 単語カード一覧の直上 — 押すと確認モーダル（2段階） */}
+            {(statusTab === "learning"
+              ? learningVocab.length > 0
+              : archivedVocab.length > 0) && (
+              <div className="flex justify-end mb-3">
+                <button
+                  type="button"
+                  onClick={() => setClearAllModalStep(1)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 hover:border-rose-200 hover:text-rose-600 rounded-xl text-xs font-medium text-slate-500 transition-colors shrink-0"
+                  aria-label={
+                    statusTab === "learning"
+                      ? "学習中の単語をすべて削除（確認）"
+                      : "マスター済みの単語をすべて削除（確認）"
+                  }
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  全削除
+                </button>
+              </div>
+            )}
+
             {/* Empty tab state */}
             {activeVocab.length === 0 && (
               <div className="text-center py-12 text-slate-400 text-sm">
@@ -1222,38 +1238,101 @@ export default function VocabularyPage() {
         )}
       </main>
 
-      {/* Clear confirm dialog */}
-      {showClearConfirm && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
-            <div className="flex items-center gap-3 mb-3">
-              <AlertTriangle className="h-5 w-5 text-rose-500 flex-shrink-0" />
-              <h3 className="font-bold text-slate-800">
-                {statusTab === 'learning' ? '学習中の単語をすべて削除' : 'マスター済みの単語をすべて削除'}
-              </h3>
+      {/* 全削除モーダル — body に portal（AppContentShell の transform 内だと fixed がずれるため） */}
+      {clearAllModalStep > 0 &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[5500] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <div
+              className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md max-h-[min(90vh,640px)] overflow-y-auto"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="vocab-clear-title"
+            >
+              {clearAllModalStep === 1 ? (
+                <>
+                  <div className="flex items-center gap-3 mb-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" aria-hidden />
+                    <h3 id="vocab-clear-title" className="font-bold text-slate-800 text-base">
+                      単語の一括削除
+                    </h3>
+                  </div>
+                  <div className="space-y-3 text-sm text-slate-600 leading-relaxed mb-6">
+                    <p>
+                      {statusTab === "learning"
+                        ? "下の一覧は「学習中」タブの単語です。全削除は検索・絞り込みに関係なく、学習中の単語をすべて削除します。"
+                        : "下の一覧は「Mastered」タブの単語です。全削除は検索・絞り込みに関係なく、マスター済みの単語をすべて削除します。"}
+                    </p>
+                    <p className="font-medium text-slate-800">
+                      {statusTab === "learning"
+                        ? `削除対象: 学習中の ${learningVocab.length} 件の表現`
+                        : `削除対象: マスター済みの ${archivedVocab.length} 件の表現`}
+                    </p>
+                    <p className="text-rose-600 text-xs font-medium">
+                      この操作は取り消せません。次の画面で最終確認のうえ削除できます。
+                    </p>
+                  </div>
+                  <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setClearAllModalStep(0)}
+                      className="w-full sm:w-auto px-5 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setClearAllModalStep(2)}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-semibold transition-colors"
+                    >
+                      削除に進む
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-3">
+                    <AlertTriangle className="h-5 w-5 text-rose-500 flex-shrink-0" aria-hidden />
+                    <h3 id="vocab-clear-title" className="font-bold text-slate-800 text-base">
+                      最終確認
+                    </h3>
+                  </div>
+                  <p className="text-sm text-slate-600 leading-relaxed mb-6">
+                    {statusTab === "learning"
+                      ? `学習中の ${learningVocab.length} 件をすべて削除してよろしいですか？一度削除すると復元できません。`
+                      : `マスター済みの ${archivedVocab.length} 件をすべて削除してよろしいですか？一度削除すると復元できません。`}
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    <button
+                      type="button"
+                      onClick={handleClearByStatus}
+                      className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold transition-colors"
+                    >
+                      はい、削除する
+                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setClearAllModalStep(1)}
+                        className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        戻る
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClearAllModalStep(0)}
+                        className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-            <p className="text-sm text-slate-500 mb-5">
-              {statusTab === 'learning'
-                ? `学習中の${learningVocab.length}個の表現がすべて削除されます。この操作は元に戻せません。`
-                : `マスター済みの${archivedVocab.length}個の表現がすべて削除されます。この操作は元に戻せません。`}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleClearByStatus}
-                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-sm font-semibold transition-colors"
-              >
-                削除する
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
 
     </div>

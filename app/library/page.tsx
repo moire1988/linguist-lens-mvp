@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronUp,
@@ -12,12 +13,11 @@ import {
   Zap,
   Shuffle,
   Search,
-  Lock,
-  Loader2,
-  Sparkles,
   Volume2,
+  Crown,
 } from "lucide-react";
-import { useAuth, useClerk } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { SiteHeader } from "@/components/site-header";
 import { GlobalNav } from "@/components/global-nav";
@@ -27,9 +27,12 @@ import { getSettings } from "@/lib/settings";
 import { useAccentLang } from "@/hooks/use-accent-lang";
 import { isSpeechSynthesisSupported, speakEnglish } from "@/lib/speech";
 import {
-  registerWaitlistLoggedInAction,
-  registerWaitlistGuestAction,
-} from "@/app/actions/waitlist";
+  isLibraryPremiumAccess,
+  getStripeStatusFromUserPublicMetadata,
+  LIBRARY_PREMIUM_TEST_OVERRIDE,
+} from "@/lib/library-premium";
+import { useEffectiveAuth } from "@/lib/dev-auth";
+import { WaitlistCta } from "@/components/waitlist-cta";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1309,88 +1312,40 @@ function ExpressionCard({
   );
 }
 
-// ─── Gatekeeping limits ──────────────────────────────────────────────────────
-
-const GUEST_LIMIT = 3;
-const FREE_LIMIT  = 10;
-
-// ─── Waitlist CTA (for free users) ───────────────────────────────────────────
-
-function WaitlistCTA() {
-  const { isSignedIn } = useAuth();
-  const [status, setStatus]   = useState<"idle" | "loading" | "done">("idle");
-  const [email, setEmail]     = useState("");
-  const [errMsg, setErrMsg]   = useState<string | null>(null);
-
-  const onSuccess = () => setStatus("done");
-
-  const handleLoggedIn = async () => {
-    setStatus("loading");
-    const res = await registerWaitlistLoggedInAction();
-    if (res.ok) { onSuccess(); } else { setErrMsg(res.error ?? "エラーが発生しました"); setStatus("idle"); }
-  };
-
-  const handleGuest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus("loading");
-    const res = await registerWaitlistGuestAction(email);
-    if (res.ok) { onSuccess(); } else { setErrMsg(res.error ?? "エラーが発生しました"); setStatus("idle"); }
-  };
-
-  if (status === "done") {
-    return (
-      <p className="text-sm font-semibold text-emerald-600 flex items-center gap-1.5">
-        <Check className="w-4 h-4" /> 登録しました！リリース時にお知らせします
-      </p>
-    );
-  }
-
-  if (isSignedIn) {
-    return (
-      <button
-        onClick={handleLoggedIn}
-        disabled={status === "loading"}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-indigo-500 text-indigo-600 text-sm font-semibold hover:bg-indigo-50 transition-colors disabled:opacity-60"
-      >
-        {status === "loading" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-        Proプランの優先案内を受け取る
-      </button>
-    );
-  }
-
-  return (
-    <form onSubmit={handleGuest} className="flex gap-2 w-full max-w-sm">
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="メールアドレス"
-        required
-        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 outline-none"
-      />
-      <button
-        type="submit"
-        disabled={status === "loading"}
-        className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-60"
-      >
-        {status === "loading" ? <Loader2 className="w-4 h-4 animate-spin" /> : "登録"}
-      </button>
-      {errMsg && <p className="text-xs text-rose-500 mt-1">{errMsg}</p>}
-    </form>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function LibraryPage() {
-  const { isLoaded, isSignedIn } = useAuth();
-  const { openSignIn } = useClerk();
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { user, isLoaded: userLoaded } = useUser();
+  const { isPro: devProSimulated } = useEffectiveAuth();
 
-  // Pro 判定（現時点では未実装 → false）
-  const isPro = false;
+  /** 未ログイン時は user の読み込みを待たない（Clerk の挙動差でブロックされないように） */
+  const ready = authLoaded && (!isSignedIn || userLoaded);
+  const stripeStatus = getStripeStatusFromUserPublicMetadata(
+    user?.publicMetadata as Record<string, unknown> | null | undefined
+  );
+  /** DEV パネルで Pro を選んでいるときは Stripe より先にフル閲覧 */
+  const isPremium =
+    ready &&
+    (devProSimulated ||
+      isLibraryPremiumAccess(LIBRARY_PREMIUM_TEST_OVERRIDE, stripeStatus));
 
-  // 表示上限
-  const visibleLimit = !isSignedIn ? GUEST_LIMIT : isPro ? Infinity : FREE_LIMIT;
+  /** プレミアム以外はライブラリ本体を Teaser（ぼかし＋オーバーレイ） */
+  const showPremiumTeaser = ready && !isPremium;
+
+  const [overlayMounted, setOverlayMounted] = useState(false);
+  useEffect(() => {
+    setOverlayMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!showPremiumTeaser) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [showPremiumTeaser]);
 
   // ── State ──────────────────────────────────────────────────────────────────
   type CefrKey = Exclude<Level, "all">;
@@ -1449,18 +1404,18 @@ export default function LibraryPage() {
   const scoreDetailLevel: CefrKey | null =
     selectedLevels.size === 1 ? (Array.from(selectedLevels)[0] ?? null) : null;
 
-  // ── Gatekeeping split ──────────────────────────────────────────────────────
-  const visibleCards = isLoaded ? displayList.slice(0, visibleLimit) : displayList.slice(0, FREE_LIMIT);
-  const hiddenCount  = Math.max(0, displayList.length - visibleCards.length);
-  const showGuestGate = isLoaded && !isSignedIn && hiddenCount > 0;
-  const showFreeGate  = isLoaded && isSignedIn && !isPro && hiddenCount > 0;
+  const visibleCards = displayList;
 
   return (
     <div className="min-h-screen">
       <SiteHeader maxWidth="5xl" right={<GlobalNav />} />
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
-
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16 relative">
+        <div
+          className={cn(
+            showPremiumTeaser && "blur-md pointer-events-none select-none"
+          )}
+        >
         {/* ── Page Header ── */}
         <div className="mb-10 sm:mb-14">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-600 text-xs font-mono font-semibold tracking-wider mb-4">
@@ -1603,77 +1558,6 @@ export default function LibraryPage() {
             ))}
           </div>
 
-          {/* ── Guest gate ── */}
-          {showGuestGate && (
-            <div className="mt-4 relative">
-              {/* Blurred preview cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 blur-sm pointer-events-none select-none opacity-60">
-                {displayList.slice(visibleLimit, visibleLimit + 4).map((entry) => (
-                  <ExpressionCard
-                    key={entry.id}
-                    entry={entry}
-                    isSavedInitially={false}
-                  />
-                ))}
-              </div>
-              {/* Overlay */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-2xl shadow-xl px-8 py-8 text-center max-w-sm mx-4">
-                  <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Lock className="w-5 h-5 text-indigo-600" />
-                  </div>
-                  <p className="text-xs font-mono font-bold text-indigo-500 uppercase tracking-widest mb-2">
-                    残り {hiddenCount} 件
-                  </p>
-                  <h3 className="text-lg font-extrabold text-slate-900 mb-2">
-                    続きを読むには無料登録
-                  </h3>
-                  <p className="text-sm text-slate-500 mb-5 leading-relaxed">
-                    全 {LIBRARY.length} 表現・保存機能・あなた専用の英語解析が使えます。
-                  </p>
-                  <button
-                    onClick={() => openSignIn()}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold text-sm hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)] transition-all"
-                  >
-                    無料ではじめる
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── Free user gate ── */}
-          {showFreeGate && (
-            <div className="mt-4 relative">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 blur-sm pointer-events-none select-none opacity-60">
-                {displayList.slice(visibleLimit, visibleLimit + 4).map((entry) => (
-                  <ExpressionCard
-                    key={entry.id}
-                    entry={entry}
-                    isSavedInitially={false}
-                  />
-                ))}
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="bg-white/95 backdrop-blur-sm border border-indigo-100 rounded-2xl shadow-xl px-8 py-8 text-center max-w-sm mx-4">
-                  <div className="w-10 h-10 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Sparkles className="w-5 h-5 text-violet-600" />
-                  </div>
-                  <p className="text-xs font-mono font-bold text-violet-500 uppercase tracking-widest mb-2">
-                    Pro 限定 · 残り {hiddenCount} 件
-                  </p>
-                  <h3 className="text-lg font-extrabold text-slate-900 mb-2">
-                    全 {LIBRARY.length} 件を解放
-                  </h3>
-                  <p className="text-sm text-slate-500 mb-5 leading-relaxed">
-                    Proプランで全表現の閲覧・解析無制限・単語帳無制限が使えます。
-                  </p>
-                  <WaitlistCTA />
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* 検索ゼロヒット */}
           {displayList.length === 0 && (
             <div className="text-center py-16 text-slate-400">
@@ -1682,8 +1566,55 @@ export default function LibraryPage() {
             </div>
           )}
         </div>
+        </div>
 
       </main>
+
+      {overlayMounted &&
+        showPremiumTeaser &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[5000] bg-slate-950/35 backdrop-blur-[2px] pointer-events-none"
+              aria-hidden
+            />
+            <div className="fixed inset-0 z-[5001] flex items-center justify-center p-4 pointer-events-none">
+              <div
+                className={cn(
+                  "pointer-events-auto w-full max-w-md rounded-2xl border border-violet-200/80",
+                  "bg-gradient-to-br from-white via-violet-50/95 to-indigo-50/90",
+                  "shadow-2xl shadow-violet-900/20 px-8 py-10 text-center"
+                )}
+                role="dialog"
+                aria-labelledby="library-premium-title"
+              >
+                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-100 to-violet-200 shadow-inner">
+                  <Crown className="h-8 w-8 text-amber-700" aria-hidden />
+                </div>
+                <h2
+                  id="library-premium-title"
+                  className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight leading-snug mb-4"
+                >
+                  厳選した生きた表現ライブラリ
+                </h2>
+                <p className="text-sm text-slate-600 leading-relaxed mb-2">
+                  この機能はプレミアム会員限定です。日常会話からビジネスまで、リアルな文脈で使える表現を無制限に閲覧・保存できます。
+                </p>
+                <p className="text-xs text-slate-500 leading-relaxed mb-6">
+                  準備中のプレミアムプランでご利用いただけます。
+                </p>
+                <WaitlistCta />
+                <Link
+                  href="/"
+                  className="mt-6 inline-block text-sm text-slate-500 hover:text-indigo-600 underline underline-offset-2 transition-colors"
+                >
+                  トップに戻る
+                </Link>
+              </div>
+            </div>
+          </>,
+          document.body
+        )}
     </div>
   );
 }

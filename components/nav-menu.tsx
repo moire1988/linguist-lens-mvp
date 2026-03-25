@@ -1,176 +1,250 @@
 "use client";
 
-import { useState, useRef, useEffect, type ElementType } from "react";
+import { useEffect, useState, type ElementType } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Menu, X, BookMarked, BookOpen, Lightbulb, Settings, Library } from "lucide-react";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type NavItem =
-  | { icon: ElementType; label: string; href: string;  badge?: number; onClick?: never }
-  | { icon: ElementType; label: string; href?: never;  badge?: number; onClick: () => void };
+import { useAuth } from "@clerk/nextjs";
+import {
+  Menu,
+  X,
+  BookMarked,
+  BookOpen,
+  Lightbulb,
+  Settings,
+  Library,
+  Crown,
+} from "lucide-react";
+import { MembershipStatusNav } from "@/components/membership-status-nav";
+import { DrawerOverlay } from "@/components/drawer-overlay";
+import { useNavigationDrawer } from "@/components/navigation-drawer-context";
+import { LinguistLensLogo } from "@/components/linguist-lens-logo";
+import { cn } from "@/lib/utils";
 
 interface NavMenuProps {
-  /** コールバックが渡された場合のみ「設定」項目を表示する */
   onSettings?: () => void;
-  /** マイ単語帳のバッジ数 (0 または未指定ならバッジ非表示) */
   vocabCount?: number;
 }
 
-// ─── Shared item style ────────────────────────────────────────────────────────
+type NavLinkDef = {
+  icon: ElementType;
+  title: string;
+  description: string;
+  href: string;
+  /** プレミアム専用ページ — タイトル横に王冠を表示 */
+  premiumCrown?: boolean;
+};
 
-const ITEM_CLS =
-  "group w-full flex items-center gap-3 py-2.5 pl-3 pr-3 rounded-xl " +
-  "text-sm font-medium text-slate-700 text-left " +
-  "border-l-2 border-transparent " +
-  "hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 " +
-  "transition-colors duration-200";
+const PRIMARY_LINKS: NavLinkDef[] = [
+  {
+    icon: BookMarked,
+    title: "マイ単語帳",
+    description: "解析した表現を復習",
+    href: "/vocabulary",
+  },
+  {
+    icon: BookOpen,
+    title: "学習記事",
+    description: "学習のコツと文化背景",
+    href: "/articles",
+  },
+  {
+    icon: Library,
+    title: "厳選表現ライブラリ",
+    description: "生きた表現を検索",
+    href: "/library",
+    premiumCrown: true,
+  },
+];
 
-// ─── Component ───────────────────────────────────────────────────────────────
+const ABOUT_LINK: NavLinkDef = {
+  icon: Lightbulb,
+  title: "LinguistLensについて",
+  description: "サービスの特徴",
+  href: "/about",
+};
+
+const ITEM_ROW =
+  "group flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left " +
+  "border border-transparent transition-all duration-200 " +
+  "hover:bg-white/10 hover:border-white/15";
 
 export function NavMenu({ onSettings, vocabCount }: NavMenuProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const { isSignedIn } = useAuth();
+  const { drawerOpen, toggleDrawer, closeDrawer } = useNavigationDrawer();
+  const [mounted, setMounted] = useState(false);
+  const [panelIn, setPanelIn] = useState(false);
 
   useEffect(() => {
-    const onClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    document.addEventListener("keydown", onEscape);
-    return () => {
-      document.removeEventListener("mousedown", onClickOutside);
-      document.removeEventListener("keydown", onEscape);
-    };
+    setMounted(true);
   }, []);
 
-  // ── Item groups ─────────────────────────────────────────────────────────────
-
-  const learningItems: NavItem[] = [
-    {
-      icon: BookMarked,
-      label: "マイ単語帳",
-      href: "/vocabulary",
-      badge: vocabCount && vocabCount > 0 ? vocabCount : undefined,
-    },
-    { icon: BookOpen, label: "学習記事", href: "/articles" },
-    { icon: Library, label: "厳選表現ライブラリ", href: "/library" },
-  ];
-
-  const utilityItems: NavItem[] = [
-    { icon: Lightbulb, label: "LinguistLensについて", href: "/about" },
-    ...(onSettings
-      ? [
-          {
-            icon: Settings,
-            label: "設定",
-            onClick: () => { onSettings(); setOpen(false); },
-          } satisfies NavItem,
-        ]
-      : []),
-  ];
-
-  // ── Renderer ─────────────────────────────────────────────────────────────────
-
-  const renderItem = (item: NavItem) => {
-    const Icon = item.icon;
-    const inner = (
-      <>
-        <Icon className="h-4 w-4 text-slate-400 group-hover:text-indigo-600 shrink-0 transition-colors duration-200" />
-        <span className="flex-1">{item.label}</span>
-        {item.badge !== undefined && (
-          <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
-            {item.badge}
-          </span>
-        )}
-      </>
-    );
-
-    if (item.href !== undefined) {
-      return (
-        <Link
-          key={item.label}
-          href={item.href}
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className={ITEM_CLS}
-        >
-          {inner}
-        </Link>
-      );
+  useEffect(() => {
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeDrawer();
+    };
+    if (drawerOpen) {
+      document.addEventListener("keydown", onEscape);
     }
+    return () => document.removeEventListener("keydown", onEscape);
+  }, [drawerOpen, closeDrawer]);
 
+  useEffect(() => {
+    if (!drawerOpen) {
+      setPanelIn(false);
+      return;
+    }
+    setPanelIn(false);
+    const id = window.requestAnimationFrame(() => {
+      setPanelIn(true);
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [drawerOpen]);
+
+  const renderLinkRow = (item: NavLinkDef, badge?: number) => {
+    const Icon = item.icon;
     return (
-      <button
-        key={item.label}
-        role="menuitem"
-        onClick={item.onClick}
-        className={ITEM_CLS}
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={closeDrawer}
+        className={ITEM_ROW}
       >
-        {inner}
-      </button>
+        <Icon
+          className="mt-0.5 h-5 w-5 shrink-0 text-violet-200 group-hover:text-white transition-colors"
+          aria-hidden
+        />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <span className="block text-sm font-semibold text-white leading-snug">
+              {item.title}
+            </span>
+            {item.premiumCrown === true && (
+              <>
+                <span className="sr-only">（プレミアム会員限定）</span>
+                <span
+                  className="inline-flex shrink-0"
+                  title="プレミアム会員限定"
+                >
+                  <Crown
+                    className="h-3.5 w-3.5 text-amber-400 drop-shadow-sm"
+                    aria-hidden
+                  />
+                </span>
+              </>
+            )}
+            {badge !== undefined && badge > 0 && (
+              <span className="shrink-0 rounded-full bg-fuchsia-500/90 px-2 py-0.5 text-[10px] font-bold text-white">
+                {badge}
+              </span>
+            )}
+          </span>
+          <span className="mt-0.5 block text-[11px] text-violet-200/80 leading-relaxed">
+            {item.description}
+          </span>
+        </span>
+      </Link>
     );
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  const drawerPanel = (
+    <>
+      <DrawerOverlay open={drawerOpen} onClose={closeDrawer} />
+      <div
+        className={cn(
+          "fixed inset-y-0 right-0 z-[110] flex w-[min(100%,22rem)] flex-col shadow-2xl shadow-black/40",
+          "border-l border-white/10",
+          "bg-gradient-to-b from-violet-900 via-purple-900 to-indigo-950",
+          "transition-transform duration-300 ease-out motion-reduce:transition-none",
+          panelIn ? "translate-x-0" : "translate-x-full"
+        )}
+        role="dialog"
+        aria-modal="true"
+        aria-label="メインメニュー"
+      >
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+          <p className="text-xs font-semibold tracking-wide text-white/90">メニュー</p>
+          <button
+            type="button"
+            onClick={closeDrawer}
+            className="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+            aria-label="閉じる"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+          <div className="space-y-1">
+            {PRIMARY_LINKS.map((item) =>
+              renderLinkRow(
+                item,
+                item.href === "/vocabulary" && vocabCount && vocabCount > 0
+                  ? vocabCount
+                  : undefined
+              )
+            )}
+            {renderLinkRow(ABOUT_LINK)}
+          </div>
+        </div>
+
+        <div className="shrink-0 border-t border-white/10 bg-black/15 px-3 py-4 space-y-3">
+          {isSignedIn ? <MembershipStatusNav variant="drawer" /> : null}
+
+          {onSettings ? (
+            <button
+              type="button"
+              onClick={() => {
+                onSettings();
+                closeDrawer();
+              }}
+              className={cn(ITEM_ROW, "w-full")}
+            >
+              <Settings
+                className="mt-0.5 h-5 w-5 shrink-0 text-violet-200 group-hover:text-white"
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1 text-left">
+                <span className="block text-sm font-semibold text-white leading-snug">
+                  設定
+                </span>
+                <span className="mt-0.5 block text-[11px] text-violet-200/80 leading-relaxed">
+                  アクセントとレベル
+                </span>
+              </span>
+            </button>
+          ) : null}
+
+          <div className="flex items-center justify-center gap-2 pt-2 opacity-50">
+            <LinguistLensLogo size={22} className="opacity-90" />
+            <span
+              className="text-[10px] font-medium tracking-wider text-white/70"
+              style={{ fontFamily: "var(--font-goldman)" }}
+            >
+              LinguistLens
+            </span>
+          </div>
+        </div>
+      </div>
+    </>
+  );
 
   return (
-    <div ref={ref} className="relative">
-      {/* トリガーボタン */}
+    <div className="relative">
       <button
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="true"
-        aria-expanded={open}
+        type="button"
+        onClick={toggleDrawer}
+        aria-haspopup="dialog"
+        aria-expanded={drawerOpen}
         aria-label="メニューを開く"
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 text-xs font-medium transition-colors"
       >
-        {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-        <span className="hidden sm:inline">Menu</span>
+        {drawerOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+        <span className="hidden sm:inline">メニュー</span>
       </button>
 
-      {/* ドロップダウン */}
-      {open && (
-        <div
-          role="menu"
-          className={[
-            "absolute right-0 top-full mt-2 w-56 z-[9999]",
-            "bg-white",
-            "border border-slate-200 rounded-2xl",
-            "shadow-xl shadow-slate-200/80",
-            "overflow-hidden",
-          ].join(" ")}
-        >
-          {/* 上部ラベル */}
-          <div className="px-4 pt-3 pb-1.5">
-            <p className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest">
-              Navigation
-            </p>
-          </div>
-
-          {/* 学習系グループ */}
-          <div className="px-2 pb-1">
-            {learningItems.map(renderItem)}
-          </div>
-
-          {/* Divider */}
-          <div className="mx-3 my-1 border-t border-slate-100" />
-
-          {/* ユーティリティグループ */}
-          <div className="px-2 pb-2">
-            {utilityItems.map(renderItem)}
-          </div>
-
-          {/* フッター */}
-          <div className="border-t border-slate-100 px-3 py-2">
-            <p className="text-[10px] text-slate-300 text-center font-mono tracking-wider">
-              LinguistLens
-            </p>
-          </div>
-        </div>
-      )}
+      {mounted && drawerOpen && typeof document !== "undefined"
+        ? createPortal(drawerPanel, document.body)
+        : null}
     </div>
   );
 }

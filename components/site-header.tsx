@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { LinguistLensLogo } from "@/components/linguist-lens-logo";
+import { DevHeaderBadge } from "@/components/dev-header-badge";
 
 // ─── Width variants (match your page's main content width) ───────────────────
 
@@ -41,9 +44,10 @@ export function SiteHeader({ maxWidth = "5xl", left, right }: SiteHeaderProps) {
       <div
         className={`${MAX_W[maxWidth]} mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3`}
       >
-        {/* Left slot */}
+        {/* Left slot — DEV バッジは全ページ共通（devMode ON 時のみ表示） */}
         <div className="flex items-center gap-2 shrink-0 min-w-0">
           {left ?? <HeaderLogo />}
+          <DevHeaderBadge />
         </div>
 
         {/* Right slot */}

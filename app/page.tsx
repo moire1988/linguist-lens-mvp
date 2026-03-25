@@ -42,7 +42,7 @@ import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
 import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
 import { CommunityAnalysesCarousel } from "@/components/community-analyses-carousel";
-import { SiteHeader, HeaderLogo } from "@/components/site-header";
+import { SiteHeader } from "@/components/site-header";
 import { NavMenu } from "@/components/nav-menu";
 import {
   getSettings,
@@ -53,7 +53,6 @@ import {
   markOnboardingCompleted,
   type CefrLevel,
   type Accent,
-  type DevAuthState,
 } from "@/lib/settings";
 import {
   getRecentPublicAnalysesAction,
@@ -125,7 +124,6 @@ export default function HomePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [devMode, setDevMode] = useState(false);
-  const [devAuthState, setDevAuthState] = useState<DevAuthState>("real");
   const [isGenerating, setIsGenerating] = useState(false);
   const [recentPublicAnalyses, setRecentPublicAnalyses] = useState<RecentPublicAnalysis[]>([]);
   const [featuredAnalyses, setFeaturedAnalyses] = useState<FeaturedAnalysis[]>([]);
@@ -139,7 +137,6 @@ export default function HomePage() {
     const s = getSettings();
     setSelectedLevel(s.defaultLevel);
     setDevMode(s.devMode);
-    setDevAuthState(s.devAuthState);
     if (s.devMode) setUrl(DEV_TEST_URL);
 
     // 公開済み解析フィードを取得
@@ -614,26 +611,12 @@ export default function HomePage() {
             setShowSettings(false);
             const s = getSettings();
             setDevMode(s.devMode);
-            setDevAuthState(s.devAuthState);
             if (s.devMode) setUrl(DEV_TEST_URL);
           }}
         />
       )}
       <SiteHeader
         maxWidth="5xl"
-        left={
-          <div className="flex items-center gap-2">
-            <HeaderLogo />
-            {devMode && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-600 border border-amber-200">
-                <span className="text-[10px] font-bold">🛠️ DEV</span>
-                {devAuthState !== "real" && (
-                  <span className="text-[9px] font-mono opacity-70">{devAuthState}</span>
-                )}
-              </span>
-            )}
-          </div>
-        }
         right={
           <>
             {/* マイ単語帳 */}
