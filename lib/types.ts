@@ -28,6 +28,8 @@ export interface AnalysisResult {
   phrases: PhraseResult[];
   source_type: "youtube" | "web" | "text";
   total_count: number;
+  /** 元コンテンツのタイトル（AI または取得元メタデータ） */
+  title?: string;
   source_text?: string;
   full_script_with_highlight?: string;
   overall_level?: string;

@@ -6,7 +6,10 @@ export interface RecentPublicAnalysis {
   title: string | null;
   url: string | null;
   level: string;
+  /** プレビュー用（先頭数件のみ）。件数表示は phraseCount を使う */
   phrases: PhraseResult[];
+  /** result_json.total_count に相当する抽出総数 */
+  phraseCount: number;
   createdAt: string;
 }
 

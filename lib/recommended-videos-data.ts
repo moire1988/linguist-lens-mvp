@@ -1,3 +1,5 @@
+import { extractYouTubeVideoId } from "@/lib/youtube-url";
+
 export type VideoCategory = "TED" | "Speech" | "Vlog" | "News" | "Podcast";
 
 export interface RecommendedVideoCard {
@@ -16,6 +18,25 @@ export interface RecommendedVideoCard {
    * false = 準備中 → リンク不可・Coming Soon 表示
    */
   ready: boolean;
+  /**
+   * トップで「おすすめURL」として入力されたときのフェイク解析後の遷移先。
+   * 未指定時は `/examples/${slug}`。
+   */
+  targetPath?: string;
+}
+
+/**
+ * 入力 URL が RECOMMENDED_VIDEOS のいずれか（ready かつ YouTube ID 一致）と一致する場合、
+ * 遷移先パスを返す。一致しなければ null。
+ */
+export function getRecommendedVideoTargetPathByUrl(url: string): string | null {
+  const id = extractYouTubeVideoId(url.trim());
+  if (!id) return null;
+  const card = RECOMMENDED_VIDEOS.find((v) => v.youtubeId === id && v.ready);
+  if (!card) return null;
+  const custom = card.targetPath?.trim();
+  if (custom) return custom;
+  return `/examples/${card.slug}`;
 }
 
 export const RECOMMENDED_VIDEOS: RecommendedVideoCard[] = [

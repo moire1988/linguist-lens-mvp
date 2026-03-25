@@ -13,6 +13,8 @@ export interface SavedAnalysis {
   id: string;
   savedAt: string;
   sourceUrl?: string;
+  /** DB `saved_analyses.title`（記事・動画タイトル） */
+  contentTitle?: string | null;
   inputMode: "url" | "text";
   cefrLevel: string;
   data: AnalysisResult;

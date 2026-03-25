@@ -1,7 +1,41 @@
 import { supabase, createAuthClient } from "@/lib/supabase";
+import { fetchYoutubeOembedTitle } from "@/lib/youtube-oembed";
 import type { AnalysisResult } from "@/lib/types";
 import type { FeaturedAnalysis, RecentPublicAnalysis } from "@/lib/public-analyses-types";
 import type { SavedAnalysis } from "@/lib/saved-analyses";
+
+function isYoutubeUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return url.includes("youtube.com") || url.includes("youtu.be");
+}
+
+/** result_json から抽出総数を正規化（total_count の型ゆれ・欠損を吸収） */
+function resolvePhraseCountFromRow(row: AnalysisRow): number {
+  const raw = row.result_json;
+  let r: AnalysisResult | null = null;
+  if (raw == null) return 0;
+  if (typeof raw === "string") {
+    try {
+      r = JSON.parse(raw) as AnalysisResult;
+    } catch {
+      return 0;
+    }
+  } else {
+    r = raw as AnalysisResult;
+  }
+  const phrases = Array.isArray(r.phrases) ? r.phrases : [];
+  const len = phrases.length;
+  const tc = r.total_count as unknown;
+  let nFromTotal: number | null = null;
+  if (typeof tc === "number" && Number.isFinite(tc) && tc >= 0) {
+    nFromTotal = Math.floor(tc);
+  } else if (typeof tc === "string" && tc.trim() !== "") {
+    const p = parseInt(tc.trim(), 10);
+    if (!Number.isNaN(p) && p >= 0) nFromTotal = p;
+  }
+  if (nFromTotal !== null) return Math.max(nFromTotal, len);
+  return len;
+}
 
 // ─── DB row shape (snake_case) ────────────────────────────────────────────────
 
@@ -163,14 +197,39 @@ export async function getRecentPublicAnalyses(
     .limit(limit);
 
   if (error || !data) return [];
-  return (data as AnalysisRow[]).map((row) => ({
-    id: row.id,
-    title: row.title,
-    url: row.url,
-    level: row.level,
-    phrases: (row.result_json?.phrases ?? []).slice(0, 3),
-    createdAt: row.created_at,
-  }));
+
+  const base: RecentPublicAnalysis[] = (data as AnalysisRow[]).map((row) => {
+    const fromRow = row.title?.trim() || null;
+    const fromJson = row.result_json?.title;
+    const merged =
+      fromRow ||
+      (typeof fromJson === "string" && fromJson.trim() ? fromJson.trim() : null);
+    const phrasesFull = Array.isArray(row.result_json?.phrases)
+      ? row.result_json.phrases
+      : [];
+    const phraseCount = resolvePhraseCountFromRow(row);
+
+    return {
+      id: row.id,
+      title: merged,
+      url: row.url,
+      level: row.level,
+      phrases: phrasesFull.slice(0, 3),
+      phraseCount,
+      createdAt: row.created_at,
+    };
+  });
+
+  return Promise.all(
+    base.map(async (item) => {
+      if (item.title) return item;
+      if (item.url && isYoutubeUrl(item.url)) {
+        const oembed = await fetchYoutubeOembedTitle(item.url);
+        if (oembed) return { ...item, title: oembed };
+      }
+      return item;
+    })
+  );
 }
 
 // ─── 注目のピックアップ（is_featured=true）──────────────────────────────────

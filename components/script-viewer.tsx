@@ -131,6 +131,17 @@ function buildClientHighlight(text: string, phrases: PhraseResult[]): string {
   return parts.join("");
 }
 
+/** 読み上げ用に HTML をプレーンテキストへ。正規表現のみだと本文の「x < y」等を誤削除するため、可能なら DOM で抽出する。 */
+function htmlToPlainTextForTts(html: string): string {
+  const collapsed = html.replace(/\s+/g, " ").trim();
+  if (typeof document === "undefined") {
+    return collapsed.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  }
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return (div.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function ScriptViewer({
@@ -175,10 +186,14 @@ export function ScriptViewer({
     return phrases.length ? buildClientHighlight(text, phrases) : null;
   }, [highlightedHtml, text, phrases]);
 
-  // Plain text for TTS (strip tags if needed)
+  // 読み上げは生の transcript（text）を最優先。highlight 用 HTML からの単純なタグ除去は
+  // 「<」を含む本文を壊しうるため、text が空のときだけ HTML から DOM 抽出にフォールバックする。
   const ttsText = useMemo(() => {
-    if (highlightedHtml) return highlightedHtml.replace(/<[^>]*>/g, "");
-    return text;
+    const plain = text.trim();
+    if (plain.length > 0) return plain;
+    const hl = highlightedHtml?.trim();
+    if (hl) return htmlToPlainTextForTts(hl);
+    return "";
   }, [highlightedHtml, text]);
 
   // ─── TTS ───────────────────────────────────────────────────────────────
@@ -187,12 +202,16 @@ export function ScriptViewer({
     if (!("speechSynthesis" in window)) {
       return;
     }
+    const toSpeak = ttsText.trim();
+    if (!toSpeak) {
+      return;
+    }
     if (isSpeaking) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
       return;
     }
-    const utt = new SpeechSynthesisUtterance(ttsText);
+    const utt = new SpeechSynthesisUtterance(toSpeak);
     const { accent } = getSettings();
     utt.lang = ACCENT_LANG[accent];
     utt.rate = speed;

@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import type { AnalysisResult } from "@/lib/types";
+import { fetchYoutubeOembedTitle } from "@/lib/youtube-oembed";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -36,12 +37,21 @@ export async function savePublicAnalysis(payload: {
     return { success: false, error: "管理者権限がありません" };
   }
 
+  let resolvedTitle: string | null = null;
+  if (
+    payload.data.source_type === "youtube" &&
+    payload.sourceUrl?.trim()
+  ) {
+    resolvedTitle = await fetchYoutubeOembedTitle(payload.sourceUrl.trim());
+  }
+
   // ── 2. サービスロールで is_public = true を INSERT ─────────
   const db = createAdminClient();
   const { data, error } = await db
     .from("saved_analyses")
     .insert({
       user_id:     userId,
+      title:       resolvedTitle,
       url:         payload.sourceUrl ?? null,
       level:       payload.cefrLevel,
       result_json: payload.data,
