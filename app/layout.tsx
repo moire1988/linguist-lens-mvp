@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import type { Metadata } from "next";
 import { Inter, Goldman } from "next/font/google";
 import "./globals.css";

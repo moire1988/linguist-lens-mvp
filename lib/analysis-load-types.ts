@@ -4,6 +4,8 @@ import type { SavedAnalysis } from "@/lib/saved-analyses";
 export type AnalysisDetail = SavedAnalysis & {
   isPublic: boolean;
   isOwner: boolean;
+  /** ユーザーが掲載トグル ON（管理者の is_public 承認待ち） */
+  publicReviewRequested: boolean;
 };
 
 /** 解析詳細の読み込み失敗理由（開発時デバッグ用） */

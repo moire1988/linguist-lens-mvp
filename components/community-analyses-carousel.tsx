@@ -94,7 +94,7 @@ export function CommunityAnalysesCarousel({
             return (
               <Link
                 key={item.id}
-                href={`/share/${item.id}`}
+                href={`/analyses/${item.id}`}
                 className={cn(
                   "snap-start shrink-0 w-[256px] rounded-xl overflow-hidden",
                   "bg-white border border-slate-200 shadow-sm",

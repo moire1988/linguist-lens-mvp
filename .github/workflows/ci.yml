@@ -1,0 +1,43 @@
+name: CI Checks
+
+# develop から main への Pull Request が作られた時に発火
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check:
+    name: Type Check, Lint & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: コードをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js をセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20" # お使いのNodeバージョンに合わせてください
+          cache: "npm"
+
+      - name: パッケージをインストール
+        run: npm ci # または npm install
+
+      - name: 🔍 TypeScriptの型チェック（超重要！）
+        run: npx tsc --noEmit
+
+      - name: 🏗️ Next.jsのビルドテスト
+        # 型チェックを無視して、とにかく「ビルドが走るか」だけを確認
+        run: npm run build
+        env:
+          # Supabase: URLの形式をより「本物らしく」
+          NEXT_PUBLIC_SUPABASE_URL: https://xyz12345.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy
+          # Clerk: 形式チェックを回避するために長めのダミー
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZGV2ZWxvcGVyLmRldmVsIiw
+          CLERK_SECRET_KEY: sk_test_dummy
+          # サイトマップ生成時にチェックされがちな変数
+          NEXT_PUBLIC_APP_URL: https://localhost:3000
+          # ビルド時のみの特別な設定
+          SKIP_ENV_VALIDATION: "true"
