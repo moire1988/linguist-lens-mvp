@@ -1,0 +1,34 @@
+name: CI Checks
+
+# develop から main への Pull Request が作られた時に発火
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check:
+    name: Type Check, Lint & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: コードをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js をセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # お使いのNodeバージョンに合わせてください
+          cache: 'npm'
+
+      - name: パッケージをインストール
+        run: npm ci # または npm install
+
+      - name: 🔍 TypeScriptの型チェック（超重要！）
+        run: npx tsc --noEmit
+
+      - name: 🧹 Linter（文法チェック）を実行
+        run: npm run lint
+
+      - name: 🏗️ Next.jsのビルドテスト（致命的なエラーがないか確認）
+        run: npm run build
