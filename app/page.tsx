@@ -477,10 +477,10 @@ export default function HomePage() {
             </span>
           </div>
           <h1 className={cn(
-            "font-black text-slate-900 tracking-tight mb-4",
+            "font-black text-slate-900 tracking-tight mb-4 leading-[1.45]",
             hasContent
-              ? "text-2xl sm:text-3xl leading-snug"
-              : "text-3xl sm:text-[2.75rem] leading-snug sm:leading-[1.35]"
+              ? "text-2xl sm:text-3xl"
+              : "text-3xl sm:text-[2.75rem]"
           )}>
             英語コンテンツから
             <br />
