@@ -1,15 +1,19 @@
-"use server";
+import "server-only";
 
 import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import fs from "fs";
 import path from "path";
 import { fetchTranscript } from "youtube-transcript";
-import type { PhraseResult, AnalysisResult } from "@/lib/types";
+import type { AnalyzeErrorCode, PhraseResult, AnalysisResult } from "@/lib/types";
 import { DEV_TEST_VIDEO_ID } from "@/lib/settings";
 import { extractYouTubeVideoId } from "@/lib/youtube-url";
-export type { ExpressionType, PhraseResult, AnalysisResult } from "@/lib/types";
 
-export type AnalyzeErrorCode = "no_subtitles" | "invalid_url" | "generic";
+export type {
+  AnalyzeErrorCode,
+  ExpressionType,
+  PhraseResult,
+  AnalysisResult,
+} from "@/lib/types";
 
 function loadMockTranscript(): string {
   const filePath = path.join(process.cwd(), "data", "mock-transcript.json");
@@ -531,22 +535,51 @@ async function runUrlAnalysis(url: string, cefrLevel: string) {
 
 function classifyError(msg: string): AnalyzeErrorCode {
   if (
+    msg.includes("ANTHROPIC_API_KEY") ||
+    (msg.includes("APIキーが設定されていません") &&
+      (msg.includes(".env") || msg.includes("環境")))
+  ) {
+    return "missing_anthropic_key";
+  }
+  if (msg.includes("SUPADATA_API_KEY") || msg.includes("字幕取得APIキーが設定されていません")) {
+    return "missing_supadata_key";
+  }
+  if (msg.includes("AIの利用上限に達しました")) return "ai_rate_limit";
+  if (msg.includes("AI APIの認証に失敗")) return "ai_auth_error";
+  if (msg.includes("利用可能なAIモデルが見つかりません")) return "ai_error";
+  if (msg.startsWith("AI解析エラー") || msg.includes("AI解析に失敗しました")) {
+    return "ai_error";
+  }
+
+  if (
+    msg.includes("字幕の取得に失敗しました") ||
+    msg.includes("字幕APIエラー") ||
+    msg.includes("字幕取得サービスで一時的なエラー") ||
+    msg.includes("字幕取得リクエストが無効")
+  ) {
+    return "subtitle_api_error";
+  }
+
+  if (
     msg.includes("字幕が存在しません") ||
     msg.includes("字幕が見つかりませんでした") ||
     msg.includes("字幕が見つかりません") ||
     msg.includes("has no transcript") ||
     msg.includes("Transcript not found") ||
     (msg.includes("404") && msg.includes("字幕"))
-  ) return "no_subtitles";
+  ) {
+    return "no_subtitles";
+  }
 
   if (
     msg.includes("URLの形式が正しくありません") ||
     msg.includes("YouTube URLの形式") ||
     msg.includes("Invalid URL") ||
-    msg.includes("https://") ||
     msg.includes("URL を確認") ||
-    msg.includes("形式が正しく")
-  ) return "invalid_url";
+    (msg.includes("形式が正しく") && msg.includes("URL"))
+  ) {
+    return "invalid_url";
+  }
 
   return "generic";
 }
@@ -562,8 +595,14 @@ export async function analyzeContent(
 > {
   try {
     if (!input.trim()) return { success: false, error: "入力が空です", errorCode: "generic" };
-    if (!process.env.ANTHROPIC_API_KEY)
-      return { success: false, error: "APIキーが設定されていません。.env.local を確認してください。", errorCode: "generic" };
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return {
+        success: false,
+        error:
+          "Anthropic APIキーが設定されていません（ANTHROPIC_API_KEY）。Vercel の Environment Variables を確認してください。",
+        errorCode: "missing_anthropic_key",
+      };
+    }
 
     // Developer mode: skip Supadata API, load transcript from local file or demo text
     if (devMode && inputMode === "url") {

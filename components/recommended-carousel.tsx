@@ -120,7 +120,7 @@ export function RecommendedCarousel() {
                   <div className="relative h-[144px] bg-slate-100 overflow-hidden">
                     {v.youtubeId && (
                       <img
-                        src={`https://img.youtube.com/vi/${v.youtubeId}/hqdefault.jpg`}
+                        src={`https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg`}
                         alt={v.title}
                         className="w-full h-full object-cover opacity-40 grayscale"
                       />
@@ -162,7 +162,7 @@ export function RecommendedCarousel() {
                 <div className="relative h-[144px] bg-slate-100 overflow-hidden">
                   {v.youtubeId && (
                     <img
-                      src={`https://img.youtube.com/vi/${v.youtubeId}/hqdefault.jpg`}
+                      src={`https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg`}
                       alt={v.title}
                       className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
                     />

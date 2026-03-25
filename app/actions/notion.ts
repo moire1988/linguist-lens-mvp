@@ -1,7 +1,7 @@
 "use server";
 
 import { Client } from "@notionhq/client";
-import type { PhraseResult } from "@/app/actions/analyze";
+import type { PhraseResult } from "@/lib/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 

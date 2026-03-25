@@ -32,3 +32,15 @@ export interface AnalysisResult {
   full_script_with_highlight?: string;
   overall_level?: string;
 }
+
+/** UI / devMode の検証用。一般ユーザー向けコピーとは別にコードで原因を切り分け可能。 */
+export type AnalyzeErrorCode =
+  | "no_subtitles"
+  | "invalid_url"
+  | "missing_anthropic_key"
+  | "missing_supadata_key"
+  | "subtitle_api_error"
+  | "ai_error"
+  | "ai_rate_limit"
+  | "ai_auth_error"
+  | "generic";

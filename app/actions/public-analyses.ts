@@ -1,9 +1,9 @@
 "use server";
 
 import { getRecentPublicAnalyses, getFeaturedAnalyses } from "@/lib/db/analyses";
-import type { RecentPublicAnalysis, FeaturedAnalysis } from "@/lib/db/analyses";
+import type { FeaturedAnalysis, RecentPublicAnalysis } from "@/lib/public-analyses-types";
 
-export type { RecentPublicAnalysis, FeaturedAnalysis };
+export type { FeaturedAnalysis, RecentPublicAnalysis };
 
 export async function getRecentPublicAnalysesAction(
   limit = 6
