@@ -251,7 +251,7 @@ export default function AboutPage() {
           </FadeUp>
 
           <FadeUp>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-[1.15] tracking-tight mb-4 sm:mb-6 text-slate-900">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-[1.45] tracking-tight mb-4 sm:mb-6 text-slate-900">
               「読める・聞ける」を、
               <br />
               <span className="bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 bg-clip-text text-transparent">
@@ -302,7 +302,7 @@ export default function AboutPage() {
               <p className="text-xs font-mono font-bold text-indigo-400 uppercase tracking-widest mb-3">
                 ✦ Pain Points
               </p>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-[1.45]">
                 こんな「中級者の壁」に
                 <br />
                 ぶつかっていませんか？
@@ -356,7 +356,7 @@ export default function AboutPage() {
                 <p className="text-xs font-mono font-bold text-indigo-500 uppercase tracking-widest mb-2">
                   ✦ Developer Story
                 </p>
-                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight text-slate-900">
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-[1.45] text-slate-900">
                   10年間の学習と、
                   <br />
                   外資系での葛藤から生まれました。
@@ -399,7 +399,7 @@ export default function AboutPage() {
               <p className="text-xs font-mono font-bold text-indigo-500 uppercase tracking-widest mb-3">
                 ✦ Our Approach
               </p>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-slate-900">
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-[1.45] text-slate-900">
                 丸暗記を捨てて、
                 <br />
                 <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
@@ -463,7 +463,7 @@ export default function AboutPage() {
               <p className="text-xs font-mono font-bold text-indigo-500 uppercase tracking-widest mb-3">
                 ✦ Learning Loop
               </p>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-[1.45]">
                 好きなコンテンツから、
                 <br />
                 生きた英語を吸収するループ
@@ -615,7 +615,7 @@ export default function AboutPage() {
             <p className="text-xs font-mono font-bold text-indigo-500 uppercase tracking-widest mb-4">
               ✦ Get Started Free
             </p>
-            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight mb-4 sm:mb-5 text-slate-900">
+            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-[1.45] mb-4 sm:mb-5 text-slate-900">
               「知っている」から
               <br />
               <span className="bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 bg-clip-text text-transparent">
