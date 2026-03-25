@@ -2,7 +2,7 @@
 
 import type { ReactNode, ElementType } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import {
   Sparkles,
   Brain,
@@ -19,19 +19,21 @@ import { LinguistLensLogo } from "@/components/linguist-lens-logo";
 
 // ─── Animation Variants ───────────────────────────────────────────────────────
 
-const fadeUp = {
-  hidden:   { opacity: 0, y: 48 },
-  visible:  { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] } },
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+const fadeUp: Variants = {
+  hidden:  { opacity: 0, y: 48 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: EASE } },
 };
 
-const stagger = {
+const stagger: Variants = {
   hidden:  {},
   visible: { transition: { staggerChildren: 0.13 } },
 };
 
-const slideLeft = {
-  hidden:   { opacity: 0, x: -48 },
-  visible:  { opacity: 1, x: 0,  transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } },
+const slideLeft: Variants = {
+  hidden:  { opacity: 0, x: -48 },
+  visible: { opacity: 1, x: 0,  transition: { duration: 0.55, ease: EASE } },
 };
 
 // ─── Helper Components ────────────────────────────────────────────────────────
