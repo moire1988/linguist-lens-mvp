@@ -1,11 +1,12 @@
 "use server";
 
-import Anthropic from "@anthropic-ai/sdk";
-import { unstable_cache } from "next/cache";
+import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import fs from "fs";
 import path from "path";
+import { fetchTranscript } from "youtube-transcript";
 import type { PhraseResult, AnalysisResult } from "@/lib/types";
 import { DEV_TEST_VIDEO_ID } from "@/lib/settings";
+import { extractYouTubeVideoId } from "@/lib/youtube-url";
 export type { ExpressionType, PhraseResult, AnalysisResult } from "@/lib/types";
 
 export type AnalyzeErrorCode = "no_subtitles" | "invalid_url" | "generic";
@@ -164,14 +165,36 @@ function throwSupadataApiError(data: SupadataTranscriptJson): never {
   throw new Error(messages[code] ?? (detail || `字幕APIエラー（${code || "unknown"}）`));
 }
 
-// ─── YouTube（Supadata API 経由）──────────────────────────────────────────
+// ─── YouTube: Supadata（主） + youtube-transcript（フォールバック）──────────
 
-async function getYouTubeTranscript(url: string, cefrLevel: string): Promise<string> {
-  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
-  if (!match) throw new Error("YouTube URLの形式が正しくありません");
-  const videoId = match[1];
-  const offsetSeconds = getYouTubeOffsetSeconds(url);
+const SUPADATA_FETCH_MS = 45_000;
 
+async function getYouTubeTranscriptUnofficial(
+  videoId: string,
+  cefrLevel: string,
+  offsetSeconds: number
+): Promise<string> {
+  const chunks = await fetchTranscript(videoId);
+  let list = chunks;
+  if (offsetSeconds > 0 && chunks.length > 0) {
+    const filtered = chunks.filter((c) => {
+      const startSec = c.offset >= 1000 ? c.offset / 1000 : c.offset;
+      return startSec >= offsetSeconds - 0.05;
+    });
+    if (filtered.length > 0) list = filtered;
+  }
+  const raw = list.map((c) => c.text).join(" ").replace(/\s{2,}/g, " ").trim();
+  if (!raw) {
+    throw new Error("この動画には字幕が見つかりませんでした。");
+  }
+  return normalizeAndTruncateText(raw, cefrLevel);
+}
+
+async function getYouTubeTranscriptSupadata(
+  videoId: string,
+  cefrLevel: string,
+  offsetSeconds: number
+): Promise<string> {
   const apiKey = process.env.SUPADATA_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -179,13 +202,16 @@ async function getYouTubeTranscript(url: string, cefrLevel: string): Promise<str
     );
   }
 
-  const endpoint =
-    `https://api.supadata.ai/v1/youtube/transcript` +
-    `?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+  const params = new URLSearchParams({ videoId });
+  if (offsetSeconds === 0) {
+    params.set("text", "true");
+  }
+
+  const endpoint = `https://api.supadata.ai/v1/youtube/transcript?${params.toString()}`;
 
   const res = await fetch(endpoint, {
     headers: { "x-api-key": apiKey },
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(SUPADATA_FETCH_MS),
   });
 
   if (res.status === 404) {
@@ -255,6 +281,24 @@ async function getYouTubeTranscript(url: string, cefrLevel: string): Promise<str
   return normalizeAndTruncateText(transcript, cefrLevel);
 }
 
+async function getYouTubeTranscript(url: string, cefrLevel: string): Promise<string> {
+  const videoId = extractYouTubeVideoId(url);
+  if (!videoId) {
+    throw new Error("YouTube URLの形式が正しくありません");
+  }
+  const offsetSeconds = getYouTubeOffsetSeconds(url);
+
+  try {
+    return await getYouTubeTranscriptSupadata(videoId, cefrLevel, offsetSeconds);
+  } catch (primary) {
+    try {
+      return await getYouTubeTranscriptUnofficial(videoId, cefrLevel, offsetSeconds);
+    } catch {
+      throw primary instanceof Error ? primary : new Error("字幕の取得に失敗しました");
+    }
+  }
+}
+
 // ─── Web Article ───────────────────────────────────────────────────────────
 
 async function getWebContent(url: string, cefrLevel: string): Promise<string> {
@@ -306,6 +350,68 @@ interface ClaudeResult {
   phrases: PhraseResult[];
   fullScriptWithHighlight: string;
   overallLevel?: string;
+}
+
+function anthropicModelsToTry(): string[] {
+  const envModel = process.env.ANTHROPIC_ANALYSIS_MODEL?.trim();
+  const candidates = [
+    envModel,
+    "claude-sonnet-4-5-20250929",
+    "claude-sonnet-4-5",
+    "claude-3-5-sonnet-20241022",
+  ].filter((m): m is string => typeof m === "string" && m.length > 0);
+  return Array.from(new Set(candidates));
+}
+
+function parseClaudeRawOutput(rawText: string, snippet: string): ClaudeResult {
+  const objMatch = rawText.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    try {
+      const parsed = JSON.parse(objMatch[0]) as {
+        phrases: PhraseResult[];
+        fullScriptWithHighlight?: string;
+        overallLevel?: string;
+      };
+      if (Array.isArray(parsed.phrases) && parsed.phrases.length > 0) {
+        return {
+          phrases: parsed.phrases,
+          fullScriptWithHighlight: parsed.fullScriptWithHighlight ?? snippet,
+          overallLevel: parsed.overallLevel,
+        };
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const arrMatch = rawText.match(/\[[\s\S]*\]/);
+  if (arrMatch) {
+    try {
+      const phrases = JSON.parse(arrMatch[0]) as PhraseResult[];
+      return { phrases, fullScriptWithHighlight: snippet };
+    } catch {
+      /* fall through */
+    }
+  }
+
+  throw new Error("AIの応答形式が予期しないものでした。もう一度お試しください。");
+}
+
+function claudeErrorToUserMessage(err: unknown): Error {
+  if (err instanceof APIError) {
+    if (err.status === 429) {
+      return new Error(
+        "AIの利用上限に達しました。しばらくしてから再度お試しください。"
+      );
+    }
+    if (err.status === 401 || err.status === 403) {
+      return new Error(
+        "AI APIの認証に失敗しました。環境設定をご確認ください。"
+      );
+    }
+    return new Error(`AI解析エラー（${String(err.status)}）: ${err.message}`);
+  }
+  return err instanceof Error ? err : new Error("AI解析に失敗しました");
 }
 
 async function callClaude(text: string, cefrLevel: string): Promise<ClaudeResult> {
@@ -374,72 +480,52 @@ ${snippet}
   "fullScriptWithHighlight": "【重要】上記テキストを一字一句正確にコピーし、抽出した各表現が実際に使われている箇所のみHTMLタグで囲んだ文字列。タグ形式は必ずシングルクォートを使うこと: <b data-expr='expressionの値'>実際のテキスト</b>。ルール：①代名詞の変化（oneself→himself等）があっても同じ表現として囲む ②動詞活用形（end up→ended up）も囲む ③テキストの文字は一切変更せずタグ追加のみ ④data-exprにはphrasesのexpressionの値をそのまま入れる"
 }`;
 
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 8000,
-    messages: [{ role: "user", content: userPrompt }],
-    system: systemPrompt,
-  });
+  const models = anthropicModelsToTry();
+  let lastModelError: unknown;
 
-  const rawText =
-    response.content[0].type === "text" ? response.content[0].text : "";
-
-  // ── Try parsing as full object ──────────────────────────────────────────
-  const objMatch = rawText.match(/\{[\s\S]*\}/);
-  if (objMatch) {
+  for (const model of models) {
     try {
-      const parsed = JSON.parse(objMatch[0]) as {
-        phrases: PhraseResult[];
-        fullScriptWithHighlight?: string;
-        overallLevel?: string;
-      };
-      if (Array.isArray(parsed.phrases) && parsed.phrases.length > 0) {
-        return {
-          phrases: parsed.phrases,
-          fullScriptWithHighlight: parsed.fullScriptWithHighlight ?? snippet,
-          overallLevel: parsed.overallLevel,
-        };
+      const response = await client.messages.create({
+        model,
+        max_tokens: 8000,
+        messages: [{ role: "user", content: userPrompt }],
+        system: systemPrompt,
+      });
+      const rawText =
+        response.content[0].type === "text" ? response.content[0].text : "";
+      return parseClaudeRawOutput(rawText, snippet);
+    } catch (err) {
+      lastModelError = err;
+      if (err instanceof APIError && err.status === 404) {
+        continue;
       }
-    } catch {
-      // fall through to array fallback below
+      throw claudeErrorToUserMessage(err);
     }
   }
 
-  // ── Fallback: extract phrases array only (ignore highlight) ─────────────
-  const arrMatch = rawText.match(/\[[\s\S]*\]/);
-  if (arrMatch) {
-    try {
-      const phrases = JSON.parse(arrMatch[0]) as PhraseResult[];
-      return { phrases, fullScriptWithHighlight: snippet };
-    } catch {
-      // fall through
-    }
-  }
-
-  throw new Error("AIの応答形式が予期しないものでした。もう一度お試しください。");
+  throw lastModelError instanceof Error
+    ? lastModelError
+    : new Error("利用可能なAIモデルが見つかりませんでした。");
 }
 
-// ─── Server-side shared cache for URL analysis ────────────────────────────
-// Shared across ALL users — prevents repeated Supadata + Claude API calls
-// for the same URL+level (e.g. sample videos). TTL: 7 days.
+// ─── URL analysis (no unstable_cache: avoids serverless cache edge cases) ───
 
-const cachedUrlAnalysis = unstable_cache(
-  async (url: string, cefrLevel: string) => {
-    let text: string;
-    let sourceType: "youtube" | "web";
-    if (url.includes("youtube.com") || url.includes("youtu.be")) {
-      text = await getYouTubeTranscript(url, cefrLevel);
-      sourceType = "youtube";
-    } else {
-      text = await getWebContent(url, cefrLevel);
-      sourceType = "web";
-    }
-    const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(text, cefrLevel);
-    return { text, sourceType, phrases, fullScriptWithHighlight, overallLevel };
-  },
-  ["url-analysis-v1"],
-  { revalidate: 7 * 24 * 60 * 60 } // 7 days
-);
+async function runUrlAnalysis(url: string, cefrLevel: string) {
+  let text: string;
+  let sourceType: "youtube" | "web";
+  if (extractYouTubeVideoId(url)) {
+    text = await getYouTubeTranscript(url, cefrLevel);
+    sourceType = "youtube";
+  } else {
+    text = await getWebContent(url, cefrLevel);
+    sourceType = "web";
+  }
+  const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(
+    text,
+    cefrLevel
+  );
+  return { text, sourceType, phrases, fullScriptWithHighlight, overallLevel };
+}
 
 // ─── Main Server Action ────────────────────────────────────────────────────
 
@@ -486,7 +572,7 @@ export async function analyzeContent(
         isTestUrl ? loadMockTranscript() : DEMO_TRANSCRIPT,
         cefrLevel
       );
-      // Always call Claude directly — bypass unstable_cache so every submit tests the prompt
+      // Always call Claude directly so every submit tests the prompt
       const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(transcript, cefrLevel);
       return {
         success: true,
@@ -517,9 +603,9 @@ export async function analyzeContent(
       };
     }
 
-    // URL mode: use server-side cache (shared across users)
+    // URL mode
     const { text, sourceType, phrases, fullScriptWithHighlight, overallLevel } =
-      await cachedUrlAnalysis(input.trim(), cefrLevel);
+      await runUrlAnalysis(input.trim(), cefrLevel);
 
     return {
       success: true,
