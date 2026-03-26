@@ -17,6 +17,8 @@ import { GlobalNav } from "@/components/global-nav";
 import { AdBanner } from "@/components/ad-banner";
 import { fetchYoutubeOembedTitle } from "@/lib/youtube-oembed";
 import { resolveTranscriptPlainText } from "@/lib/analysis-transcript";
+import { cn } from "@/lib/utils";
+import { CEFR_CONTENT_META } from "@/lib/cefr-content-meta";
 
 function fallbackLabelFromUrl(url: string): string {
   try {
@@ -121,15 +123,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-const CEFR_COLORS: Record<string, string> = {
-  A1: "bg-slate-100 text-slate-600",
-  A2: "bg-green-100 text-green-700",
-  B1: "bg-blue-100 text-blue-700",
-  B2: "bg-indigo-100 text-indigo-700",
-  C1: "bg-purple-100 text-purple-700",
-  C2: "bg-rose-100 text-rose-700",
-};
-
 export default async function AnalysisDetailPage({ params }: Props) {
   const { userId } = await auth();
   const resolvedParams = await params;
@@ -205,84 +198,100 @@ export default async function AnalysisDetailPage({ params }: Props) {
     levelGap = CEFR_RANK[overallLevel] - CEFR_RANK[cefrLevel];
   }
 
+  const contentLevelMeta = overallLevel
+    ? CEFR_CONTENT_META[overallLevel]
+    : undefined;
+
   return (
     <div className="min-h-screen relative">
       <SiteHeader maxWidth="5xl" right={<GlobalNav showVocabularyLink />} />
 
       <main className="relative max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-6"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          別の動画を解析する
-        </Link>
-
-        {/* Video / article hero — examples 風・aspect-video サムネ */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 mb-8">
-          <div className="flex flex-col lg:flex-row lg:items-stretch gap-6 lg:gap-8">
-            <div className="w-full lg:max-w-md xl:max-w-lg shrink-0 mx-auto lg:mx-0">
+        {/* Video / article hero — 戻るリンクと日付を同一行・白枠の外 */}
+        <div className="mb-8">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-slate-600"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+              別の動画を解析する
+            </Link>
+            <time
+              dateTime={savedAt}
+              className="shrink-0 text-xs tabular-nums text-slate-400"
+            >
+              {new Date(savedAt).toLocaleDateString("ja-JP")}
+            </time>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               {ytId ? (
-                <div className="aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-md">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
-                    alt={headingTitle}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
+                  alt={headingTitle}
+                  className="w-[120px] h-[68px] object-cover rounded-xl flex-shrink-0 shadow-sm border border-slate-200"
+                />
               ) : isYoutube ? (
-                <div className="aspect-video w-full rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-center shadow-sm">
-                  <Youtube className="h-14 w-14 text-red-400" />
+                <div className="w-[120px] h-[68px] rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <Youtube className="h-8 w-8 text-red-400" />
                 </div>
               ) : sourceUrl ? (
-                <div className="aspect-video w-full rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-center shadow-sm">
-                  <Globe className="h-14 w-14 text-slate-300" />
+                <div className="w-[120px] h-[68px] rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <Globe className="h-8 w-8 text-slate-300" />
                 </div>
               ) : (
-                <div className="aspect-video w-full rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-center shadow-sm">
-                  <FileText className="h-14 w-14 text-slate-300" />
+                <div className="w-[120px] h-[68px] rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <FileText className="h-8 w-8 text-slate-300" />
                 </div>
               )}
-            </div>
-
-            <div className="min-w-0 flex-1 flex flex-col justify-center">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-snug tracking-tight">
-                {headingTitle}
-              </h1>
-              <p className="text-sm text-slate-500 mt-3">
-                {cefrLevel}レベルの英語表現 {totalCount}選
-              </p>
-              <div className="flex flex-wrap items-center gap-2 mt-5">
-                <span
-                  className={`text-xs font-extrabold px-3 py-1.5 rounded-full border border-slate-200 ${
-                    CEFR_COLORS[cefrLevel] ?? "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  対象 {cefrLevel}
-                </span>
-                {data.overall_level && (
-                  <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                    全体 {data.overall_level}
-                  </span>
-                )}
-                <span className="text-xs text-slate-400">
-                  {new Date(savedAt).toLocaleDateString("ja-JP")}
-                </span>
-                {sourceUrl ? (
-                  <a
-                    href={sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-500 transition-colors"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    {isYoutube ? "YouTube" : "Web"}
-                  </a>
-                ) : (
-                  <span className="text-xs text-slate-500">テキスト入力</span>
-                )}
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight tracking-tight">
+                  {headingTitle}
+                </h1>
+                <p className="text-sm text-slate-500 mt-0.5 sm:mt-1">
+                  {cefrLevel}レベルの英語表現 {totalCount}選
+                </p>
               </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              {data.overall_level && (
+                <span
+                  className={cn(
+                    "inline-flex items-baseline gap-1 px-3 py-1.5 rounded-full border shadow-sm",
+                    contentLevelMeta?.bg ?? "bg-indigo-50",
+                    contentLevelMeta?.text ?? "text-indigo-700",
+                    contentLevelMeta?.border ?? "border-indigo-100"
+                  )}
+                >
+                  <span className="text-[10px] font-normal leading-none">
+                    コンテンツレベル
+                  </span>
+                  <span className="text-xs font-extrabold">
+                    {data.overall_level}
+                  </span>
+                  {contentLevelMeta?.label != null && (
+                    <span className="text-xs font-medium opacity-80">
+                      {contentLevelMeta.label}
+                    </span>
+                  )}
+                </span>
+              )}
+              {sourceUrl ? (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-500 transition-colors"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  {isYoutube ? "YouTube" : "Web"}
+                </a>
+              ) : (
+                <span className="text-xs text-slate-500">テキスト入力</span>
+              )}
             </div>
           </div>
 
@@ -316,6 +325,7 @@ export default async function AnalysisDetailPage({ params }: Props) {
               )}
             </div>
           )}
+          </div>
         </div>
 
         {/* 抽出サマリー */}
@@ -328,10 +338,15 @@ export default async function AnalysisDetailPage({ params }: Props) {
             <>
               <div className="w-px h-8 bg-indigo-200" />
               <div className="text-center">
-                <p className="text-2xl font-extrabold text-indigo-600">
-                  {data.overall_level}
+                <p className="flex flex-wrap items-baseline justify-center gap-1.5 text-2xl font-extrabold text-indigo-600">
+                  <span>{data.overall_level}</span>
+                  {contentLevelMeta?.label != null && (
+                    <span className="text-sm font-semibold text-indigo-500/90">
+                      {contentLevelMeta.label}
+                    </span>
+                  )}
                 </p>
-                <p className="text-[10px] text-indigo-400 font-medium">
+                <p className="text-[10px] font-normal text-indigo-400">
                   コンテンツレベル
                 </p>
               </div>

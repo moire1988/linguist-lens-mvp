@@ -19,6 +19,7 @@ import { AdBanner } from "@/components/ad-banner";
 import { SiteHeader } from "@/components/site-header";
 import { SettingsModal } from "@/components/settings-modal";
 import { getSettings, DEV_TEST_URL } from "@/lib/settings";
+import { CEFR_CONTENT_META } from "@/lib/cefr-content-meta";
 
 function getYouTubeId(url: string): string | null {
   const m = url.match(/[?&]v=([^&]{11})/);
@@ -26,14 +27,6 @@ function getYouTubeId(url: string): string | null {
 }
 
 const CEFR_RANK: Record<string, number> = { A1:1, A2:2, B1:3, B2:4, C1:5, C2:6 };
-const CEFR_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  A1: { label:"入門",   bg:"bg-slate-100",  text:"text-slate-700",  border:"border-slate-200"  },
-  A2: { label:"初級",   bg:"bg-green-100",  text:"text-green-700",  border:"border-green-200"  },
-  B1: { label:"中級",   bg:"bg-blue-100",   text:"text-blue-700",   border:"border-blue-200"   },
-  B2: { label:"中上級", bg:"bg-indigo-100", text:"text-indigo-700", border:"border-indigo-200" },
-  C1: { label:"上級",   bg:"bg-purple-100", text:"text-purple-700", border:"border-purple-200" },
-  C2: { label:"熟達",   bg:"bg-rose-100",   text:"text-rose-700",   border:"border-rose-200"   },
-};
 
 const FILTER_OPTIONS: { value: "all" | ExpressionType; label: string }[] = [
   { value: "all",             label: "すべて"       },
@@ -107,7 +100,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
     ? example.phrases
     : example.phrases.filter((p) => p.type === activeFilter);
 
-  const meta = CEFR_META[example.overallLevel];
+  const meta = CEFR_CONTENT_META[example.overallLevel];
   const gap = (CEFR_RANK[example.overallLevel] ?? 0) - CEFR_RANK["B2"];
   const youtubeId = getYouTubeId(example.url);
 
@@ -188,15 +181,21 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={cn(
-                "text-xs font-extrabold px-3 py-1.5 rounded-full border",
-                meta?.bg, meta?.text, meta?.border
-              )}>
-                総合 {example.overallLevel}
-                <span className="ml-1 font-medium opacity-80">{meta?.label}</span>
-              </span>
-              <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                対象: {example.cefrRange}（{example.cefrRangeLabel}）
+              <span
+                className={cn(
+                  "inline-flex items-baseline gap-1 px-3 py-1.5 rounded-full border",
+                  meta?.bg,
+                  meta?.text,
+                  meta?.border
+                )}
+              >
+                <span className="text-[10px] font-normal leading-none">
+                  コンテンツレベル
+                </span>
+                <span className="text-xs font-extrabold">{example.overallLevel}</span>
+                {meta?.label != null && (
+                  <span className="text-xs font-medium opacity-80">{meta.label}</span>
+                )}
               </span>
               <a
                 href={example.url}
