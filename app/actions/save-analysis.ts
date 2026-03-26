@@ -41,6 +41,7 @@ interface AnalysisRow {
   title: string | null;
   level: string;
   result_json: AnalysisResult;
+  coach_comment: string | null;
   is_shared: boolean;
   is_approved: boolean;
   is_public: boolean;
@@ -85,6 +86,12 @@ export async function saveAnalysisAction(payload: {
       ? extractYouTubeVideoId(sourceUrl)
       : null;
 
+  const coachComment =
+    typeof payload.data.coach_comment === "string" &&
+    payload.data.coach_comment.trim() !== ""
+      ? payload.data.coach_comment.trim()
+      : null;
+
   const { data, error } = await db
     .from("saved_analyses")
     .insert({
@@ -95,6 +102,7 @@ export async function saveAnalysisAction(payload: {
       title:       resolvedTitle,
       level:       payload.cefrLevel,
       result_json: payload.data,
+      coach_comment: coachComment,
       is_public:   false,
       is_featured: false,
       public_review_requested: false,
@@ -118,6 +126,7 @@ export async function saveAnalysisAction(payload: {
       raw.includes("is_featured") ||
       raw.includes("public_review_requested") ||
       raw.includes("video_id") ||
+      raw.includes("coach_comment") ||
       raw.includes("schema cache")
     ) {
       return {
@@ -198,13 +207,17 @@ export async function getAnalysisDetailResult(
     return { ok: false, failure };
   }
 
+  /**
+   * coach_comment 列はマイグレーション未適用でも壊れないよう SELECT に含めない（本文は result_json 内）。
+   * .single() は 0 行時に PGRST116 になるため .maybeSingle() を使う。
+   */
   const { data, error } = await db
     .from("saved_analyses")
     .select(
       "id, url, title, level, result_json, is_shared, is_approved, created_at, user_id, is_public"
     )
     .eq("id", normalizedId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     const failure: AnalysisLoadFailure = {
@@ -223,6 +236,9 @@ export async function getAnalysisDetailResult(
   }
 
   const row = data as AnalysisRow;
+
+  const resultJson = row.result_json as AnalysisResult;
+  const mergedData: AnalysisResult = { ...resultJson };
 
   const isPublic = row.is_public;
   const isGuestAnalysis = row.user_id == null;
@@ -253,11 +269,13 @@ export async function getAnalysisDetailResult(
       contentTitle: row.title,
       inputMode: row.url ? "url" : "text",
       cefrLevel: row.level,
-      data: row.result_json,
+      data: mergedData,
       isShared: row.is_shared ?? false,
       isApproved: row.is_approved ?? false,
       isPublic: row.is_public ?? false,
-      publicReviewRequested: row.public_review_requested ?? false,
+      publicReviewRequested:
+        (row as { public_review_requested?: boolean }).public_review_requested ??
+        false,
       isOwner:
         row.user_id != null && userId !== null && row.user_id === userId,
     },

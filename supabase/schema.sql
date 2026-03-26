@@ -76,6 +76,9 @@ ALTER TABLE public.saved_analyses
 ALTER TABLE public.saved_analyses
   ADD COLUMN IF NOT EXISTS video_id TEXT;
 
+ALTER TABLE public.saved_analyses
+  ADD COLUMN IF NOT EXISTS coach_comment TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_saved_analyses_video_id_level
   ON public.saved_analyses (video_id, level)
   WHERE video_id IS NOT NULL;

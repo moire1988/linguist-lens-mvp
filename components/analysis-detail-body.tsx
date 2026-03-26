@@ -15,7 +15,10 @@ import {
   getDailyRemaining,
   FREE_DAILY_LIMIT,
 } from "@/lib/vocabulary";
-import { saveVocabularyAction } from "@/app/actions/vocabulary";
+import {
+  saveVocabularyAction,
+  listSavedExpressionKeysAction,
+} from "@/app/actions/vocabulary";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 
 const PAYWALL_THRESHOLD = 3;
@@ -37,6 +40,8 @@ export function AnalysisDetailBody(props: {
   totalCount: number;
   /** スクリプト見出し（解析ページでは「全文スクリプト」） */
   scriptSectionTitle?: string;
+  /** この解析の saved_analyses.id（単語保存時に紐づけ） */
+  sourceAnalysisId?: string;
 }) {
   const {
     sourceUrl,
@@ -46,6 +51,7 @@ export function AnalysisDetailBody(props: {
     showPaywall,
     totalCount,
     scriptSectionTitle = "全文スクリプト",
+    sourceAnalysisId,
   } = props;
   const { isSignedIn } = useAuth();
   const { isPro } = useEffectiveAuth();
@@ -55,60 +61,97 @@ export function AnalysisDetailBody(props: {
   const [dailyRemaining, setDailyRemaining] = useState(FREE_DAILY_LIMIT);
   const [showPremium, setShowPremium] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | ExpressionType>("all");
+  const [savingKey, setSavingKey] = useState<string | null>(null);
 
   useEffect(() => {
-    setSavedExpressions(
-      new Set(getVocabulary().map((p) => p.expression.toLowerCase()))
+    if (isSignedIn === undefined) return;
+    if (!isSignedIn) {
+      setSavedExpressions(
+        new Set(getVocabulary().map((p) => p.expression.toLowerCase()))
+      );
+      setDailyRemaining(getDailyRemaining());
+      return;
+    }
+    void listSavedExpressionKeysAction().then((keys) =>
+      setSavedExpressions(new Set(keys))
     );
-    setDailyRemaining(getDailyRemaining());
-  }, []);
+    setDailyRemaining(999);
+  }, [isSignedIn]);
 
   const handleSave = useCallback(
-    (phrase: PhraseResult) => {
+    async (phrase: PhraseResult) => {
       const key = phrase.expression.toLowerCase();
       if (savedExpressions.has(key)) return;
-      const result = savePhrase({
-        expression: phrase.expression,
-        type: phrase.type,
-        cefr_level: phrase.cefr_level,
-        meaning_ja: phrase.meaning_ja,
-        nuance: phrase.nuance,
-        example: phrase.example,
-        example_translation: phrase.example_translation,
-        context: phrase.context,
-        why_hard_for_japanese: phrase.why_hard_for_japanese,
-        sourceUrl,
-      });
-      if (result.success) {
-        setSavedExpressions((s) => {
-          const n = new Set(Array.from(s));
-          n.add(key);
-          return n;
+
+      if (!isSignedIn) {
+        const result = savePhrase({
+          expression: phrase.expression,
+          type: phrase.type,
+          cefr_level: phrase.cefr_level,
+          meaning_ja: phrase.meaning_ja,
+          nuance: phrase.nuance,
+          example: phrase.example,
+          example_translation: phrase.example_translation,
+          context: phrase.context,
+          why_hard_for_japanese: phrase.why_hard_for_japanese,
+          sourceUrl,
         });
-        setDailyRemaining((r) => Math.max(0, r - 1));
-        if (isSignedIn) {
-          void saveVocabularyAction({
-            expression: phrase.expression,
-            type: phrase.type,
-            cefr_level: phrase.cefr_level,
-            meaning_ja: phrase.meaning_ja,
-            nuance: phrase.nuance,
-            example: phrase.example,
-            example_translation: phrase.example_translation,
-            context: phrase.context,
-            why_hard_for_japanese: phrase.why_hard_for_japanese,
-            sourceUrl,
-            status: "learning",
+        if (result.success) {
+          setSavedExpressions((s) => {
+            const n = new Set(Array.from(s));
+            n.add(key);
+            return n;
           });
+          setDailyRemaining((r) => Math.max(0, r - 1));
+          toast.success("保存しました", {
+            description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+          });
+        } else if (result.reason === "limit_reached") {
+          setShowPremium(true);
         }
-        toast.success("単語帳に保存しました", {
-          description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+        return;
+      }
+
+      setSavingKey(key);
+      try {
+        const result = await saveVocabularyAction({
+          expression: phrase.expression,
+          type: phrase.type,
+          cefr_level: phrase.cefr_level,
+          meaning_ja: phrase.meaning_ja,
+          nuance: phrase.nuance,
+          example: phrase.example,
+          example_translation: phrase.example_translation,
+          context: phrase.context,
+          why_hard_for_japanese: phrase.why_hard_for_japanese,
+          sourceUrl,
+          source_analysis_id: sourceAnalysisId,
+          status: "learning",
         });
-      } else if (result.reason === "limit_reached") {
-        setShowPremium(true);
+        if (result.success) {
+          setSavedExpressions((s) => {
+            const n = new Set(Array.from(s));
+            n.add(key);
+            return n;
+          });
+          toast.success("保存しました", {
+            description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+          });
+        } else if (result.reason === "duplicate") {
+          setSavedExpressions((s) => {
+            const n = new Set(Array.from(s));
+            n.add(key);
+            return n;
+          });
+          toast.info("この表現はすでに保存されています");
+        } else {
+          toast.error(result.error);
+        }
+      } finally {
+        setSavingKey(null);
       }
     },
-    [savedExpressions, sourceUrl, isSignedIn]
+    [savedExpressions, sourceUrl, isSignedIn, sourceAnalysisId]
   );
 
   const filteredPhrases = useMemo(() => {
@@ -145,6 +188,7 @@ export function AnalysisDetailBody(props: {
           isPro={isPro}
           dailyRemaining={dailyRemaining}
           sectionTitle={scriptSectionTitle}
+          savingExpressionKey={savingKey}
         />
       </div>
 
@@ -208,6 +252,7 @@ export function AnalysisDetailBody(props: {
                 savedExpressions={savedExpressions}
                 dailyRemaining={dailyRemaining}
                 onSave={handleSave}
+                savingExpressionKey={savingKey}
               />
             ) : null
           )}
@@ -227,6 +272,7 @@ export function AnalysisDetailBody(props: {
                       savedExpressions={savedExpressions}
                       dailyRemaining={dailyRemaining}
                       onSave={handleSave}
+                      savingExpressionKey={savingKey}
                     />
                   ) : null
                 )}

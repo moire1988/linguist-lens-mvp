@@ -14,6 +14,8 @@ export interface SavedPhrase {
   context: string;
   why_hard_for_japanese: string;
   sourceUrl?: string;
+  /** 解析結果ページなどで保存した場合の saved_analyses.id */
+  source_analysis_id?: string;
   savedAt: string;
   status?: 'learning' | 'archived';
   archivedAt?: string;

@@ -5,7 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 import {
   Volume2, VolumeX, BookmarkPlus, Check,
-  Mic, MicOff, ChevronDown, Lock,
+  Mic, MicOff, ChevronDown, Lock, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
@@ -14,6 +14,10 @@ import { TranslationAccordion } from "@/components/translation-accordion";
 import {
   savePhrase, getVocabulary, getDailyRemaining, FREE_DAILY_LIMIT,
 } from "@/lib/vocabulary";
+import {
+  saveVocabularyAction,
+  listSavedExpressionKeysAction,
+} from "@/app/actions/vocabulary";
 import { openLoginPrompt } from "@/lib/login-prompt-store";
 import type { ArticleVocabItem, EnglishVariant } from "@/lib/article-types";
 
@@ -114,10 +118,11 @@ interface PopupData {
 function VocabPopup({
   data, isSignedIn, isSaved, dailyRemaining,
   englishVariant, articleLevel,
+  isSaving,
   onSave, onMouseEnter, onMouseLeave,
 }: {
   data: PopupData; isSignedIn: boolean; isSaved: boolean; dailyRemaining: number;
-
+  isSaving?: boolean;
   englishVariant: EnglishVariant; articleLevel: string;
   onSave: () => void; onMouseEnter: () => void; onMouseLeave: () => void;
 }) {
@@ -238,7 +243,7 @@ function VocabPopup({
           <div className="px-4 pb-4">
             <button
               onClick={onSave}
-              disabled={isSaved || dailyRemaining === 0}
+              disabled={isSaved || dailyRemaining === 0 || isSaving}
               className={cn(
                 "w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all",
                 isSaved
@@ -248,7 +253,13 @@ function VocabPopup({
                   : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
               )}
             >
-              {isSaved ? <><Check className="h-3.5 w-3.5" /> 保存済み</> : <><BookmarkPlus className="h-3.5 w-3.5" /> 単語帳に保存</>}
+              {isSaving ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 保存中…</>
+              ) : isSaved ? (
+                <><Check className="h-3.5 w-3.5" /> 保存済み</>
+              ) : (
+                <><BookmarkPlus className="h-3.5 w-3.5" /> 単語帳に保存</>
+              )}
               {!isSaved && dailyRemaining <= 2 && dailyRemaining > 0 && (
                 <span className="ml-auto text-[10px] text-amber-500 font-semibold">本日あと{dailyRemaining}件</span>
               )}
@@ -281,12 +292,21 @@ export function ArticleBody({
   const [popup, setPopup]               = useState<PopupData | null>(null);
   const [savedWords, setSavedWords]     = useState<Set<string>>(new Set());
   const [dailyRemaining, setDailyRem]   = useState(FREE_DAILY_LIMIT);
+  const [savingWord, setSavingWord]     = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isSignedIn) return;
-    const vocab = getVocabulary();
-    setSavedWords(new Set(vocab.map((p) => p.expression.toLowerCase())));
-    setDailyRem(getDailyRemaining());
+    if (isSignedIn === undefined) return;
+    if (!isSignedIn) {
+      setSavedWords(
+        new Set(getVocabulary().map((p) => p.expression.toLowerCase()))
+      );
+      setDailyRem(getDailyRemaining());
+      return;
+    }
+    void listSavedExpressionKeysAction().then((keys) =>
+      setSavedWords(new Set(keys))
+    );
+    setDailyRem(999);
   }, [isSignedIn]);
 
   useEffect(() => {
@@ -329,21 +349,72 @@ export function ArticleBody({
     return () => { container.removeEventListener("mouseover", onOver); container.removeEventListener("mouseout", onOut); };
   }, [cancelHide, scheduleHide]);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!popup) return;
-    const result = savePhrase({
-      expression: popup.word, type: "collocation", cefr_level: articleLevel,
-      meaning_ja: popup.meaning, nuance: "", example: popup.example,
-      context: `記事: ${articleTitle}`, why_hard_for_japanese: "",
-    });
-    if (result.success) {
-      setSavedWords((s) => { const n = new Set(Array.from(s)); n.add(popup.word.toLowerCase()); return n; });
-      setDailyRem((r) => Math.max(0, r - 1));
-      toast.success(`「${popup.word}」を単語帳に保存しました`);
-    } else if (result.reason === "limit_reached") {
-      toast.error(`本日の保存上限（${FREE_DAILY_LIMIT}件）に達しました`);
+    const key = popup.word.toLowerCase();
+    if (!isSignedIn) {
+      const result = savePhrase({
+        expression: popup.word,
+        type: "collocation",
+        cefr_level: articleLevel,
+        meaning_ja: popup.meaning,
+        nuance: "",
+        example: popup.example,
+        context: `記事: ${articleTitle}`,
+        why_hard_for_japanese: "",
+      });
+      if (result.success) {
+        setSavedWords((s) => {
+          const n = new Set(Array.from(s));
+          n.add(key);
+          return n;
+        });
+        setDailyRem((r) => Math.max(0, r - 1));
+        toast.success("保存しました", {
+          description: `「${popup.word}」をマイ単語帳に追加しました`,
+        });
+      } else if (result.reason === "limit_reached") {
+        toast.error(`本日の保存上限（${FREE_DAILY_LIMIT}件）に達しました`);
+      }
+      return;
     }
-  }, [popup, articleLevel, articleTitle]);
+
+    setSavingWord(key);
+    try {
+      const result = await saveVocabularyAction({
+        expression: popup.word,
+        type: "collocation",
+        cefr_level: articleLevel,
+        meaning_ja: popup.meaning,
+        nuance: popup.nuance || "",
+        example: popup.example,
+        context: `記事: ${articleTitle}`,
+        why_hard_for_japanese: "",
+        status: "learning",
+      });
+      if (result.success) {
+        setSavedWords((s) => {
+          const n = new Set(Array.from(s));
+          n.add(key);
+          return n;
+        });
+        toast.success("保存しました", {
+          description: `「${popup.word}」をマイ単語帳に追加しました`,
+        });
+      } else if (result.reason === "duplicate") {
+        setSavedWords((s) => {
+          const n = new Set(Array.from(s));
+          n.add(key);
+          return n;
+        });
+        toast.info("この表現はすでに保存されています");
+      } else {
+        toast.error(result.error);
+      }
+    } finally {
+      setSavingWord(null);
+    }
+  }, [popup, articleLevel, articleTitle, isSignedIn]);
 
   const cursorClass = !isLoaded ? "" : isSignedIn
     ? "[&_.vocabulary-highlight]:cursor-pointer"
@@ -376,7 +447,8 @@ export function ArticleBody({
           dailyRemaining={dailyRemaining}
           englishVariant={englishVariant}
           articleLevel={articleLevel}
-          onSave={handleSave}
+          isSaving={savingWord === popup.word.toLowerCase()}
+          onSave={() => void handleSave()}
           onMouseEnter={cancelHide}
           onMouseLeave={scheduleHide}
         />
@@ -400,13 +472,23 @@ export function ArticleVocabCard({
   const [feedback,          setFeedback]           = useState<Feedback | null>(null);
   const [isSaved,           setIsSaved]            = useState(false);
   const [dailyRemaining,    setDailyRem]           = useState(FREE_DAILY_LIMIT);
+  const [saving,            setSaving]             = useState(false);
   const recRef = useRef<SpeechRecognitionInstance | null>(null);
 
   useEffect(() => {
-    if (!isSignedIn) return;
-    const vocab = getVocabulary();
-    setIsSaved(vocab.some((p) => p.expression.toLowerCase() === item.word.toLowerCase()));
-    setDailyRem(getDailyRemaining());
+    if (isSignedIn === undefined) return;
+    if (!isSignedIn) {
+      const vocab = getVocabulary();
+      setIsSaved(
+        vocab.some((p) => p.expression.toLowerCase() === item.word.toLowerCase())
+      );
+      setDailyRem(getDailyRemaining());
+      return;
+    }
+    void listSavedExpressionKeysAction().then((keys) => {
+      setIsSaved(keys.includes(item.word.toLowerCase()));
+    });
+    setDailyRem(999);
   }, [isSignedIn, item.word]);
 
   useEffect(() => () => { recRef.current?.stop(); }, []);
@@ -456,25 +538,42 @@ export function ArticleVocabCard({
     recRef.current = rec; rec.start(); setIsListening(true);
   }, [isListening, item.dynamicExample, item.word]);
 
-  const handleSave = useCallback(() => {
-    if (isSaved) return;
+  const handleSave = useCallback(async () => {
+    if (isSaved || saving) return;
     if (!isSignedIn) {
       openLoginPrompt("save");
       return;
     }
-    const result = savePhrase({
-      expression: item.word,
-      type: item.partOfSpeech === "phrasal verb" ? "phrasal_verb" : "collocation",
-      cefr_level: articleLevel, meaning_ja: item.meaning, nuance: "",
-      example: item.dynamicExample, context: `記事: ${articleTitle}`, why_hard_for_japanese: "",
-    });
-    if (result.success) {
-      setIsSaved(true); setDailyRem((r) => Math.max(0, r - 1));
-      toast.success(`「${item.word}」を単語帳に保存しました`);
-    } else if (result.reason === "limit_reached") {
-      toast.error(`本日の保存上限（${FREE_DAILY_LIMIT}件）に達しました`);
+    setSaving(true);
+    try {
+      const result = await saveVocabularyAction({
+        expression: item.word,
+        type:
+          item.partOfSpeech === "phrasal verb" ? "phrasal_verb" : "collocation",
+        cefr_level: articleLevel,
+        meaning_ja: item.meaning,
+        nuance: item.nuance,
+        example: item.dynamicExample,
+        example_translation: item.dynamicExampleTranslation,
+        context: `記事: ${articleTitle}`,
+        why_hard_for_japanese: "",
+        status: "learning",
+      });
+      if (result.success) {
+        setIsSaved(true);
+        toast.success("保存しました", {
+          description: `「${item.word}」をマイ単語帳に追加しました`,
+        });
+      } else if (result.reason === "duplicate") {
+        setIsSaved(true);
+        toast.info("この表現はすでに保存されています");
+      } else {
+        toast.error(result.error);
+      }
+    } finally {
+      setSaving(false);
     }
-  }, [isSaved, item, articleLevel, articleTitle]);
+  }, [isSaved, saving, isSignedIn, item, articleLevel, articleTitle]);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col">
@@ -580,8 +679,8 @@ export function ArticleVocabCard({
       {/* 単語帳に保存 */}
       <div className="px-5 pb-4 pt-1 border-t border-slate-100 bg-slate-50/50">
         <button
-          onClick={handleSave}
-          disabled={isSaved || (isSignedIn && dailyRemaining === 0)}
+          onClick={() => void handleSave()}
+          disabled={isSaved || saving || (isSignedIn && dailyRemaining === 0)}
           className={cn(
             "w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-medium transition-all",
             isSaved
@@ -591,7 +690,9 @@ export function ArticleVocabCard({
               : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
           )}
         >
-          {isSaved ? (
+          {saving ? (
+            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 保存中…</>
+          ) : isSaved ? (
             <><Check className="h-3.5 w-3.5" /> 単語帳に保存済み</>
           ) : (
             <>

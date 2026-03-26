@@ -11,60 +11,18 @@ import { SiteHeader } from "@/components/site-header";
 import { GlobalNav } from "@/components/global-nav";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { Breadcrumb } from "@/components/breadcrumb";
-import type { ArticleSummary } from "@/lib/article-types";
 import {
   getArticleCategoryBadgeClass,
   getArticleCategoryDisplayLabel,
 } from "@/lib/article-categories";
 import { articleDisplayTitles } from "@/lib/article-display";
 import { cn } from "@/lib/utils";
+import { FavoriteFakeDoorButton } from "@/components/favorite-fake-door-button";
+import { RelatedArticleCard } from "@/components/related-article-card";
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
 
 const SITE_URL = "https://linguist-lens-mvp.vercel.app";
-
-const CEFR_STYLE: Record<string, string> = {
-  A1: "bg-slate-100  text-slate-600  border-slate-200",
-  A2: "bg-green-100  text-green-700  border-green-200",
-  B1: "bg-blue-100   text-blue-700   border-blue-200",
-  B2: "bg-indigo-100 text-indigo-700 border-indigo-200",
-  C1: "bg-purple-100 text-purple-700 border-purple-200",
-  C2: "bg-rose-100   text-rose-700   border-rose-200",
-};
-
-// ─── Related article card ─────────────────────────────────────────────────────
-
-function RelatedArticleCard({ article }: { article: ArticleSummary }) {
-  const cefrStyle  = CEFR_STYLE[article.level]    ?? CEFR_STYLE.B2;
-  const titles     = articleDisplayTitles(article);
-  const catClass   = article.category
-    ? getArticleCategoryBadgeClass(article.category)
-    : null;
-
-  return (
-    <Link
-      href={`/articles/${article.slug}`}
-      className="group flex flex-col gap-2 border border-slate-200 hover:border-indigo-300 bg-white hover:bg-indigo-50/20 rounded-xl p-4 transition-all duration-150"
-    >
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className={cn("text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border", cefrStyle)}>
-          {article.level}
-        </span>
-        {catClass && (
-          <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border truncate max-w-[140px]", catClass)}>
-            {getArticleCategoryDisplayLabel(article.category)}
-          </span>
-        )}
-      </div>
-      <p className="text-sm font-bold font-mono text-slate-800 leading-snug group-hover:text-indigo-700 transition-colors line-clamp-2">
-        {titles.primary}
-      </p>
-      {titles.secondary && (
-        <p className="text-xs text-slate-500 leading-snug line-clamp-1">{titles.secondary}</p>
-      )}
-    </Link>
-  );
-}
 
 // ─── generateMetadata ─────────────────────────────────────────────────────────
 
@@ -135,7 +93,7 @@ export default async function ArticlePage({
         />
 
         {/* Meta */}
-        <div className="flex items-center gap-2 flex-wrap mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <CefrBadge level={article.level} />
           <VariantBadge variant={article.englishVariant} />
           {article.category && (
@@ -148,6 +106,9 @@ export default async function ArticlePage({
           )}
           <span className="text-xs text-slate-400">
             {new Date(article.publishedAt!).toLocaleDateString("ja-JP")}
+          </span>
+          <span className="ml-auto flex items-center">
+            <FavoriteFakeDoorButton size="md" />
           </span>
         </div>
 

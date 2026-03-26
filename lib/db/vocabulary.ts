@@ -16,6 +16,7 @@ interface VocabularyRow {
   context: string;
   why_hard_for_japanese: string;
   source_url: string | null;
+  source_analysis_id: string | null;
   status: string;
   saved_at: string;
   archived_at: string | null;
@@ -36,13 +37,16 @@ function rowToPhrase(row: VocabularyRow): SavedPhrase {
     context: row.context,
     why_hard_for_japanese: row.why_hard_for_japanese,
     sourceUrl: row.source_url ?? undefined,
+    source_analysis_id: row.source_analysis_id ?? undefined,
     savedAt: row.saved_at,
-    status: (row.status === 'archived' ? 'archived' : 'learning') as 'learning' | 'archived',
+    status: (row.status === "archived" ? "archived" : "learning") as
+      | "learning"
+      | "archived",
     archivedAt: row.archived_at ?? undefined,
   };
 }
 
-// ─── CRUD ─────────────────────────────────────────────────────────────────────
+// ─── CRUD（Clerk JWT 付きクライアント — RLS 適用）──────────────────────────────
 
 export async function getDbVocabulary(
   token: string,
@@ -50,7 +54,7 @@ export async function getDbVocabulary(
 ): Promise<SavedPhrase[]> {
   const client = createAuthClient(token);
   const { data, error } = await client
-    .from("vocabulary_list")
+    .from("saved_expressions")
     .select("*")
     .eq("user_id", userId)
     .order("saved_at", { ascending: false });
@@ -67,21 +71,22 @@ export async function insertDbVocabulary(
   const client = createAuthClient(token);
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const { data, error } = await client
-    .from("vocabulary_list")
+    .from("saved_expressions")
     .insert({
       id,
       user_id: userId,
-      expression: phrase.expression,
+      expression: phrase.expression.trim(),
       type: phrase.type,
       cefr_level: phrase.cefr_level,
       meaning_ja: phrase.meaning_ja,
-      nuance: phrase.nuance ?? '',
-      example: phrase.example ?? '',
+      nuance: phrase.nuance ?? "",
+      example: phrase.example ?? "",
       example_translation: phrase.example_translation ?? null,
-      context: phrase.context ?? '',
-      why_hard_for_japanese: phrase.why_hard_for_japanese ?? '',
+      context: phrase.context ?? "",
+      why_hard_for_japanese: phrase.why_hard_for_japanese ?? "",
       source_url: phrase.sourceUrl ?? null,
-      status: phrase.status ?? 'learning',
+      source_analysis_id: phrase.source_analysis_id ?? null,
+      status: phrase.status ?? "learning",
     })
     .select("id")
     .single();
@@ -97,8 +102,8 @@ export async function archiveDbVocabulary(
 ): Promise<void> {
   const client = createAuthClient(token);
   await client
-    .from("vocabulary_list")
-    .update({ status: 'archived', archived_at: new Date().toISOString() })
+    .from("saved_expressions")
+    .update({ status: "archived", archived_at: new Date().toISOString() })
     .eq("id", id)
     .eq("user_id", userId);
 }
@@ -110,8 +115,8 @@ export async function restoreDbVocabulary(
 ): Promise<void> {
   const client = createAuthClient(token);
   await client
-    .from("vocabulary_list")
-    .update({ status: 'learning', archived_at: null })
+    .from("saved_expressions")
+    .update({ status: "learning", archived_at: null })
     .eq("id", id)
     .eq("user_id", userId);
 }
@@ -123,7 +128,7 @@ export async function deleteDbVocabulary(
 ): Promise<void> {
   const client = createAuthClient(token);
   await client
-    .from("vocabulary_list")
+    .from("saved_expressions")
     .delete()
     .eq("id", id)
     .eq("user_id", userId);
@@ -132,11 +137,11 @@ export async function deleteDbVocabulary(
 export async function clearDbVocabulary(
   token: string,
   userId: string,
-  status: 'learning' | 'archived'
+  status: "learning" | "archived"
 ): Promise<void> {
   const client = createAuthClient(token);
   await client
-    .from("vocabulary_list")
+    .from("saved_expressions")
     .delete()
     .eq("user_id", userId)
     .eq("status", status);

@@ -45,6 +45,12 @@ export async function savePublicAnalysis(payload: {
     resolvedTitle = await fetchYoutubeOembedTitle(payload.sourceUrl.trim());
   }
 
+  const coachComment =
+    typeof payload.data.coach_comment === "string" &&
+    payload.data.coach_comment.trim() !== ""
+      ? payload.data.coach_comment.trim()
+      : null;
+
   // ── 2. サービスロールで is_public = true を INSERT ─────────
   const db = createAdminClient();
   const { data, error } = await db
@@ -55,6 +61,7 @@ export async function savePublicAnalysis(payload: {
       url:         payload.sourceUrl ?? null,
       level:       payload.cefrLevel,
       result_json: payload.data,
+      coach_comment: coachComment,
       is_public:   true,           // 管理者 + サービスロールのみここに到達できる
     })
     .select("id")

@@ -26,7 +26,9 @@ interface ScriptViewerProps {
   /** AI-generated HTML with <b data-expr="..."> markup */
   highlightedHtml?: string;
   savedExpressions: Set<string>;
-  onSave: (phrase: PhraseResult) => void;
+  onSave: (phrase: PhraseResult) => void | Promise<void>;
+  /** 保存リクエスト中の表現キー（小文字）— スピナー表示用 */
+  savingExpressionKey?: string | null;
   /** Show "日本語に翻訳" button at the bottom of the transcript */
   showTranslate?: boolean;
   /** Pro plan flag — false (default) shows the waitlist modal instead of calling the API */
@@ -152,6 +154,7 @@ export function ScriptViewer({
   highlightedHtml,
   savedExpressions,
   onSave,
+  savingExpressionKey = null,
   showTranslate = false,
   isPro = false,
   dailyRemaining = 0,
@@ -292,9 +295,9 @@ export function ScriptViewer({
   // ─── Save from popup ───────────────────────────────────────────────────
 
   const handleSave = useCallback(
-    (phrase: PhraseResult) => {
+    async (phrase: PhraseResult) => {
       if (savedExpressions.has(phrase.expression.toLowerCase())) return;
-      onSave(phrase);
+      await Promise.resolve(onSave(phrase));
     },
     [savedExpressions, onSave]
   );
@@ -498,7 +501,10 @@ export function ScriptViewer({
           dailyRemaining={dailyRemaining}
           top={popup.top}
           left={popup.left}
-          onSave={() => handleSave(popup.phrase)}
+          isSaving={
+            savingExpressionKey === popup.phrase.expression.toLowerCase()
+          }
+          onSave={() => void handleSave(popup.phrase)}
           onMouseEnter={cancelHide}
           onMouseLeave={scheduleHide}
         />

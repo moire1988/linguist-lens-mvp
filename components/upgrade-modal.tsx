@@ -8,6 +8,7 @@ import {
   registerWaitlistGuestAction,
 } from "@/app/actions/waitlist";
 import { FREE_DAILY_LIMIT } from "@/lib/vocabulary";
+import { ModalPortal } from "@/components/modal-portal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,7 @@ export function UpgradeModal({ onClose, reason = "vocab_limit" }: UpgradeModalPr
   const notice = NOTICE[reason];
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={onClose}
@@ -196,5 +198,6 @@ export function UpgradeModal({ onClose, reason = "vocab_limit" }: UpgradeModalPr
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

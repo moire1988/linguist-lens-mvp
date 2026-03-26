@@ -19,6 +19,8 @@ import { fetchYoutubeOembedTitle } from "@/lib/youtube-oembed";
 import { resolveTranscriptPlainText } from "@/lib/analysis-transcript";
 import { cn } from "@/lib/utils";
 import { CEFR_CONTENT_META } from "@/lib/cefr-content-meta";
+import { FavoriteFakeDoorButton } from "@/components/favorite-fake-door-button";
+import { AnalysisCoachCallout } from "@/components/analysis-coach-callout";
 
 function fallbackLabelFromUrl(url: string): string {
   try {
@@ -257,6 +259,7 @@ export default async function AnalysisDetailPage({ params }: Props) {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <FavoriteFakeDoorButton />
               {data.overall_level && (
                 <span
                   className={cn(
@@ -328,6 +331,10 @@ export default async function AnalysisDetailPage({ params }: Props) {
           </div>
         </div>
 
+        {typeof data.coach_comment === "string" && data.coach_comment.trim() !== "" && (
+          <AnalysisCoachCallout text={data.coach_comment} />
+        )}
+
         {/* 抽出サマリー */}
         <div className="flex items-center gap-4 bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-3.5 mb-8">
           <div className="text-center">
@@ -367,6 +374,7 @@ export default async function AnalysisDetailPage({ params }: Props) {
           highlightedHtml={data.full_script_with_highlight}
           showPaywall={showPaywall}
           totalCount={totalCount}
+          sourceAnalysisId={id}
         />
 
         <AnalysisDetailFooter

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronDown,
@@ -15,7 +15,9 @@ import {
   Search,
   Volume2,
   Crown,
+  Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth, useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -23,6 +25,10 @@ import { SiteHeader } from "@/components/site-header";
 import { GlobalNav } from "@/components/global-nav";
 import type { ExpressionType } from "@/lib/types";
 import { savePhrase, getVocabulary } from "@/lib/vocabulary";
+import {
+  saveVocabularyAction,
+  listSavedExpressionKeysAction,
+} from "@/app/actions/vocabulary";
 import { getSettings } from "@/lib/settings";
 import { useAccentLang } from "@/hooks/use-accent-lang";
 import { isSpeechSynthesisSupported, speakEnglish } from "@/lib/speech";
@@ -1122,19 +1128,64 @@ function SpeakLineButton({
 function ExpressionCard({
   entry,
   isSavedInitially,
+  isSignedIn,
+  onSaved,
 }: {
   entry: LibraryEntry;
   isSavedInitially: boolean;
+  isSignedIn: boolean;
+  onSaved: (expressionLower: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(isSavedInitially);
+  const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState<"saved" | "dup" | "limit" | null>(null);
   const { lang: speakLang, accent: accentSetting } = useAccentLang();
 
   const cfg = LEVEL_CONFIG[entry.level];
+  const exprKey = entry.expression.toLowerCase();
+
+  useEffect(() => {
+    setSaved(isSavedInitially);
+  }, [isSavedInitially]);
 
   const handleSave = () => {
-    if (saved) return;
+    if (saved || saving) return;
+    if (isSignedIn) {
+      setSaving(true);
+      void saveVocabularyAction({
+        expression: entry.expression,
+        type: entry.type,
+        cefr_level: entry.level,
+        meaning_ja: entry.meaning_ja,
+        nuance: entry.nuance,
+        example: entry.goodExample,
+        example_translation: entry.goodExampleJa,
+        context: entry.context,
+        why_hard_for_japanese: entry.why_hard_for_japanese,
+        status: "learning",
+      })
+        .then((result) => {
+          if (result.success) {
+            setSaved(true);
+            onSaved(exprKey);
+            setFlash("saved");
+            toast.success("保存しました");
+            setTimeout(() => setFlash(null), 2000);
+          } else if (result.reason === "duplicate") {
+            setSaved(true);
+            onSaved(exprKey);
+            setFlash("dup");
+            toast.info("この表現はすでに保存されています");
+            setTimeout(() => setFlash(null), 2500);
+          } else {
+            toast.error(result.error);
+          }
+        })
+        .finally(() => setSaving(false));
+      return;
+    }
+
     const result = savePhrase({
       expression: entry.expression,
       type: entry.type,
@@ -1148,6 +1199,7 @@ function ExpressionCard({
     });
     if (result.success) {
       setSaved(true);
+      onSaved(exprKey);
       setFlash("saved");
       setTimeout(() => setFlash(null), 2000);
     } else {
@@ -1282,7 +1334,7 @@ function ExpressionCard({
       <div className="px-5 py-4 border-t border-slate-100">
         <button
           onClick={handleSave}
-          disabled={saved}
+          disabled={saved || saving}
           className={cn(
             "w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-medium transition-all",
             saved
@@ -1290,7 +1342,12 @@ function ExpressionCard({
               : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm"
           )}
         >
-          {saved ? (
+          {saving ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              保存中…
+            </>
+          ) : saved ? (
             <>
               <Check className="h-3.5 w-3.5" />
               単語帳に保存済み
@@ -1354,12 +1411,31 @@ export default function LibraryPage() {
   const [shuffleKey,     setShuffleKey]     = useState(0);
   const [savedExpressions, setSavedExpressions] = useState<Set<string>>(new Set());
 
+  const handleVocabSaved = useCallback((expressionLower: string) => {
+    setSavedExpressions((prev) => {
+      const next = new Set(prev);
+      next.add(expressionLower);
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     const { defaultLevel } = getSettings();
     setSelectedLevels(new Set([defaultLevel as CefrKey]));
-    const vocab = getVocabulary();
-    setSavedExpressions(new Set(vocab.map((v) => v.expression.toLowerCase())));
   }, []);
+
+  useEffect(() => {
+    if (isSignedIn === undefined) return;
+    if (!isSignedIn) {
+      setSavedExpressions(
+        new Set(getVocabulary().map((v) => v.expression.toLowerCase()))
+      );
+      return;
+    }
+    void listSavedExpressionKeysAction().then((keys) =>
+      setSavedExpressions(new Set(keys))
+    );
+  }, [isSignedIn]);
 
   // ── Toggle level chip ──────────────────────────────────────────────────────
   const toggleLevel = (lv: CefrKey) => {
@@ -1553,7 +1629,11 @@ export default function LibraryPage() {
               <ExpressionCard
                 key={entry.id}
                 entry={entry}
-                isSavedInitially={savedExpressions.has(entry.expression.toLowerCase())}
+                isSavedInitially={savedExpressions.has(
+                  entry.expression.toLowerCase()
+                )}
+                isSignedIn={Boolean(isSignedIn)}
+                onSaved={handleVocabSaved}
               />
             ))}
           </div>

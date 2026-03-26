@@ -21,6 +21,10 @@ ALTER TABLE public.saved_analyses
 ALTER TABLE public.saved_analyses
   ADD COLUMN IF NOT EXISTS video_id TEXT;
 
+-- AI コーチコメント（解析ワンパス生成・一覧参照用の冗長カラム可）
+ALTER TABLE public.saved_analyses
+  ADD COLUMN IF NOT EXISTS coach_comment TEXT;
+
 -- ゲスト解析（user_id なし）を許可
 ALTER TABLE public.saved_analyses
   ALTER COLUMN user_id DROP NOT NULL;

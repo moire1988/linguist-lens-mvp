@@ -19,6 +19,7 @@ import {
   analyzeVocabulary,
   type CoachAnalysis,
 } from "@/app/actions/coach";
+import { ModalPortal } from "@/components/modal-portal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -115,6 +116,7 @@ export function CoachModal({ vocabulary, onClose }: CoachModalProps) {
   }, [vocabulary]);
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
       onClick={onClose}
@@ -248,5 +250,6 @@ export function CoachModal({ vocabulary, onClose }: CoachModalProps) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

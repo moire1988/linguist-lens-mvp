@@ -43,12 +43,14 @@ import { callAnalyzeApi } from "@/lib/analyze-client";
 import { isAnalyzeDebugMagicUrlInput } from "@/lib/analyze-debug-magic";
 import { generateArticle } from "@/app/actions/generate-article";
 import { getVocabularyCount } from "@/lib/vocabulary";
+import { getVocabularyCountAction } from "@/app/actions/vocabulary";
 import { getCachedEntry, setCachedResult } from "@/lib/cache";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
 import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
 import { CommunityAnalysesCarousel } from "@/components/community-analyses-carousel";
+import { FavoriteFakeDoorButton } from "@/components/favorite-fake-door-button";
 import { SiteHeader } from "@/components/site-header";
 import { NavMenu } from "@/components/nav-menu";
 import {
@@ -146,9 +148,8 @@ export default function HomePage() {
   const [isUrlTyping, setIsUrlTyping] = useState(false);
   const urlTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 設定・単語帳件数をロード
+  // 設定・単語帳件数をロード（ログイン時は Supabase）
   useEffect(() => {
-    setVocabCount(getVocabularyCount());
     const s = getSettings();
     setSelectedLevel(s.defaultLevel);
     setDevMode(s.devMode);
@@ -158,6 +159,15 @@ export default function HomePage() {
     getRecentPublicAnalysesAction(6).then(setRecentPublicAnalyses);
     getFeaturedAnalysesAction(6).then(setFeaturedAnalyses);
   }, []);
+
+  useEffect(() => {
+    if (isSignedIn === undefined) return;
+    if (!isSignedIn) {
+      setVocabCount(getVocabularyCount());
+      return;
+    }
+    void getVocabularyCountAction().then(setVocabCount);
+  }, [isSignedIn]);
 
   useEffect(() => {
     // Clerk がまだ認証状態を読み込み中（undefined）は何もしない
@@ -330,12 +340,6 @@ export default function HomePage() {
       inputMode === "url" &&
       isAnalyzeDebugMagicUrlInput(url);
 
-    // ── Guest: ログインを促す（devMode・DEV魔法URLはスキップ）──────────────
-    if (!isSignedIn && !devMode && !devMagicAnalyzeUrl) {
-      openSignIn();
-      return;
-    }
-
     // ── おすすめURL（RECOMMENDED_VIDEOS と同一動画）→ API なし・演出後に既存ページへ
     if (inputMode === "url" && url.trim()) {
       const fakeTarget = getRecommendedVideoTargetPathByUrl(url.trim());
@@ -353,8 +357,14 @@ export default function HomePage() {
       }
     }
 
-    // ── DB 既存行（同一 video_id × 同一レベル）→ INSERT なしで遷移 ───────────
-    if (inputMode === "url" && url.trim() && !devMode) {
+    // ── DB 既存行（同一 video_id × 同一レベル）→ 外部API・解析を呼ばず遷移（ゲストより先に実行） ──
+    // DEV 魔法URLはサーバー側のデバッグ分岐と揃え、ここではスキップ
+    if (
+      inputMode === "url" &&
+      url.trim() &&
+      !devMode &&
+      !devMagicAnalyzeUrl
+    ) {
       try {
         const existingId = await findExistingAnalysisIdAction(
           url.trim(),
@@ -398,6 +408,12 @@ export default function HomePage() {
         }
         return;
       }
+    }
+
+    // ── Guest: ログインを促す（DBキャッシュ・ローカルキャッシュのあと。devMode・DEV魔法URLはスキップ）
+    if (!isSignedIn && !devMode && !devMagicAnalyzeUrl) {
+      openSignIn();
+      return;
     }
 
     // ── クォータチェック（devMode・DEV魔法URLはスキップ）──────────────────
@@ -1145,8 +1161,8 @@ export default function HomePage() {
                 };
 
                 return (
+                  <div key={item.id} className="relative">
                   <a
-                    key={item.id}
                     href={`/analyses/${item.id}`}
                     className="group flex flex-col bg-white border border-slate-200 hover:border-indigo-300 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all"
                   >
@@ -1211,6 +1227,10 @@ export default function HomePage() {
                       </div>
                     </div>
                   </a>
+                  <div className="absolute right-2 top-2 z-10">
+                    <FavoriteFakeDoorButton />
+                  </div>
+                  </div>
                 );
               })}
             </div>

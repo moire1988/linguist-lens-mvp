@@ -10,6 +10,7 @@ import {
   Check,
   Mic,
   MicOff,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
@@ -156,12 +157,20 @@ interface PhraseCardProps {
   phrase: PhraseResult;
   savedExpressions: Set<string>;
   dailyRemaining: number;
-  onSave: (phrase: PhraseResult) => void;
+  onSave: (phrase: PhraseResult) => void | Promise<void>;
+  /** 保存リクエスト中の表現キー（小文字） */
+  savingExpressionKey?: string | null;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }: PhraseCardProps) {
+export function PhraseCard({
+  phrase,
+  savedExpressions,
+  dailyRemaining,
+  onSave,
+  savingExpressionKey = null,
+}: PhraseCardProps) {
   const { isSignedIn } = useAppAuth();
   const [isSpeaking,   setIsSpeaking]   = useState(false);
   const [showDetail,   setShowDetail]   = useState(false);
@@ -170,7 +179,9 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
   const [feedback,     setFeedback]     = useState<Feedback | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
-  const saved = savedExpressions.has(phrase.expression.toLowerCase());
+  const exprKey = phrase.expression.toLowerCase();
+  const saved = savedExpressions.has(exprKey);
+  const isSavingThis = savingExpressionKey === exprKey;
   const typeConfig = TYPE_CONFIG[phrase.type] ?? TYPE_CONFIG.phrasal_verb;
   const cefrConfig = CEFR_CONFIG[phrase.cefr_level] ?? CEFR_CONFIG.B2;
 
@@ -260,14 +271,14 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
 
   // ─── 単語帳に保存 ─────────────────────────────────────────────────────
 
-  const handleSave = useCallback(() => {
-    if (saved) return;
+  const handleSave = useCallback(async () => {
+    if (saved || isSavingThis) return;
     if (!isSignedIn) {
       openLoginPrompt("save");
       return;
     }
-    onSave(phrase);
-  }, [saved, isSignedIn, phrase, onSave]);
+    await Promise.resolve(onSave(phrase));
+  }, [saved, isSavingThis, isSignedIn, phrase, onSave]);
 
   // ─── Render ───────────────────────────────────────────────────────────
 
@@ -413,7 +424,7 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
       <div className="px-5 pb-4 pt-1 border-t border-slate-100 bg-slate-50/50">
         <button
           onClick={handleSave}
-          disabled={saved}
+          disabled={saved || isSavingThis}
           className={cn(
             "w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-medium transition-all",
             saved
@@ -421,7 +432,12 @@ export function PhraseCard({ phrase, savedExpressions, dailyRemaining, onSave }:
               : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm"
           )}
         >
-          {saved ? (
+          {isSavingThis ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              保存中…
+            </>
+          ) : saved ? (
             <>
               <Check className="h-3.5 w-3.5" />
               単語帳に保存済み

@@ -36,6 +36,8 @@ export interface AnalysisResult {
   script_text?: string;
   full_script_with_highlight?: string;
   overall_level?: string;
+  /** 同一リクエストで生成する AI コーチからの短い励ましコメント（日本語） */
+  coach_comment?: string;
 }
 
 /** UI / devMode の検証用。一般ユーザー向けコピーとは別にコードで原因を切り分け可能。 */

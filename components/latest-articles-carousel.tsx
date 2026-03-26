@@ -12,6 +12,7 @@ import {
 } from "@/lib/article-categories";
 import { articleDisplayTitles } from "@/lib/article-display";
 import type { EnglishVariant } from "@/lib/article-types";
+import { FavoriteFakeDoorButton } from "@/components/favorite-fake-door-button";
 
 // ─── Style maps ──────────────────────────────────────────────────────────────
 
@@ -104,17 +105,20 @@ export function LatestArticlesCarousel() {
             const titles = articleDisplayTitles(article);
 
             return (
-              <Link
+              <div
                 key={article.slug}
+                className="relative snap-start shrink-0 w-[256px]"
+              >
+              <Link
                 href={`/articles/${article.slug}`}
                 className={cn(
-                  "snap-start shrink-0 w-[256px] rounded-xl overflow-hidden",
-                  "bg-white border border-slate-200 shadow-sm flex flex-col",
-                  "hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5",
+                  "flex h-full flex-col overflow-hidden rounded-xl",
+                  "border border-slate-200 bg-white shadow-sm",
+                  "hover:border-indigo-300 hover:-translate-y-0.5 hover:shadow-md",
                   "transition-all duration-200 group"
                 )}
               >
-                <div className="p-3.5 flex-1 flex flex-col">
+                <div className="flex flex-1 flex-col p-3.5 pr-11">
                   {/* Badges */}
                   <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
                     <span
@@ -175,6 +179,10 @@ export function LatestArticlesCarousel() {
                   </div>
                 </div>
               </Link>
+              <div className="absolute right-2 top-2 z-10">
+                <FavoriteFakeDoorButton />
+              </div>
+              </div>
             );
           })}
         </div>

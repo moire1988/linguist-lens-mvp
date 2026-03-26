@@ -359,6 +359,7 @@ interface ClaudeResult {
   phrases: PhraseResult[];
   fullScriptWithHighlight: string;
   overallLevel?: string;
+  coachComment?: string;
 }
 
 function parseClaudeRawOutput(rawText: string, snippet: string): ClaudeResult {
@@ -369,12 +370,19 @@ function parseClaudeRawOutput(rawText: string, snippet: string): ClaudeResult {
         phrases: PhraseResult[];
         fullScriptWithHighlight?: string;
         overallLevel?: string;
+        coach_comment?: string;
       };
       if (Array.isArray(parsed.phrases) && parsed.phrases.length > 0) {
+        const coachRaw = parsed.coach_comment;
+        const coachComment =
+          typeof coachRaw === "string" && coachRaw.trim() !== ""
+            ? coachRaw.trim()
+            : undefined;
         return {
           phrases: capPhrasesAtMax(parsed.phrases),
           fullScriptWithHighlight: parsed.fullScriptWithHighlight ?? snippet,
           overallLevel: parsed.overallLevel,
+          coachComment,
         };
       }
     } catch {
@@ -386,7 +394,7 @@ function parseClaudeRawOutput(rawText: string, snippet: string): ClaudeResult {
   if (arrMatch) {
     try {
       const phrases = capPhrasesAtMax(JSON.parse(arrMatch[0]) as PhraseResult[]);
-      return { phrases, fullScriptWithHighlight: snippet };
+      return { phrases, fullScriptWithHighlight: snippet, coachComment: undefined };
     } catch {
       /* fall through */
     }
@@ -460,11 +468,16 @@ async function runUrlAnalysis(url: string, cefrLevel: string) {
     text = await getWebContent(url, cefrLevel);
     sourceType = "web";
   }
-  const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(
+  const { phrases, fullScriptWithHighlight, overallLevel, coachComment } =
+    await callClaude(text, cefrLevel);
+  return {
     text,
-    cefrLevel
-  );
-  return { text, sourceType, phrases, fullScriptWithHighlight, overallLevel };
+    sourceType,
+    phrases,
+    fullScriptWithHighlight,
+    overallLevel,
+    coachComment,
+  };
 }
 
 // ─── Main Server Action ────────────────────────────────────────────────────
@@ -541,6 +554,26 @@ export async function analyzeContent(
   try {
     if (!input.trim()) return { success: false, error: "入力が空です", errorCode: "generic" };
 
+    /**
+     * 開発時の魔法入力は DB キャッシュより優先し、ここではスキップ（衝突防止）。
+     */
+    const skipCacheForDebugMagic =
+      process.env.NODE_ENV === "development" &&
+      inputMode === "url" &&
+      isAnalyzeDebugMagicUrlInput(input);
+
+    /**
+     * Pre-check（最優先）: Supabase `saved_analyses`（アプリ上の解析永続テーブル）を
+     * video_id + level または url + level で検索。ヒット時は字幕/AI を一切呼ばない。
+     */
+    if (inputMode === "url" && !devMode && !skipCacheForDebugMagic) {
+      const existingId = await findExistingSavedAnalysisId(input.trim(), cefrLevel);
+      if (existingId) {
+        console.log("Cache hit! Skipping AI generation.");
+        return { success: true, existingAnalysisId: existingId };
+      }
+    }
+
     // DEV のみ: 魔法の URL → 字幕・AI を一切呼ばず、遅延後に既存解析ページへ誘導
     if (
       process.env.NODE_ENV === "development" &&
@@ -564,17 +597,6 @@ export async function analyzeContent(
       };
     }
 
-    /**
-     * Supabase `saved_analyses`（解析の永続化テーブル）で video_id + level が一致する行があれば、
-     * 字幕取得・AI を呼ばず既存 ID のみ返す（ANTHROPIC 未設定でもヒット時はリダイレクト可）。
-     */
-    if (inputMode === "url" && !devMode) {
-      const existingId = await findExistingSavedAnalysisId(input.trim(), cefrLevel);
-      if (existingId) {
-        return { success: true, existingAnalysisId: existingId };
-      }
-    }
-
     if (!process.env.ANTHROPIC_API_KEY) {
       return {
         success: false,
@@ -592,7 +614,8 @@ export async function analyzeContent(
         cefrLevel
       );
       // Always call Claude directly so every submit tests the prompt
-      const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(transcript, cefrLevel);
+      const { phrases, fullScriptWithHighlight, overallLevel, coachComment } =
+        await callClaude(transcript, cefrLevel);
       return {
         success: true,
         data: {
@@ -602,13 +625,15 @@ export async function analyzeContent(
           source_text: transcript,
           full_script_with_highlight: fullScriptWithHighlight,
           overall_level: overallLevel,
+          coach_comment: coachComment,
         },
       };
     }
 
     if (inputMode === "text") {
       const text = input.trim();
-      const { phrases, fullScriptWithHighlight, overallLevel } = await callClaude(text, cefrLevel);
+      const { phrases, fullScriptWithHighlight, overallLevel, coachComment } =
+        await callClaude(text, cefrLevel);
       return {
         success: true,
         data: {
@@ -618,13 +643,20 @@ export async function analyzeContent(
           source_text: text,
           full_script_with_highlight: fullScriptWithHighlight,
           overall_level: overallLevel,
+          coach_comment: coachComment,
         },
       };
     }
 
     // URL mode（新規のみ）
-    const { text, sourceType, phrases, fullScriptWithHighlight, overallLevel } =
-      await runUrlAnalysis(input.trim(), cefrLevel);
+    const {
+      text,
+      sourceType,
+      phrases,
+      fullScriptWithHighlight,
+      overallLevel,
+      coachComment,
+    } = await runUrlAnalysis(input.trim(), cefrLevel);
 
     return {
       success: true,
@@ -635,6 +667,7 @@ export async function analyzeContent(
         source_text: text,
         full_script_with_highlight: fullScriptWithHighlight,
         overall_level: overallLevel,
+        coach_comment: coachComment,
       },
     };
   } catch (error) {

@@ -5,7 +5,7 @@ import { useClerk } from "@clerk/nextjs";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 import {
   Volume2, VolumeX, BookmarkPlus, Check,
-  Mic, MicOff, Lock,
+  Mic, MicOff, Lock, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, getBestEnglishVoice } from "@/lib/utils";
@@ -91,6 +91,7 @@ export interface PhrasePopupProps {
   dailyRemaining: number;
   top: number;
   left: number;
+  isSaving?: boolean;
   onSave: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -100,6 +101,7 @@ export interface PhrasePopupProps {
 
 export function PhrasePopup({
   phrase, isSaved, dailyRemaining, top, left,
+  isSaving = false,
   onSave, onMouseEnter, onMouseLeave,
 }: PhrasePopupProps) {
   const { isSignedIn } = useEffectiveAuth();
@@ -252,7 +254,7 @@ export function PhrasePopup({
           <div className="px-4 pb-4">
             <button
               onClick={onSave}
-              disabled={isSaved || dailyRemaining === 0}
+              disabled={isSaved || dailyRemaining === 0 || isSaving}
               className={cn(
                 "w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all",
                 isSaved
@@ -262,9 +264,16 @@ export function PhrasePopup({
                   : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50"
               )}
             >
-              {isSaved
-                ? <><Check className="h-3.5 w-3.5" /> 保存済み</>
-                : <><BookmarkPlus className="h-3.5 w-3.5" /> 単語帳に保存</>}
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  保存中…
+                </>
+              ) : isSaved ? (
+                <><Check className="h-3.5 w-3.5" /> 保存済み</>
+              ) : (
+                <><BookmarkPlus className="h-3.5 w-3.5" /> 単語帳に保存</>
+              )}
               {!isSaved && dailyRemaining <= 2 && dailyRemaining > 0 && (
                 <span className="ml-auto text-[10px] text-amber-500 font-semibold">
                   本日あと{dailyRemaining}件

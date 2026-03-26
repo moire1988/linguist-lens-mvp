@@ -9,6 +9,7 @@ import {
 } from "@/lib/article-categories";
 import { articleDisplayTitles } from "@/lib/article-display";
 import { cn } from "@/lib/utils";
+import { FavoriteFakeDoorButton } from "@/components/favorite-fake-door-button";
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -82,36 +83,41 @@ function ArticleCard({ article }: { article: ArticleSummary }) {
     : "";
 
   return (
-    <Link
-      href={`/articles/${article.slug}`}
-      className="group block border border-slate-200 hover:border-indigo-300 bg-white hover:bg-indigo-50/20 rounded-xl p-4 sm:p-5 transition-all duration-150"
-    >
-      <div className="flex items-center gap-2 flex-wrap mb-2.5">
-        <span className={cn("text-[10px] font-mono font-bold px-2 py-0.5 rounded border", cefrStyle)}>
-          {article.level}
-        </span>
-        {article.englishVariant && (
-          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded border bg-slate-50 text-slate-500 border-slate-200">
-            {VARIANT_LABEL[article.englishVariant]}
+    <div className="relative">
+      <Link
+        href={`/articles/${article.slug}`}
+        className="group block rounded-xl border border-slate-200 bg-white p-4 pr-12 transition-all duration-150 hover:border-indigo-300 hover:bg-indigo-50/20 sm:p-5"
+      >
+        <div className="mb-2.5 flex flex-wrap items-center gap-2">
+          <span className={cn("rounded border px-2 py-0.5 font-mono text-[10px] font-bold", cefrStyle)}>
+            {article.level}
           </span>
+          {article.englishVariant && (
+            <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-500">
+              {VARIANT_LABEL[article.englishVariant]}
+            </span>
+          )}
+          {catClass && (
+            <span className={cn("max-w-[200px] truncate rounded border px-2 py-0.5 font-mono text-[10px] font-semibold", catClass)}>
+              {getArticleCategoryDisplayLabel(article.category)}
+            </span>
+          )}
+          <span className="ml-auto shrink-0 font-mono text-[10px] text-slate-400">{dateStr}</span>
+        </div>
+        <p className="font-mono text-sm font-bold leading-snug text-slate-800 transition-colors group-hover:text-indigo-700">
+          {titles.primary}
+        </p>
+        {titles.secondary && (
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">{titles.secondary}</p>
         )}
-        {catClass && (
-          <span className={cn("text-[10px] font-mono font-semibold px-2 py-0.5 rounded border truncate max-w-[200px]", catClass)}>
-            {getArticleCategoryDisplayLabel(article.category)}
-          </span>
+        {article.keyword && (
+          <p className="mt-2.5 font-mono text-[10px] text-slate-400">🔑 {article.keyword}</p>
         )}
-        <span className="ml-auto text-[10px] font-mono text-slate-400 shrink-0">{dateStr}</span>
+      </Link>
+      <div className="absolute right-3 top-3 z-10 sm:right-4 sm:top-4">
+        <FavoriteFakeDoorButton />
       </div>
-      <p className="text-sm font-bold font-mono text-slate-800 leading-snug group-hover:text-indigo-700 transition-colors">
-        {titles.primary}
-      </p>
-      {titles.secondary && (
-        <p className="text-xs text-slate-500 leading-relaxed mt-1">{titles.secondary}</p>
-      )}
-      {article.keyword && (
-        <p className="mt-2.5 text-[10px] font-mono text-slate-400">🔑 {article.keyword}</p>
-      )}
-    </Link>
+    </div>
   );
 }
 

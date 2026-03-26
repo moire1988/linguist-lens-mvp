@@ -10,6 +10,7 @@ import {
   type LoginPromptConfig,
   type LoginPromptFeature,
 } from "@/lib/login-prompt-store";
+import { ModalPortal } from "@/components/modal-portal";
 
 // ─── Feature-specific copy ────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ export function LoginPromptModal() {
   };
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center"
       onClick={(e) => {
@@ -124,5 +126,6 @@ export function LoginPromptModal() {
         </button>
       </div>
     </div>
+    </ModalPortal>
   );
 }

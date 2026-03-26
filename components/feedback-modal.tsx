@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { X, Star, Send, MessageSquare } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { submitFeedback } from "@/app/actions/feedback";
+import { ModalPortal } from "@/components/modal-portal";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -26,12 +27,6 @@ export function FeedbackModal() {
   const [rating, setRating]       = useState(0);
   const [hover, setHover]         = useState(0);
   const [comment, setComment]     = useState("");
-
-  // Body scroll lock
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
 
   // Escape to close
   useEffect(() => {
@@ -83,7 +78,7 @@ export function FeedbackModal() {
 
       {/* ── Modal ────────────────────────────────────────────────────── */}
       {open && (
-        <>
+        <ModalPortal>
           {/* Backdrop */}
           <div
             className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
@@ -230,7 +225,7 @@ export function FeedbackModal() {
               </div>
             </div>
           </div>
-        </>
+        </ModalPortal>
       )}
     </>
   );

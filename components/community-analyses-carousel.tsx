@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, Globe, FileText, Youtube } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RecentPublicAnalysis } from "@/lib/public-analyses-types";
+import { FavoriteFakeDoorButton } from "@/components/favorite-fake-door-button";
 
 const LEVEL_STYLES: Record<string, string> = {
   A1: "bg-slate-100 text-slate-600 border-slate-300",
@@ -92,13 +93,16 @@ export function CommunityAnalysesCarousel({
             const showSonota = resolvedTotal > 2 || previewLen > 2;
 
             return (
-              <Link
+              <div
                 key={item.id}
+                className="relative snap-start shrink-0 w-[256px]"
+              >
+              <Link
                 href={`/analyses/${item.id}`}
                 className={cn(
-                  "snap-start shrink-0 w-[256px] rounded-xl overflow-hidden",
-                  "bg-white border border-slate-200 shadow-sm",
-                  "hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5",
+                  "block overflow-hidden rounded-xl",
+                  "border border-slate-200 bg-white shadow-sm",
+                  "hover:border-indigo-300 hover:-translate-y-0.5 hover:shadow-md",
                   "transition-all duration-200 group"
                 )}
               >
@@ -173,6 +177,10 @@ export function CommunityAnalysesCarousel({
                   </div>
                 </div>
               </Link>
+              <div className="absolute right-2 top-2 z-20">
+                <FavoriteFakeDoorButton />
+              </div>
+              </div>
             );
           })}
         </div>

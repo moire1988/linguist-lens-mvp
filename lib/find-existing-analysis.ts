@@ -5,7 +5,8 @@ import { extractYouTubeVideoId } from "@/lib/youtube-url";
 
 /**
  * 同一 YouTube 動画（video_id）＋同一 CEFR レベル（`target_level` 相当の列は `level`）、または同一 URL 文字列＋レベルで
- * 既存の `saved_analyses`（アプリ上の解析永続化テーブル; 別名で analyses と呼ぶ文脈あり）行があればその id を返す（LLM・字幕 API 前のキャッシュ再利用用）。
+ * 既存の `saved_analyses`（アプリ上の解析永続化テーブル; 要件上の analyses と同一）行があればその id を返す。
+ * `analyzeContent` の Pre-check で最優先呼び出し（外部 API より先）。
  * 検索順: (1) video_id + level → (2) url 完全一致 + level → (3) YouTube は url に ID を含む行を候補取得し、
  * extractYouTubeVideoId で同一動画と判定（video_id 未設定・URL表記違いの重複防止）。
  */
