@@ -1,91 +1,124 @@
 /**
- * AI 記事生成でランダム選択するカテゴリ（DB の `category` にそのまま保存される）。
+ * AI 記事生成で選ばれるカテゴリ（DB `category` にそのまま保存する日本語ラベル）。
  */
 export const ARTICLE_CATEGORIES = [
-  "Deep Cultural Nuances & Society (e.g., unspoken rules outsiders miss, echoes of class, modern dating culture)",
-  "Pop Culture & Z-Gen Trends (e.g., fresh net slang, meme culture, how people actually talk on social)",
-  "Workplace & Daily Survival (e.g., real office English, pub and café survival, flat-share headaches)",
-  "English Grammar & Nuance Masterclass (e.g., subtle differences between near-synonyms, what natives feel when they pick a tense — explain insights in English)",
+  "リアルな英語・文法",
+  "トレンド・スラング",
+  "働き方・ライフスタイル",
+  "恋愛・人間関係",
+  "海外カルチャーあるある",
 ] as const;
+
+export type ArticleCategory = (typeof ARTICLE_CATEGORIES)[number];
 
 export function pickArticleCategory(): string {
   const list = ARTICLE_CATEGORIES as readonly string[];
   return list[Math.floor(Math.random() * list.length)];
 }
 
-/** Grammar 専用カテゴリか（本文を文法エッセイにする分岐用） */
+/** 文法エッセイ・英語本文で解説するモード（プロンプト分岐用） */
 export function isGrammarMasterclassCategory(category: string): boolean {
-  return category.startsWith("English Grammar & Nuance Masterclass");
+  const t = category.trim();
+  return t === "リアルな英語・文法" || t.startsWith("リアルな英語・文法");
 }
 
-/** 一覧・詳細のカテゴリバッジ（キーは `ARTICLE_CATEGORIES` の文字列と完全一致） */
+/** 一覧・詳細のカテゴリバッジ（キーは `ARTICLE_CATEGORIES` と完全一致） */
 export const ARTICLE_CATEGORY_BADGE_STYLE: Record<string, string> = {
-  [ARTICLE_CATEGORIES[0]]:
-    "bg-violet-50 text-violet-700 border-violet-200",
-  [ARTICLE_CATEGORIES[1]]:
-    "bg-pink-50 text-pink-700 border-pink-200",
-  [ARTICLE_CATEGORIES[2]]:
-    "bg-sky-50 text-sky-700 border-sky-200",
-  [ARTICLE_CATEGORIES[3]]:
-    "bg-amber-50 text-amber-700 border-amber-200",
+  "リアルな英語・文法":
+    "bg-amber-50 text-amber-800 border-amber-200",
+  "トレンド・スラング":
+    "bg-pink-50 text-pink-800 border-pink-200",
+  "働き方・ライフスタイル":
+    "bg-sky-50 text-sky-800 border-sky-200",
+  "恋愛・人間関係":
+    "bg-rose-50 text-rose-800 border-rose-200",
+  海外カルチャーあるある:
+    "bg-violet-50 text-violet-800 border-violet-200",
 };
-
-/** フィルタ・バッジ用の短い表示名（日本語で統一） */
-export const ARTICLE_CATEGORY_SHORT_LABEL: Record<string, string> = {
-  [ARTICLE_CATEGORIES[0]]: "文化・社会",
-  [ARTICLE_CATEGORIES[1]]: "ポップ・Z世代",
-  [ARTICLE_CATEGORIES[2]]: "仕事・日常",
-  [ARTICLE_CATEGORIES[3]]: "文法",
-};
-
-/** DB に残る旧カテゴリ文字列（一覧の UI 名と過去の CMS プロンプト） */
-const LEGACY_ARTICLE_CATEGORY_SHORT_LABEL: Record<string, string> = {
-  "Tech & Startup": "テック・スタートアップ",
-  "Pop Culture & Entertainment": "ポップ文化",
-  "Lifehacks & Psychology": "ライフハック・心理",
-  "Real Parenting & Family": "子育て・家族",
-  "Local Travel Secrets": "旅行・ローカル",
-  "Tech & Startup Culture (e.g., remote work, AI tools, silicon valley trends)":
-    "テック・スタートアップ",
-  "Pop Culture & Entertainment (e.g., movies, music, internet slang)": "ポップ文化",
-  "Psychology & Human Behavior (e.g., motivation, habits, communication)":
-    "心理・行動",
-  "Modern Daily Life & Relationships (e.g., dating, family dynamics, friendships)":
-    "日常・人間関係",
-  "Health, Wellness & Food (e.g., diet trends, mental health, workouts)":
-    "健康・ウェルネス",
-};
-
-/** 長い文字列や軽微な表記ゆれを prefix で吸収（長い方を先にマッチさせる） */
-const LEGACY_CATEGORY_PREFIX_LABELS: readonly { prefix: string; label: string }[] = [
-  { prefix: "English Grammar & Nuance Masterclass", label: "文法" },
-  { prefix: "Workplace & Daily Survival", label: "仕事・日常" },
-  { prefix: "Pop Culture & Z-Gen Trends", label: "ポップ・Z世代" },
-  { prefix: "Deep Cultural Nuances & Society", label: "文化・社会" },
-  { prefix: "Tech & Startup Culture", label: "テック・スタートアップ" },
-  { prefix: "Pop Culture & Entertainment", label: "ポップ文化" },
-  { prefix: "Psychology & Human Behavior", label: "心理・行動" },
-  { prefix: "Modern Daily Life & Relationships", label: "日常・人間関係" },
-  { prefix: "Health, Wellness & Food", label: "健康・ウェルネス" },
-];
 
 /**
- * フィルタ・カード・管理画面で表示するカテゴリ名（DB の `category` 生値 → 日本語ラベル）
+ * フィルタ用表示名（現行カテゴリはそのまま返す）。
+ * @deprecated 新カテゴリは生文字列＝表示名のため、互換のため残す。
+ */
+export const ARTICLE_CATEGORY_SHORT_LABEL: Record<string, string> = {
+  [ARTICLE_CATEGORIES[0]]: ARTICLE_CATEGORIES[0],
+  [ARTICLE_CATEGORIES[1]]: ARTICLE_CATEGORIES[1],
+  [ARTICLE_CATEGORIES[2]]: ARTICLE_CATEGORIES[2],
+  [ARTICLE_CATEGORIES[3]]: ARTICLE_CATEGORIES[3],
+  [ARTICLE_CATEGORIES[4]]: ARTICLE_CATEGORIES[4],
+};
+
+/** 旧ショートラベル（移行前 UI）→ 新カテゴリ */
+const LEGACY_SHORT_TO_NEW: Record<string, string> = {
+  "文化・社会": "海外カルチャーあるある",
+  "ポップ・Z世代": "トレンド・スラング",
+  "仕事・日常": "働き方・ライフスタイル",
+  文法: "リアルな英語・文法",
+};
+
+/** 旧 DB 生値（短文）→ 新カテゴリ */
+const LEGACY_ARTICLE_CATEGORY_SHORT_LABEL: Record<string, string> = {
+  "Tech & Startup": "働き方・ライフスタイル",
+  "Pop Culture & Entertainment": "トレンド・スラング",
+  "Lifehacks & Psychology": "働き方・ライフスタイル",
+  "Real Parenting & Family": "恋愛・人間関係",
+  "Local Travel Secrets": "海外カルチャーあるある",
+  "Tech & Startup Culture (e.g., remote work, AI tools, silicon valley trends)":
+    "働き方・ライフスタイル",
+  "Pop Culture & Entertainment (e.g., movies, music, internet slang)": "トレンド・スラング",
+  "Psychology & Human Behavior (e.g., motivation, habits, communication)":
+    "恋愛・人間関係",
+  "Modern Daily Life & Relationships (e.g., dating, family dynamics, friendships)":
+    "恋愛・人間関係",
+  "Health, Wellness & Food (e.g., diet trends, mental health, workouts)":
+    "働き方・ライフスタイル",
+};
+
+/** 長い英語カテゴリ（prefix）→ 新カテゴリ（長い方を先にマッチ） */
+const LEGACY_CATEGORY_PREFIX_TO_NEW: readonly { prefix: string; label: string }[] = [
+  { prefix: "English Grammar & Nuance Masterclass", label: "リアルな英語・文法" },
+  { prefix: "Deep Cultural Nuances & Society", label: "海外カルチャーあるある" },
+  { prefix: "Pop Culture & Z-Gen Trends", label: "トレンド・スラング" },
+  { prefix: "Workplace & Daily Survival", label: "働き方・ライフスタイル" },
+  { prefix: "Tech & Startup Culture", label: "働き方・ライフスタイル" },
+  { prefix: "Pop Culture & Entertainment", label: "トレンド・スラング" },
+  { prefix: "Psychology & Human Behavior", label: "恋愛・人間関係" },
+  { prefix: "Modern Daily Life & Relationships", label: "恋愛・人間関係" },
+  { prefix: "Health, Wellness & Food", label: "働き方・ライフスタイル" },
+];
+
+const NEW_SET = new Set<string>(ARTICLE_CATEGORIES as unknown as string[]);
+
+/**
+ * バッジ・フィルタ用の正規化カテゴリ名（常に新5分類のいずれか、または未マッチ時は原文）
  */
 export function getArticleCategoryDisplayLabel(category: string | undefined): string {
   if (category === undefined) return "";
   const trimmed = category.trim();
   if (trimmed === "") return "";
 
-  const fromCurrent = ARTICLE_CATEGORY_SHORT_LABEL[trimmed];
-  if (fromCurrent !== undefined) return fromCurrent;
+  if (NEW_SET.has(trimmed)) return trimmed;
 
-  const fromLegacy = LEGACY_ARTICLE_CATEGORY_SHORT_LABEL[trimmed];
-  if (fromLegacy !== undefined) return fromLegacy;
+  const fromLegacyShort = LEGACY_SHORT_TO_NEW[trimmed];
+  if (fromLegacyShort !== undefined) return fromLegacyShort;
 
-  for (const { prefix, label } of LEGACY_CATEGORY_PREFIX_LABELS) {
+  const fromLegacyExact = LEGACY_ARTICLE_CATEGORY_SHORT_LABEL[trimmed];
+  if (fromLegacyExact !== undefined) return fromLegacyExact;
+
+  for (const { prefix, label } of LEGACY_CATEGORY_PREFIX_TO_NEW) {
     if (trimmed.startsWith(prefix)) return label;
   }
 
   return trimmed;
+}
+
+/**
+ * バッジ用クラス（旧 `category` 生値でも新5色に寄せる）
+ */
+export function getArticleCategoryBadgeClass(category: string | undefined): string {
+  const label = getArticleCategoryDisplayLabel(category);
+  return (
+    ARTICLE_CATEGORY_BADGE_STYLE[label] ??
+    "bg-slate-50 text-slate-600 border-slate-200"
+  );
 }

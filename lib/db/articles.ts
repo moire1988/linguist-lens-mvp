@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import type { Article, ArticleSummary, ArticleVocabItem, EnglishVariant } from "@/lib/article-types";
+import { getArticleCategoryDisplayLabel } from "@/lib/article-categories";
 
 // ─── DB row shape ─────────────────────────────────────────────────────────────
 
@@ -127,11 +128,14 @@ export async function getRelatedArticles(
     createdAt:      row.created_at,
   }));
 
-  // 同カテゴリを先頭に
+  // 同カテゴリを先頭に（旧ラベルと新ラベルが混在しても正規化ラベルで一致）
   if (category) {
+    const currentLabel = getArticleCategoryDisplayLabel(category);
     articles.sort((a, b) => {
-      const aMatch = a.category === category ? 0 : 1;
-      const bMatch = b.category === category ? 0 : 1;
+      const aMatch =
+        getArticleCategoryDisplayLabel(a.category) === currentLabel ? 0 : 1;
+      const bMatch =
+        getArticleCategoryDisplayLabel(b.category) === currentLabel ? 0 : 1;
       return aMatch - bMatch;
     });
   }

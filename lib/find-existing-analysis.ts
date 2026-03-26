@@ -79,3 +79,26 @@ export async function findExistingSavedAnalysisId(
 
   return null;
 }
+
+/**
+ * 最新の saved_analyses 1件の id（開発時・魔法URLデバッグのリダイレクト先フォールバック用）。
+ */
+export async function peekLatestSavedAnalysisId(): Promise<string | null> {
+  let db;
+  try {
+    db = createAdminClient();
+  } catch {
+    return null;
+  }
+
+  const { data, error } = await db
+    .from("saved_analyses")
+    .select("id")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const id = (data as { id: unknown }).id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}

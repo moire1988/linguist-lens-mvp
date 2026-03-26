@@ -7,9 +7,10 @@ import { cn } from "@/lib/utils";
 import { getLatestArticlesAction } from "@/app/actions/articles";
 import type { ArticleSummary } from "@/lib/article-types";
 import {
-  ARTICLE_CATEGORY_BADGE_STYLE,
+  getArticleCategoryBadgeClass,
   getArticleCategoryDisplayLabel,
 } from "@/lib/article-categories";
+import { articleDisplayTitles } from "@/lib/article-display";
 import type { EnglishVariant } from "@/lib/article-types";
 
 // ─── Style maps ──────────────────────────────────────────────────────────────
@@ -97,9 +98,10 @@ export function LatestArticlesCarousel() {
           className="flex gap-3 overflow-x-auto snap-x scrollbar-hide pb-1 -mx-4 sm:mx-0 px-4 sm:px-0"
         >
           {articles.map((article) => {
-            const catStyle = article.category
-              ? (ARTICLE_CATEGORY_BADGE_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200")
+            const catClass = article.category
+              ? getArticleCategoryBadgeClass(article.category)
               : null;
+            const titles = articleDisplayTitles(article);
 
             return (
               <Link
@@ -134,11 +136,11 @@ export function LatestArticlesCarousel() {
                         </span>
                       );
                     })()}
-                    {catStyle && (
+                    {catClass && (
                       <span
                         className={cn(
                           "px-1.5 py-0.5 rounded text-[10px] font-mono border truncate max-w-[120px]",
-                          catStyle
+                          catClass
                         )}
                       >
                         {getArticleCategoryDisplayLabel(article.category)}
@@ -146,15 +148,14 @@ export function LatestArticlesCarousel() {
                     )}
                   </div>
 
-                  {/* English title */}
+                  {/* Main title (JA) + English subline */}
                   <p className="text-slate-700 font-mono text-xs font-semibold leading-snug line-clamp-3 mb-1.5 group-hover:text-indigo-600 transition-colors flex-1">
-                    {article.titleEn}
+                    {titles.primary}
                   </p>
 
-                  {/* Japanese subtitle */}
-                  {article.titleJa && (
+                  {titles.secondary && (
                     <p className="text-slate-400 text-[10px] font-mono leading-snug line-clamp-1 mb-2">
-                      {article.titleJa}
+                      {titles.secondary}
                     </p>
                   )}
 

@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { AnalysisResult, AnalyzeErrorCode } from "@/lib/types";
 import { callAnalyzeApi } from "@/lib/analyze-client";
+import { isAnalyzeDebugMagicUrlInput } from "@/lib/analyze-debug-magic";
 import { generateArticle } from "@/app/actions/generate-article";
 import { getVocabularyCount } from "@/lib/vocabulary";
 import { getCachedEntry, setCachedResult } from "@/lib/cache";
@@ -324,8 +325,13 @@ export default function HomePage() {
     setError(null);
     setErrorCode(null);
 
-    // ── Guest: ログインを促す（devModeはスキップ）────────────────────────
-    if (!isSignedIn && !devMode) {
+    const devMagicAnalyzeUrl =
+      process.env.NODE_ENV === "development" &&
+      inputMode === "url" &&
+      isAnalyzeDebugMagicUrlInput(url);
+
+    // ── Guest: ログインを促す（devMode・DEV魔法URLはスキップ）──────────────
+    if (!isSignedIn && !devMode && !devMagicAnalyzeUrl) {
       openSignIn();
       return;
     }
@@ -394,8 +400,8 @@ export default function HomePage() {
       }
     }
 
-    // ── クォータチェック（devModeはスキップ）─────────────────────────────
-    if (!devMode) {
+    // ── クォータチェック（devMode・DEV魔法URLはスキップ）──────────────────
+    if (!devMode && !devMagicAnalyzeUrl) {
       const quota = await consumeQuotaAction();
       if (!quota?.allowed) {
         setShowQuotaModal(true);

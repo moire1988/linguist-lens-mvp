@@ -1,5 +1,4 @@
 import { ImageResponse } from "next/og";
-import { Buffer } from "node:buffer";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { normalizeAnalysisId } from "@/lib/analysis-id";
 import { extractYouTubeVideoId } from "@/lib/youtube-url";
@@ -18,6 +17,13 @@ const OG_HEIGHT = 630;
 
 const NOTO_JP_WOFF =
   "https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-jp@5.0.18/files/noto-sans-jp-japanese-700-normal.woff";
+
+/** `HeaderLogo`（`site-header.tsx`）と同じ Google Goldman 400 */
+const GOLDMAN_WOFF =
+  "https://cdn.jsdelivr.net/npm/@fontsource/goldman@5.2.8/files/goldman-latin-400-normal.woff";
+
+/** ヘッダーの「LinguistLens」文字色（`HeaderLogo` の inline style と一致） */
+const BRAND_WORDMARK_COLOR = "#1A2D42";
 
 interface AnalysisOgRow {
   title: string | null;
@@ -82,6 +88,20 @@ function resolveYoutubeId(row: AnalysisOgRow): string | null {
   return null;
 }
 
+/** `node:buffer` の静的 import を避け（dev での欠落チャンクを減らす）、Node は Buffer グローバルで base64 化。 */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const Buf = globalThis.Buffer;
+  if (typeof Buf !== "undefined") {
+    return Buf.from(buffer).toString("base64");
+  }
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
+}
+
 async function fetchYoutubeThumbnailDataUrl(videoId: string): Promise<string | null> {
   const variants = ["maxresdefault", "hqdefault", "mqdefault"] as const;
   for (const v of variants) {
@@ -94,7 +114,7 @@ async function fetchYoutubeThumbnailDataUrl(videoId: string): Promise<string | n
       const buf = await res.arrayBuffer();
       if (buf.byteLength < 2500) continue;
       const mime = contentTypeHeader.includes("png") ? "image/png" : "image/jpeg";
-      const b64 = Buffer.from(buf).toString("base64");
+      const b64 = arrayBufferToBase64(buf);
       return `data:${mime};base64,${b64}`;
     } catch {
       continue;
@@ -119,17 +139,97 @@ async function fetchAnalysisRow(id: string): Promise<AnalysisOgRow | null> {
   }
 }
 
-async function loadOgFonts(): Promise<
-  { name: string; data: ArrayBuffer; weight: number; style: "normal" }[]
-> {
+type OgFont = { name: string; data: ArrayBuffer; weight: number; style: "normal" };
+
+async function loadOgFonts(): Promise<{
+  fonts: OgFont[];
+  fontFamilyJa: string;
+  fontFamilyBrand: string;
+}> {
+  const empty = {
+    fonts: [] as OgFont[],
+    fontFamilyJa: "system-ui, sans-serif",
+    fontFamilyBrand: "system-ui, sans-serif",
+  };
   try {
-    const res = await fetch(NOTO_JP_WOFF, { next: { revalidate: 86400 } });
-    if (!res.ok) return [];
-    const data = await res.arrayBuffer();
-    return [{ name: "Noto Sans JP", data, weight: 700, style: "normal" as const }];
+    const [notoRes, goldRes] = await Promise.all([
+      fetch(NOTO_JP_WOFF, { next: { revalidate: 86400 } }),
+      fetch(GOLDMAN_WOFF, { next: { revalidate: 86400 } }),
+    ]);
+    const fonts: OgFont[] = [];
+    let fontFamilyJa = empty.fontFamilyJa;
+    let fontFamilyBrand = empty.fontFamilyBrand;
+    if (notoRes.ok) {
+      fonts.push({
+        name: "Noto Sans JP",
+        data: await notoRes.arrayBuffer(),
+        weight: 700,
+        style: "normal",
+      });
+      fontFamilyJa = "Noto Sans JP";
+    }
+    if (goldRes.ok) {
+      fonts.push({
+        name: "Goldman",
+        data: await goldRes.arrayBuffer(),
+        weight: 400,
+        style: "normal",
+      });
+      fontFamilyBrand = "Goldman";
+    }
+    return { fonts, fontFamilyJa, fontFamilyBrand };
   } catch {
-    return [];
+    return empty;
   }
+}
+
+/**
+ * `components/linguist-lens-logo.tsx` と同じマーク（ホバーアニメなし）。
+ */
+function OgBrandIcon({ size }: { size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ display: "flex", flexShrink: 0 }}
+    >
+      <defs>
+        <linearGradient id="ogll-g1" x1="0%" y1="50%" x2="100%" y2="50%">
+          <stop offset="0%" stopColor="#7C3AED" />
+          <stop offset="100%" stopColor="#06B6D4" />
+        </linearGradient>
+        <linearGradient id="ogll-g2" x1="50%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" stopColor="#7C3AED" />
+          <stop offset="100%" stopColor="#06B6D4" />
+        </linearGradient>
+        <clipPath id="ogll-circ">
+          <circle cx="50" cy="50" r="50" />
+        </clipPath>
+        <clipPath id="ogll-upper">
+          <polygon points="0,0 100,0 0,100" />
+        </clipPath>
+        <clipPath id="ogll-lower">
+          <polygon points="100,0 100,100 0,100" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#ogll-circ)">
+        <rect
+          width="100"
+          height="100"
+          fill="url(#ogll-g1)"
+          clipPath="url(#ogll-upper)"
+        />
+        <rect
+          width="100"
+          height="100"
+          fill="url(#ogll-g2)"
+          clipPath="url(#ogll-lower)"
+        />
+      </g>
+    </svg>
+  );
 }
 
 export default async function OgImage({
@@ -138,7 +238,10 @@ export default async function OgImage({
   params: { id: string };
 }) {
   const id = normalizeAnalysisId(params.id ?? "");
-  const [row, fonts] = await Promise.all([fetchAnalysisRow(id), loadOgFonts()]);
+  const [row, { fonts, fontFamilyJa, fontFamilyBrand }] = await Promise.all([
+    fetchAnalysisRow(id),
+    loadOgFonts(),
+  ]);
 
   const phraseCount = row ? resolvePhraseCount(row) : 0;
   const level = row?.level?.trim() ?? "";
@@ -146,8 +249,6 @@ export default async function OgImage({
   const title = truncateTitle(rawTitle, 68);
   const ytId = row ? resolveYoutubeId(row) : null;
   const thumbDataUrl = ytId ? await fetchYoutubeThumbnailDataUrl(ytId) : null;
-
-  const fontFamily = fonts.length ? "Noto Sans JP" : "system-ui, sans-serif";
 
   if (!row) {
     return new ImageResponse(
@@ -163,7 +264,7 @@ export default async function OgImage({
             background: "#fafafa",
             position: "relative",
             overflow: "hidden",
-            fontFamily,
+            fontFamily: fontFamilyJa,
           }}
         >
           <div
@@ -175,27 +276,16 @@ export default async function OgImage({
               display: "flex",
             }}
           />
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 96,
-              height: 96,
-              borderRadius: 24,
-              background: "linear-gradient(135deg, #8b5cf6, #6366f1)",
-              marginBottom: 28,
-              boxShadow: "0 24px 48px rgba(99,102,241,0.35)",
-            }}
-          >
-            <span style={{ color: "white", fontSize: 44, lineHeight: 1 }}>✦</span>
+          <div style={{ display: "flex", marginBottom: 24 }}>
+            <OgBrandIcon size={96} />
           </div>
           <div
             style={{
               fontSize: 52,
-              fontWeight: 800,
-              color: "#1e1b4b",
-              letterSpacing: "-1px",
+              fontWeight: 400,
+              fontFamily: fontFamilyBrand,
+              color: BRAND_WORDMARK_COLOR,
+              letterSpacing: "-0.5px",
             }}
           >
             LinguistLens
@@ -227,7 +317,7 @@ export default async function OgImage({
           background: "#f8fafc",
           position: "relative",
           overflow: "hidden",
-          fontFamily,
+          fontFamily: fontFamilyJa,
         }}
       >
         <div
@@ -380,25 +470,14 @@ export default async function OgImage({
             gap: 10,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              background: "linear-gradient(135deg, #8b5cf6, #3b82f6)",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <span style={{ color: "white", fontSize: 18, lineHeight: 1 }}>✦</span>
-          </div>
+          <OgBrandIcon size={36} />
           <span
             style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: "#64748b",
-              letterSpacing: "-0.3px",
+              fontSize: 26,
+              fontWeight: 400,
+              fontFamily: fontFamilyBrand,
+              color: BRAND_WORDMARK_COLOR,
+              letterSpacing: "-0.2px",
             }}
           >
             LinguistLens

@@ -6,8 +6,12 @@ import path from "path";
 import { fetchTranscript } from "youtube-transcript";
 import type { AnalyzeErrorCode, PhraseResult, AnalysisResult } from "@/lib/types";
 import { DEV_TEST_VIDEO_ID } from "@/lib/settings";
-import { findExistingSavedAnalysisId } from "@/lib/find-existing-analysis";
+import {
+  findExistingSavedAnalysisId,
+  peekLatestSavedAnalysisId,
+} from "@/lib/find-existing-analysis";
 import { extractYouTubeVideoId } from "@/lib/youtube-url";
+import { isAnalyzeDebugMagicUrlInput } from "@/lib/analyze-debug-magic";
 
 export type {
   AnalyzeErrorCode,
@@ -534,6 +538,14 @@ async function runUrlAnalysis(url: string, cefrLevel: string) {
 
 // ─── Main Server Action ────────────────────────────────────────────────────
 
+const ANALYZE_DEBUG_SLEEP_MS = 2500;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function classifyError(msg: string): AnalyzeErrorCode {
   if (
     msg.includes("ANTHROPIC_API_KEY") ||
@@ -597,6 +609,30 @@ export async function analyzeContent(
 > {
   try {
     if (!input.trim()) return { success: false, error: "入力が空です", errorCode: "generic" };
+
+    // DEV のみ: 魔法の URL → 字幕・AI を一切呼ばず、遅延後に既存解析ページへ誘導
+    if (
+      process.env.NODE_ENV === "development" &&
+      inputMode === "url" &&
+      isAnalyzeDebugMagicUrlInput(input)
+    ) {
+      await sleep(ANALYZE_DEBUG_SLEEP_MS);
+      const envId = process.env.DEBUG_REDIRECT_ANALYSIS_ID?.trim();
+      if (envId) {
+        return { success: true, existingAnalysisId: envId };
+      }
+      const latestId = await peekLatestSavedAnalysisId();
+      if (latestId) {
+        return { success: true, existingAnalysisId: latestId };
+      }
+      return {
+        success: false,
+        error:
+          "開発デバッグ: リダイレクト先がありません。.env.local に DEBUG_REDIRECT_ANALYSIS_ID=<saved_analyses の UUID> を設定するか、一度通常の解析でデータを作成してください。",
+        errorCode: "generic",
+      };
+    }
+
     if (!process.env.ANTHROPIC_API_KEY) {
       return {
         success: false,

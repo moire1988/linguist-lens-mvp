@@ -13,9 +13,10 @@ import { NewsletterBanner } from "@/components/newsletter-banner";
 import { Breadcrumb } from "@/components/breadcrumb";
 import type { ArticleSummary } from "@/lib/article-types";
 import {
-  ARTICLE_CATEGORY_BADGE_STYLE,
+  getArticleCategoryBadgeClass,
   getArticleCategoryDisplayLabel,
 } from "@/lib/article-categories";
+import { articleDisplayTitles } from "@/lib/article-display";
 import { cn } from "@/lib/utils";
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
@@ -35,8 +36,9 @@ const CEFR_STYLE: Record<string, string> = {
 
 function RelatedArticleCard({ article }: { article: ArticleSummary }) {
   const cefrStyle  = CEFR_STYLE[article.level]    ?? CEFR_STYLE.B2;
-  const catStyle   = article.category
-    ? (ARTICLE_CATEGORY_BADGE_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200")
+  const titles     = articleDisplayTitles(article);
+  const catClass   = article.category
+    ? getArticleCategoryBadgeClass(article.category)
     : null;
 
   return (
@@ -48,17 +50,17 @@ function RelatedArticleCard({ article }: { article: ArticleSummary }) {
         <span className={cn("text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border", cefrStyle)}>
           {article.level}
         </span>
-        {catStyle && (
-          <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border truncate max-w-[140px]", catStyle)}>
+        {catClass && (
+          <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border truncate max-w-[140px]", catClass)}>
             {getArticleCategoryDisplayLabel(article.category)}
           </span>
         )}
       </div>
       <p className="text-sm font-bold font-mono text-slate-800 leading-snug group-hover:text-indigo-700 transition-colors line-clamp-2">
-        {article.titleEn}
+        {titles.primary}
       </p>
-      {article.titleJa && (
-        <p className="text-xs text-slate-500 leading-snug line-clamp-1">{article.titleJa}</p>
+      {titles.secondary && (
+        <p className="text-xs text-slate-500 leading-snug line-clamp-1">{titles.secondary}</p>
       )}
     </Link>
   );
@@ -116,6 +118,7 @@ export default async function ArticlePage({
     article.level,
     article.category
   );
+  const titles = articleDisplayTitles(article);
 
   return (
     <div className="min-h-screen relative">
@@ -127,7 +130,7 @@ export default async function ArticlePage({
         <Breadcrumb
           items={[
             { label: "Learning Articles", href: "/articles" },
-            { label: article.titleEn },
+            { label: titles.primary },
           ]}
         />
 
@@ -138,7 +141,7 @@ export default async function ArticlePage({
           {article.category && (
             <span className={cn(
               "text-[10px] font-mono px-1.5 py-0.5 rounded border",
-              ARTICLE_CATEGORY_BADGE_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200"
+              getArticleCategoryBadgeClass(article.category)
             )}>
               {getArticleCategoryDisplayLabel(article.category)}
             </span>
@@ -151,11 +154,11 @@ export default async function ArticlePage({
         {/* Title block */}
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-extrabold font-mono text-slate-900 tracking-tight leading-tight">
-            {article.titleEn}
+            {titles.primary}
           </h1>
-          {article.titleJa && (
+          {titles.secondary && (
             <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-              {article.titleJa}
+              {titles.secondary}
             </p>
           )}
         </div>
@@ -167,7 +170,7 @@ export default async function ArticlePage({
         <ArticleBody
           contentHtml={article.contentHtml}
           articleLevel={article.level}
-          articleTitle={article.titleEn}
+          articleTitle={titles.primary}
           englishVariant={article.englishVariant}
         />
 
@@ -186,7 +189,7 @@ export default async function ArticlePage({
                   key={i}
                   item={item}
                   articleLevel={article.level}
-                  articleTitle={article.titleEn}
+                  articleTitle={titles.primary}
                   englishVariant={article.englishVariant}
                 />
               ))}

@@ -31,10 +31,17 @@ const nextConfig = {
     ];
   },
   // Vercel: コミットごとにビルドIDが変わり、/_next/static のハッシュが必ず更新される
-  generateBuildId: async () =>
-    process.env.VERCEL_GIT_COMMIT_SHA ||
-    process.env.VERCEL_DEPLOYMENT_ID ||
-    `local-${Date.now()}`,
+  // ローカル dev で毎回 Date.now() にするとキャッシュとズレて欠落チャンク (Cannot find module './xxxx.js') が出やすい
+  generateBuildId: async () => {
+    if (process.env.NODE_ENV === "development") {
+      return "development";
+    }
+    return (
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+      process.env.VERCEL_DEPLOYMENT_ID ||
+      `local-${Date.now()}`
+    );
+  },
 };
 
 module.exports = nextConfig;

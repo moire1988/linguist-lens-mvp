@@ -4,9 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import type { ArticleSummary, EnglishVariant } from "@/lib/article-types";
 import {
-  ARTICLE_CATEGORY_BADGE_STYLE,
+  getArticleCategoryBadgeClass,
   getArticleCategoryDisplayLabel,
 } from "@/lib/article-categories";
+import { articleDisplayTitles } from "@/lib/article-display";
 import { cn } from "@/lib/utils";
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -69,9 +70,10 @@ function FilterRow({
 // ─── Article card ─────────────────────────────────────────────────────────────
 
 function ArticleCard({ article }: { article: ArticleSummary }) {
-  const catStyle = article.category
-    ? (ARTICLE_CATEGORY_BADGE_STYLE[article.category] ?? "bg-slate-50 text-slate-600 border-slate-200")
+  const catClass = article.category
+    ? getArticleCategoryBadgeClass(article.category)
     : null;
+  const titles = articleDisplayTitles(article);
   const cefrStyle = CEFR_STYLE[article.level] ?? CEFR_STYLE.B2;
   const dateStr = article.publishedAt
     ? new Date(article.publishedAt).toLocaleDateString("ja-JP", {
@@ -93,18 +95,18 @@ function ArticleCard({ article }: { article: ArticleSummary }) {
             {VARIANT_LABEL[article.englishVariant]}
           </span>
         )}
-        {catStyle && (
-          <span className={cn("text-[10px] font-mono font-semibold px-2 py-0.5 rounded border truncate max-w-[200px]", catStyle)}>
+        {catClass && (
+          <span className={cn("text-[10px] font-mono font-semibold px-2 py-0.5 rounded border truncate max-w-[200px]", catClass)}>
             {getArticleCategoryDisplayLabel(article.category)}
           </span>
         )}
         <span className="ml-auto text-[10px] font-mono text-slate-400 shrink-0">{dateStr}</span>
       </div>
       <p className="text-sm font-bold font-mono text-slate-800 leading-snug group-hover:text-indigo-700 transition-colors">
-        {article.titleEn}
+        {titles.primary}
       </p>
-      {article.titleJa && (
-        <p className="text-xs text-slate-500 leading-relaxed mt-1">{article.titleJa}</p>
+      {titles.secondary && (
+        <p className="text-xs text-slate-500 leading-relaxed mt-1">{titles.secondary}</p>
       )}
       {article.keyword && (
         <p className="mt-2.5 text-[10px] font-mono text-slate-400">🔑 {article.keyword}</p>
@@ -127,21 +129,24 @@ export function ArticleListClient({ articles }: { articles: ArticleSummary[] }) 
       const match = a.englishVariant === variantFilter || a.englishVariant === "common";
       if (!match) return false;
     }
-    if (categoryFilter !== "all" && (a.category ?? "") !== categoryFilter) return false;
+    if (
+      categoryFilter !== "all" &&
+      getArticleCategoryDisplayLabel(a.category) !== categoryFilter
+    )
+      return false;
     return true;
   });
 
   const hasFilter = levelFilter !== "all" || variantFilter !== "all" || categoryFilter !== "all";
 
-  // 存在するカテゴリのみ表示（過去データのラベルも拾う）
+  // 正規化ラベルでユニーク化（旧 DB 文字列が混在しても1チップにまとまる）
   const existingCategories = Array.from(
-    new Set(articles.map((a) => a.category).filter((c): c is string => Boolean(c)))
-  ).sort((a, b) =>
-    getArticleCategoryDisplayLabel(a).localeCompare(
-      getArticleCategoryDisplayLabel(b),
-      "ja"
+    new Set(
+      articles
+        .map((a) => getArticleCategoryDisplayLabel(a.category))
+        .filter((c) => c !== "")
     )
-  );
+  ).sort((a, b) => a.localeCompare(b, "ja"));
 
   const levelOptions   = [{ value: "all", label: "すべて" }, ...LEVELS.filter((l) => articles.some((a) => a.level === l)).map((l) => ({ value: l, label: l }))];
   // common は選択肢に出さない。ボタンは すべて / US / UK / AU のみ
@@ -153,10 +158,7 @@ export function ArticleListClient({ articles }: { articles: ArticleSummary[] }) 
   ];
   const categoryOptions = [
     { value: "all", label: "すべて" },
-    ...existingCategories.map((c) => ({
-      value: c,
-      label: getArticleCategoryDisplayLabel(c),
-    })),
+    ...existingCategories.map((c) => ({ value: c, label: c })),
   ];
 
   return (

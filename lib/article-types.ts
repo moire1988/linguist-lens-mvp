@@ -14,8 +14,8 @@ export type EnglishVariant = "US" | "UK" | "AU" | "common";
 export interface Article {
   id:              string;
   slug:            string;
-  titleEn:         string;   // English title — displayed as <h1>
-  titleJa?:        string;   // Japanese SEO title — used in <title> tag and as subtitle
+  titleEn:         string;   // 英語ライン（サブ見出し・OG 等でも使用）
+  titleJa?:        string;   // メイン見出し（日本語キャッチ）。未設定時は titleEn を主表示にフォールバック
   level:           string;
   englishVariant:  EnglishVariant;
   keyword?:        string;   // SEO focus keyword (e.g. "Netflix slang English B2")
@@ -32,8 +32,8 @@ export interface Article {
 export interface ArticleSummary {
   id:             string;
   slug:           string;
-  titleEn:        string;
-  titleJa?:       string;
+  titleEn:        string; // 英語サブ
+  titleJa?:       string; // メイン見出し（任意）
   level:          string;
   englishVariant: EnglishVariant;
   keyword?:       string;

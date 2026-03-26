@@ -11,6 +11,7 @@ import type {
 } from "@/lib/article-types";
 import {
   ARTICLE_CATEGORIES,
+  getArticleCategoryDisplayLabel,
   isGrammarMasterclassCategory,
 } from "@/lib/article-categories";
 
@@ -82,7 +83,7 @@ async function pickVariantBalanced(
 }
 
 // ─── Category (balanced picker) ──────────────────────────────────────────────
-// 4カテゴリ均等 (25% each)。直近20件で最も不足しているカテゴリを優先。
+// 5カテゴリ均等を目標に、直近20件で不足分を優先（旧 category 文字列は表示ラベルへ正規化してカウント）。
 
 async function pickCategoryBalanced(
   db: ReturnType<typeof createAdminClient>
@@ -103,7 +104,9 @@ async function pickCategoryBalanced(
 
     const counts: Record<string, number> = Object.fromEntries(categories.map((c) => [c, 0]));
     for (const row of data as { category: string | null }[]) {
-      if (row.category && row.category in counts) counts[row.category]++;
+      if (!row.category) continue;
+      const canon = getArticleCategoryDisplayLabel(row.category);
+      if (canon in counts) counts[canon]++;
     }
     const n = data.length;
 
@@ -126,6 +129,23 @@ function getArticleBodyWordCountRange(level: string): string {
   return "250–350";
 }
 
+/** 各カテゴリの「雑誌コラム」角度（プロンプト用） */
+function categoryAngleGuide(cat: string): string {
+  const guides: Record<string, string> = {
+    "リアルな英語・文法":
+      "ネトフリや日常会話で「あ、聞いたことある！」となる一文法・言い回しを1テーマに。日本語とのズレを明るく対比。教科書や論文口調は禁止。",
+    "トレンド・スラング":
+      "SNS・配信・若者文化のリアルな言い回し。日本のネット文化との違いをフランクに。古いスラング辞典の羅列は避ける。",
+    "働き方・ライフスタイル":
+      "リモート、会議、カフェ、休日の過ごし方など、実生活で使える英語。日本の職場・生活との違いを楽しく。",
+    "恋愛・人間関係":
+      "デート、友人、距離感、LINE文化の差など。軽やかで共感できるコラム。重い心理学・社会学的フレームは使わない。",
+    海外カルチャーあるある:
+      "「え、そうなの？」となる海外の日常・しきたり・空気感。旅行ガイドではなく、在住者目線の小ネタ・あるある。",
+  };
+  return guides[cat] ?? "日本と海外の文化の違いを、明るく親しみやすい雑誌コラム風に書いてください。";
+}
+
 // ─── Prompt ───────────────────────────────────────────────────────────────────
 
 function buildPrompt(level: string, variant: EnglishVariant, selectedCategory: string): string {
@@ -133,171 +153,122 @@ function buildPrompt(level: string, variant: EnglishVariant, selectedCategory: s
   const wordRange = getArticleBodyWordCountRange(level);
   const isGrammar = isGrammarMasterclassCategory(selectedCategory);
   const isBeginnerLevel = level === "A1" || level === "A2";
+  const angle = categoryAngleGuide(selectedCategory);
 
   const grammarModeBlock = isGrammar
     ? `
-═══ MODE: ENGLISH GRAMMAR & NUANCE MASTERCLASS (MANDATORY) ═════════════
-This category is NOT a culture story. Write the ENTIRE English body as a compelling magazine-style ESSAY in English that teaches ONE deep grammar or usage topic (e.g. why natives reach for this tense, not another; subtle differences between two similar-looking phrases; the "feel" of an aspect or modal in real contexts).
-• All explanations, contrasts, and insights in the article body must be in ENGLISH (this is the lesson).
-• Still obey ${level} constraints: vocabulary and sentence complexity must match the level.
-• Pick one focused angle — avoid shallow lists of rules; aim for "I never thought of it that way!" depth.
-• Naturally weave in ${variant}-appropriate vocabulary, spelling, and idioms while discussing grammar.
+═══ MODE: 「リアルな英語・文法」（英語本文はレッスンエッセイ）════════════
+• 英語本文は雑誌コラムのように読みやすい ONE テーマのエッセイ。解説・対比はすべて英語で。
+• ${level} に厳密に合わせる。箇条書きルール集にしない。「へぇ、そういう感覚なんだ」を1つに絞る。
+• ${variant} のスペル・語彙・イディオムを自然に織り込む。
+• 日本語話者がハマるポイントは明るく触れてよい。学術・論文調は禁止。
 `
     : "";
 
   const nonGrammarModeBlock = !isGrammar
     ? `
-═══ MODE: CULTURE / TREND / DAILY LIFE (MANDATORY) ═════════════════════
-Pick a REAL, slightly niche angle that makes Japanese readers think "I had no idea — I want to tell someone!" — not generic advice.
-• Lean into the spirit of: ${selectedCategory}
-• Naturally mix in vocabulary, idioms, and spelling that feel authentic to ${variant}.
+═══ MODE: カジュアル雑誌コラム（必須）══════════════════════════════════
+• 「日本と海外の文化の違い」を軸に、明るく・楽しく・フランクに。
+• 角度ガイド: ${angle}
+• ${variant} の語彙・スラングを自然に。舞台を海外に固定しない。
 `
     : "";
 
   const step2Rules = isGrammar
-    ? `1. Word count: ${wordRange} words of English body text (the grammar lesson lives here — all explanations stay in English).
-${isBeginnerLevel ? `   • A1/A2: Keep the lesson TIGHT — one focused insight only; do not pad. Shorter text is intentional for reading stamina.` : ""}
-2. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST precisely match ${level}.
-3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout — woven into the essay, not bolted on.
-4. Opening hook: The very first sentence must grab attention with a bold claim or question about grammar, usage, or native "feel" — never a travel or café hook.
-5. The body must read as ONE coherent English essay; do not switch to Japanese to teach rules inside the article.
-6. Never mention CEFR levels, "English learners", or language study as meta.`
-    : `1. Word count: ${wordRange} words of English body text.
-${isBeginnerLevel ? `   • A1/A2: Brevity is a feature — prioritize clarity and one memorable takeaway; avoid long paragraphs that exhaust beginners.` : ""}
-2. CEFR compliance: ALL vocabulary, grammar, and sentence length MUST precisely match ${level}.
-3. English variant: Consistently apply ${variant} spelling, vocabulary, and idioms throughout — the dialect must be woven naturally into the content, not just mentioned once.
-4. Opening hook: The very first sentence must be a surprising fact, bold claim, or intriguing question (culture, trend, or daily life — never a bland tourism teaser).
-5. Style: Engaging magazine article — clear, accurate, enjoyable. Never mention CEFR levels, "English learners", or language study.`;
+    ? `1. Word count: ${wordRange} words of English body（文法エッセイ。説明は英語のまま）。
+${isBeginnerLevel ? `   • A1/A2: 1テーマに集中。短くてよい。` : ""}
+2. CEFR: ${level} に厳密一致。
+3. ${variant} を通篇で一貫。
+4. 冒頭は文法・言い回しの「つかみ」。観光・カフェフック禁止。
+5. 一続きの英語エッセイ。本文に日本語のルール説明を挟まない。
+6. CEFR や「英語学習者」などのメタ言及禁止。`
+    : `1. Word count: ${wordRange} words of English body。
+${isBeginnerLevel ? `   • A1/A2: 短く、一つの「わかった！」に集中。` : ""}
+2. CEFR: ${level} に厳密一致。
+3. ${variant} を自然に織り込む。
+4. 冒頭は驚き・共感のフック。観光ガイド調禁止。
+5. 親しみやすいバイリンガルコラム調。教科書・Wiki・学術分析禁止。`;
 
   const step3SelectionRule = isGrammar
-    ? `Select exactly 5 items: phrasal verbs, idioms, collocations, OR compact grammatical chunks worth noticing (e.g. a tricky modal stack, a natural collocation) — each must strongly reflect the ${variant} dialect and suit ${level} learners.`
-    : `Select exactly 5 phrasal verbs, idioms, or collocations that strongly reflect the ${variant} dialect and target ${level} learners.`;
+    ? `ちょうど5件: 句動詞・イディオム・コロケーションまたは文法的塊（${variant} らしく ${level} に合う）。`
+    : `ちょうど5件: 句動詞・イディオム・コロケーション（${variant} らしく ${level} に合う）。`;
 
   const step5Lead = isGrammar
-    ? `Explain ONE deep grammar or usage insight from the English essay — in natural Japanese — so readers think "へぇ！そうなんだ！" (Wow, I didn't know that!). Tie it to how ${variant} speakers feel or choose forms.`
-    : `Explain ONE specific word or cultural nuance used in the article that relates to the ${variant} dialect.
-This should make readers think "へぇ！そうなんだ！" (Wow, I didn't know that!).`;
+    ? `英語エッセイの「へぇ！」を日本語で2〜3文。明日オンライン英会話で使えそうな実感を。`
+    : `記事の ${variant} らしい具体を日本語で2〜3文。「Netflix で聞いたことある！」レベルの具体さ。`;
 
   const step5GoodExamples = isGrammar
-    ? `Good examples (grammar-focused):
-  • "このエッセイで出てきた'would have been'は、過去の事実に対する仮定の話し手の距離感を表すときに選ばれます。日本語の「〜だっただろう」とは少しニュアンスが違い、話し手が『もし〜だったら』という世界線を想像している感じが強いです。"
-  • "現在完了形と単純過去の違いは、『結果が今も続いているか』だけでなく、話し手が出来事をどう心に置いているかでも変わります。"`
-    : `Good examples (dialect-focused):
-  • "オーストラリアでは、'a lot'の代わりに'heaps'がよく使われます。「Heaps of people showed up」のように日常会話でごく自然に使われる表現です。"
-  • "イギリス英語では、'knackered'は「へとへとに疲れた」という意味で使われます。'tired'よりも感情がこもった表現で、ネイティブが日常的によく口にする言葉です。"
-  • "アメリカ英語の'reach out'は元々ビジネス用語でしたが、今では「連絡する」という意味で日常会話にも定着しています。"`;
+    ? `例: 「ここの would have been は、日本語の『〜だっただろう』より、別の世界線を想像してる感じが強いよね。」`
+    : `例: 「アメリカのカフェで隣に軽く声をかけられるの、日本だとびっくりだけど、そこではスモールトークの入り口なんだよね。」`;
 
   const step5FocusRule = isGrammar
-    ? `  • Focus on one grammar/usage insight grounded in the English article text (not generic theory).`
-    : `  • Focus specifically on a ${variant} word, phrase, spelling difference, or cultural nuance from the article text.`;
+    ? `  • 本文に根ざした一文法・用法に限定。`
+    : `  • 本文の表現や場面にひもづける。`;
 
-  return `You are an expert ESL teacher and a creative editor. Generate a highly engaging English learning article for Japanese learners.
+  return `あなたのペルソナ: 社会学者でも論文ライターでもない。「海外カルチャー好きで親しみやすいバイリンガルの雑誌コラムライター」。読者は日本の英語学習者。
 
 [Parameters]
-Category/Topic: ${selectedCategory}
-Target CEFR Level: ${level} — ${levelDesc}
-English Dialect/Variant: ${variant} (US, UK, AU, or common)
+カテゴリ（JSON の category にそのまま）: ${selectedCategory}
+CEFR: ${level} — ${levelDesc}
+English variant: ${variant}
 
-═══ STRICTLY FORBIDDEN (ZERO TOLERANCE) ════════════════════════════════
-• Boring tourist-guide content: "best cafés to visit", "hidden gems in [city]", sightseeing tips, restaurant reviews as the main topic.
-• Generic self-help clichés: "your brain is sabotaging you", vague motivation without cultural bite, empty positivity.
-• Anything that feels like a textbook appendix or a Wikipedia summary with no personality.
+═══ 禁止 ═══════════════════════════════════════════════════════════════
+• 学術分析・重い社会学、「見えない階級」系の論調やタイトル。
+• 観光ガイド・おすすめカフェ・ありきたり自己啓発。
+• 教科書付録・ Wikipedia 調の無個性説明。
+• titleEn を論文・教科書見出し風にすること（titleEn はサブの英語一行）。
 
-═══ REQUIRED (NON-NEGOTIABLE) ═════════════════════════════════════════
-• Japanese learners must get a genuine "Aha!" moment: specific, fresh, a little nerdy or insider — still readable at ${level}.
-${isBeginnerLevel ? `• A1/A2 reading load: Target English body length is ${wordRange} words (see STEP 2). Do NOT exceed this — beginners rarely have stamina for long texts; the Japanese translation should stay comfortably under ~1,000 characters unless the English is already at the top of the range.` : ""}
-• The ${variant} parameter controls spelling, idioms, slang, and lexical choices — NOT where the story is "set". Do not force Sydney/London/New York scenery unless the topic truly needs it.
+═══ 必須 ═══════════════════════════════════════════════════════════════
+• すべてのカテゴリで「日本と海外の文化・コミュニケーションの違い」を、ライトで実践的に。
+• 「へぇ！」「明日使ってみよう！」と思わせる具体。上から目線・説教調は禁止。
+${isBeginnerLevel ? `• A1/A2: 英語本文 ${wordRange} 語を厳守。` : ""}
 ${grammarModeBlock}${nonGrammarModeBlock}
-═══ CRITICAL RULES FOR DIALECT (${variant}) ════════════════════════════
-The ${variant} parameter dictates the vocabulary, spelling, idioms, and slang — NOT the geographical setting.
 
-${variant === "AU" ? `Since AU is selected: the piece does NOT need to be about Australia. It must use Australian English patterns (e.g., "mate", "heaps", "reckon", "arvo") and AU/UK spelling (e.g., "colour", "realise") where natural.` : ""}
-${variant === "UK" ? `Since UK is selected: use British English — "cheers", "mate", "rubbish", "queue", "knackered", "chuffed", "brilliant", British spelling (e.g., "colour", "favourite", "realise"). Setting can be anywhere.` : ""}
-${variant === "US" ? `Since US is selected: use American English spelling and vocabulary (e.g., "color", "favorite", "apartment", "trash", "vacation"). Setting can be anywhere.` : ""}
-${variant === "common" ? `Since common is selected: use internationally neutral English with no strong regional slang; keep wording clear and widely understood.` : ""}
+═══ DIALECT (${variant}) ═══════════════════════════════════════════════
+${variant === "AU" ? `AU 英語・スペル。舞台は澳洲固定でなくてよい。` : ""}
+${variant === "UK" ? `British English。` : ""}
+${variant === "US" ? `American English。` : ""}
+${variant === "common" ? `中立で通じる英語。` : ""}
 
-═══ CRITICAL RULES FOR CONTENT & ORIGINALITY ═══════════════════════════
-Generate a completely fresh, highly specific angle from the category: ${selectedCategory}. No recycled "café in Melbourne" or "brain hacks" templates.
+═══ STEP 1 — keyword / タイトル / slug ═════════════════════════════════
+• keyword: 英語の中くらいのフォーカスキーワード。
+• titleJa: 【メイン】キャッチーな日本語。疑問形・口語・英語フレーズの引用可。
+  ⭕ ネトフリでよく聞く「I'm down」って結局どういう意味？
+  ❌ Z世代の若者言葉の裏側（堅い）
+  目安: 全角45文字以内。
+• titleEn: 【サブ】自然な短い英語一行。学術タイトルにしない。
+• slug: 英語小文字・ハイフン、最大60文字（titleEn / keyword 由来）。
 
-The article must sound natural, modern, and engaging — like a sharp magazine piece, not a textbook.
-
-═══ STEP 1 — SEO STRATEGY ══════════════════════════════════════════════
-• Generate a specific, medium-tail "Focus Keyword" in English.
-  Good: "Australian slang remote work B2", "UK idioms modern relationships B1"
-  Bad: too broad ("English words") or too narrow ("the exact phrase from one TV show").
-
-• Generate TWO titles — they must describe the SAME article in the SAME format:
-  - titleEn: A natural, compelling English title that accurately reflects the article content.
-  - titleJa: A beautiful, natural Japanese translation of titleEn — NOT an SEO-stuffed phrase.
-             Translate the meaning faithfully; feel free to paraphrase for elegance.
-             ❌ Bad: "オーストラリア英語で学ぶリモートワーク表現" (SEO-stuffed, unnatural)
-             ✅ Good: "在宅勤務でよく使うオーストラリア英語の口癖" (faithful, natural)
-             Max 30 Japanese characters.
-
-• CRITICAL — Title/Content format consistency:
-  If the article is an essay or narrative, BOTH titles must be essay-style.
-  Listicle-style titles ("Top 5 phrases...", "〜表現5選") are ONLY allowed
-  if the article body IS actually a numbered list. Never use clickbait titles
-  that don't match the body format.
-
-• The slug must be URL-friendly lowercase English, max 60 chars.
-  Example: "australian-slang-remote-work-b2", "uk-dating-idioms-b1"
-
-═══ STEP 2 — CONTENT RULES ═════════════════════════════════════════════
+═══ STEP 2 — 英語本文 ═══════════════════════════════════════════════
 ${step2Rules}
 
-═══ STEP 3 — VOCABULARY HIGHLIGHTS ════════════════════════════════════
+═══ STEP 3 — 語彙ハイライト ═══════════════════════════════════════════
 ${step3SelectionRule}
-Wrap each one inside the article text in EXACTLY this span format:
+<span class="vocabulary-highlight" data-word="BASE_FORM" data-meaning="日本語訳" data-nuance="ニュアンス（1文）" data-example="Short new example.">word in text</span>
+属性は二重引用符のみ。ネスト禁止。
 
-  <span class="vocabulary-highlight" data-word="BASE_FORM" data-meaning="日本語訳" data-nuance="ニュアンス解説（1文）" data-example="Short new example sentence.">word as it appears in article</span>
+═══ STEP 4 — 日本語訳 ═══════════════════════════════════════════════
+全文の自然な日本語訳。<p>…</p> のみ。
 
-Rules for spans:
-  • data-word    → always the dictionary base form (e.g., "burn out" not "burning out")
-  • data-meaning → concise Japanese meaning, max 15 characters
-  • data-nuance  → brief Japanese nuance/usage tip, max 40 characters
-  • data-example → a NEW short sentence different from the article text
-  • Double quotes for ALL attribute values. Never use single quotes inside attributes.
-  • Do NOT nest spans.
-
-═══ STEP 4 — JAPANESE TRANSLATION ═════════════════════════════════════
-Write a fluent, natural Japanese translation of the full article.
-Wrap each paragraph in <p>…</p> tags. Plain prose — no annotations, no vocabulary notes.
-
-═══ STEP 5 — CULTURAL / GRAMMAR TIP (JAPANESE) ═════════════════════════
+═══ STEP 5 — culturalTip（日本語）═══════════════════════════════════
 ${step5Lead}
-
 ${step5GoodExamples}
-
-Rules:
-  • Write in natural Japanese (not translated English).
 ${step5FocusRule}
-  • 2–3 sentences only. No bullet points, no lists.
+2〜3文。箇条書き禁止。
 
-═══ OUTPUT FORMAT (STRICT JSON) ════════════════════════════════════════
-Return ONLY a valid JSON object — no markdown fences, no preamble, absolutely nothing else.
-CRITICAL: All string values must be on a single line — use NO raw newlines inside JSON strings.
-Use <p>…</p> tags (not \\n) to separate paragraphs in HTML fields.
+═══ OUTPUT (STRICT JSON ONLY) ═══════════════════════════════════════
+有効な JSON のみ。文字列内に生改行を入れない。
 
 {
-  "keyword": "medium-tail SEO focus keyword in English",
+  "keyword": "medium-tail keyword in English",
   "category": "${selectedCategory}",
-  "titleEn": "Natural English title matching the article format",
-  "titleJa": "日本語SEOタイトル（最大30文字）",
-  "slug": "seo-friendly-english-slug",
-  "contentHtml": "<p>Article body with <span class=\\"vocabulary-highlight\\" data-word=\\"word\\" data-meaning=\\"意味\\" data-nuance=\\"ニュアンス\\" data-example=\\"Example sentence.\\">word</span> highlights.</p><p>Second paragraph...</p>",
-  "translationHtml": "<p>第1段落の翻訳。</p><p>第2段落の翻訳。</p>",
-  "culturalTip": "記事のテーマや${variant}英語に関する文化・語学豆知識（日本語2〜3文）",
-  "vocabularyList": [
-    {
-      "word": "base form",
-      "partOfSpeech": "verb",
-      "meaning": "日本語訳",
-      "nuance": "ニュアンス・使い方のポイント（1文）",
-      "dynamicExample": "A natural example sentence using this word.",
-      "dynamicExampleTranslation": "例文の自然な日本語訳"
-    }
-  ]
+  "titleJa": "メインのキャッチーな日本語タイトル",
+  "titleEn": "Supporting English subtitle line",
+  "slug": "english-url-slug",
+  "contentHtml": "<p>...</p>",
+  "translationHtml": "<p>...</p>",
+  "culturalTip": "日本語で2〜3文",
+  "vocabularyList": [{ "word": "...", "partOfSpeech": "verb", "meaning": "...", "nuance": "...", "dynamicExample": "...", "dynamicExampleTranslation": "..." }]
 }`;
 }
 
@@ -456,20 +427,26 @@ export async function generateCmsArticle(
     };
   }
 
-  if (!parsed.titleEn || !parsed.contentHtml || !parsed.translationHtml) {
+  if (
+    !parsed.titleEn?.trim() ||
+    !parsed.titleJa?.trim() ||
+    !parsed.contentHtml ||
+    !parsed.translationHtml
+  ) {
     return {
       success: false,
-      error: "AI レスポンスに必須フィールド (titleEn / contentHtml / translationHtml) がありません",
+      error:
+        "AI レスポンスに必須フィールド (titleJa メイン見出し / titleEn 英語サブ / contentHtml / translationHtml) がありません",
     };
   }
 
-  const rawSlug    = parsed.slug ?? parsed.titleEn;
+  const rawSlug = parsed.slug ?? parsed.titleEn;
   const uniqueSlug = await ensureUniqueSlug(rawSlug);
 
   const insertPayload = {
     slug:             uniqueSlug,
     title_en:         parsed.titleEn.trim(),
-    title_ja:         parsed.titleJa?.trim() ?? null,
+    title_ja:         parsed.titleJa.trim(),
     level,
     english_variant:  variant,
     keyword:          parsed.keyword?.trim() ?? null,

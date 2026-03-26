@@ -14,9 +14,10 @@ import { getAdminArticles, updateArticlePublish, deleteAdminArticle } from "@/ap
 import type { Article } from "@/lib/article-types";
 import {
   ARTICLE_CATEGORIES,
-  ARTICLE_CATEGORY_SHORT_LABEL,
+  getArticleCategoryBadgeClass,
   getArticleCategoryDisplayLabel,
 } from "@/lib/article-categories";
+import { articleDisplayTitles } from "@/lib/article-display";
 import { VariantBadge } from "@/components/variant-badge";
 
 // ─── CEFR / Variant helpers ───────────────────────────────────────────────────
@@ -63,9 +64,9 @@ function AdminFilterRow({ label, options, active, onChange }: {
 const VARIANT_RATIO_HELP =
   "🇺🇸 US 30% · 🇬🇧 UK 10% · 🇦🇺 AU 10% · 🌐 共通 50%";
 
-const CATEGORY_GENERATION_HELP = (ARTICLE_CATEGORIES as readonly string[])
-  .map((c) => ARTICLE_CATEGORY_SHORT_LABEL[c] ?? c)
-  .join(" / ");
+const CATEGORY_GENERATION_HELP = (ARTICLE_CATEGORIES as readonly string[]).join(
+  " · "
+);
 
 const LEVEL_COLORS: Record<string, string> = {
   A1: "bg-slate-100 text-slate-600 border-slate-200",
@@ -131,7 +132,10 @@ export default function AdminPage() {
       return;
     }
 
-    setGeneratedResult({ title: result.article.titleEn, slug: result.article.slug });
+    setGeneratedResult({
+      title: articleDisplayTitles(result.article).primary,
+      slug: result.article.slug,
+    });
     setArticles((prev) => [result.article, ...prev]);
     toast.success("記事を生成しました");
   };
@@ -162,7 +166,8 @@ export default function AdminPage() {
   // ── Delete ─────────────────────────────────────────────────────────────────
 
   const handleDelete = async (article: Article) => {
-    if (!confirm(`「${article.titleEn}」を削除しますか？`)) return;
+    if (!confirm(`「${articleDisplayTitles(article).primary}」を削除しますか？`))
+      return;
     setLoadingId(article.id);
     const result = await deleteAdminArticle(article.id);
     setLoadingId(null);
@@ -249,7 +254,7 @@ export default function AdminPage() {
               <span className="text-slate-400 mx-1">—</span>
               次のいずれか1つが選ばれます（
               <span className="font-medium text-slate-700">{CATEGORY_GENERATION_HELP}</span>
-              ）。各カテゴリが偏りすぎないよう直近20件を参照してバランスします。
+              ）。5カテゴリは各約20%を目安に、直近20件を参照して偏りを抑えます。
             </p>
           </div>
 
@@ -311,21 +316,17 @@ export default function AdminPage() {
           {/* Filters */}
           {!isLoadingArticles && articles.length > 0 && (() => {
             const existingCategories = Array.from(
-              new Set(articles.map((a) => a.category).filter((c): c is string => Boolean(c)))
-            ).sort((a, b) =>
-              getArticleCategoryDisplayLabel(a).localeCompare(
-                getArticleCategoryDisplayLabel(b),
-                "ja"
+              new Set(
+                articles
+                  .map((a) => getArticleCategoryDisplayLabel(a.category))
+                  .filter((c) => c !== "")
               )
-            );
+            ).sort((a, b) => a.localeCompare(b, "ja"));
             const levelOpts    = [{ value: "all", label: "すべて" }, ...LEVELS.filter((l) => articles.some((a) => a.level === l)).map((l) => ({ value: l, label: l }))];
             const variantOpts  = [{ value: "all", label: "すべて" }, ...VARIANTS.filter((v) => articles.some((a) => a.englishVariant === v.value)).map((v) => ({ value: v.value, label: v.label }))];
             const categoryOpts = [
               { value: "all", label: "すべて" },
-              ...existingCategories.map((c) => ({
-                value: c,
-                label: getArticleCategoryDisplayLabel(c),
-              })),
+              ...existingCategories.map((c) => ({ value: c, label: c })),
             ];
             const hasFilter = filterLevel !== "all" || filterVariant !== "all" || filterCategory !== "all";
             return (
@@ -367,11 +368,16 @@ export default function AdminPage() {
               {articles.filter((a) => {
                 if (filterLevel    !== "all" && a.level             !== filterLevel)    return false;
                 if (filterVariant  !== "all" && a.englishVariant    !== filterVariant)  return false;
-                if (filterCategory !== "all" && (a.category ?? "") !== filterCategory) return false;
+                if (
+                  filterCategory !== "all" &&
+                  getArticleCategoryDisplayLabel(a.category) !== filterCategory
+                )
+                  return false;
                 return true;
               }).map((article) => {
                 const isPublished = !!article.publishedAt;
                 const isThisLoading = loadingId === article.id;
+                const titles = articleDisplayTitles(article);
 
                 return (
                   <div
@@ -408,17 +414,22 @@ export default function AdminPage() {
                           </span>
                         </div>
                         <p className="text-sm font-medium text-slate-800 leading-snug truncate font-mono">
-                          {article.titleEn}
+                          {titles.primary}
                         </p>
-                        {article.titleJa && (
+                        {titles.secondary && (
                           <p className="text-xs text-slate-500 leading-snug truncate mt-0.5">
-                            {article.titleJa}
+                            {titles.secondary}
                           </p>
                         )}
                         {(article.category || article.keyword) && (
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {article.category && (
-                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 truncate max-w-[140px]">
+                              <span
+                                className={cn(
+                                  "text-[9px] font-medium px-1.5 py-0.5 rounded-md border truncate max-w-[140px]",
+                                  getArticleCategoryBadgeClass(article.category)
+                                )}
+                              >
                                 {getArticleCategoryDisplayLabel(article.category)}
                               </span>
                             )}
