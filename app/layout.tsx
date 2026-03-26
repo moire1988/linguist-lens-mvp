@@ -25,9 +25,9 @@ const goldman = Goldman({
 
 const siteUrl = "https://linguist-lens-mvp.vercel.app";
 
-const title    = "LinguistLens - あなただけの英語学習AIコーチ";
+const title    = "LinguistLens - YouTubeで英語学習を加速させるAIコーチ";
 const description =
-  "YouTubeやWeb記事のURLを貼るだけで、CEFRレベルに合った句動詞・イディオム・コロケーションをAIが抽出・解説。英語を「知っている」から「使える」へ。";
+  "YouTube動画からネイティブ特有の句動詞やイディオムをAIが自動抽出。あなた専用の英語学習コーチが、日常会話のニュアンスまで解説します。";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -55,8 +55,11 @@ export const metadata: Metadata = {
   twitter: {
     card:        "summary_large_image",
     title,
-    description: "YouTubeやWebの英語コンテンツから重要フレーズをAIが抽出。句動詞・イディオムをCEFRレベル別に効率よくマスターしよう。",
+    description,
     images:      ["/og"],
+  },
+  verification: {
+    google: "kSoQYfzuQWKb1sw4IUvJ8DpzUT3fibG21bEDDKfBRec",
   },
 };
 
