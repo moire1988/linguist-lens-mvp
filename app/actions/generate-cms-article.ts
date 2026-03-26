@@ -257,11 +257,16 @@ ${step5FocusRule}
 2〜3文。箇条書き禁止。
 
 ═══ OUTPUT (STRICT JSON ONLY) ═══════════════════════════════════════
-有効な JSON のみ。文字列内に生改行を入れない。
+有効な JSON オブジェクト1つのみ。前置き・\`\`\` フェンス・解説文は禁止。
+文字列値に生改行を入れない（改行は \\n でエスケープ）。
+
+【パース互換・必須】
+• titleJa / titleEn / culturalTip / keyword など短い文字列に、ASCII 二重引用符 U+0022 を含めない。英語引用は '…' か「」か \' だけ。
+• contentHtml / translationHtml / vocabularyList 内で HTML 属性に " を使う場合、JSON 上は必ず \\" とエスケープ（例: <span class=\\"vocabulary-highlight\\" data-word=\\"go\\">）。
 
 {
   "keyword": "medium-tail keyword in English",
-  "category": "${selectedCategory}",
+  "category": ${JSON.stringify(selectedCategory)},
   "titleJa": "メインのキャッチーな日本語タイトル",
   "titleEn": "Supporting English subtitle line",
   "slug": "english-url-slug",
@@ -347,6 +352,10 @@ function sanitizeJsonString(raw: string): string {
       result += "\\n";
       continue;
     }
+    if (inString && char === "\t") {
+      result += "\\t";
+      continue;
+    }
     if (inString && char === "\r") {
       continue;
     }
@@ -355,10 +364,71 @@ function sanitizeJsonString(raw: string): string {
   return result;
 }
 
+/** ```json ... ``` や先頭の説明文を除去 */
+function stripMarkdownCodeFence(raw: string): string {
+  let t = raw.trim();
+  if (!t.startsWith("```")) return t;
+  const firstNl = t.indexOf("\n");
+  if (firstNl !== -1) t = t.slice(firstNl + 1);
+  const end = t.lastIndexOf("```");
+  if (end !== -1) t = t.slice(0, end);
+  return t.trim();
+}
+
+/**
+ * 先頭の { から、文字列を考慮して対応する } までを切り出す（貪欲 regex だと
+ * 本文中の } や複数ブロックで壊れやすい）。
+ */
+function extractFirstJsonObject(raw: string): string {
+  const text = raw.trim();
+  const start = text.indexOf("{");
+  if (start === -1) throw new Error("AI レスポンスに { が見つかりませんでした");
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (c === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (c === '"') {
+        inString = false;
+        continue;
+      }
+      continue;
+    }
+
+    if (c === '"') {
+      inString = true;
+      continue;
+    }
+    if (c === "{") {
+      depth++;
+      continue;
+    }
+    if (c === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+      continue;
+    }
+  }
+
+  throw new Error("AI レスポンスの JSON が閉じ括弧で終わっていません");
+}
+
 function parseAiResponse(raw: string): RawArticleJson {
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("AI レスポンスに JSON が見つかりませんでした");
-  return JSON.parse(sanitizeJsonString(match[0])) as RawArticleJson;
+  const stripped = stripMarkdownCodeFence(raw);
+  const jsonSlice = extractFirstJsonObject(stripped);
+  return JSON.parse(sanitizeJsonString(jsonSlice)) as RawArticleJson;
 }
 
 // ─── Server Action ───────────────────────────────────────────────────────────

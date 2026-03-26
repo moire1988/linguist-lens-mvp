@@ -99,3 +99,27 @@ CREATE POLICY "update_own_analyses" ON public.saved_analyses
 
 CREATE POLICY "delete_own_analyses" ON public.saved_analyses
   FOR DELETE USING (user_id = (auth.jwt() ->> 'sub'));
+
+
+-- ─── 3. waitlist（Pro プラン Waitlist）────────────────────────
+-- Server Action（service_role）のみ書き込み。anon/authenticated からは RLS でブロック。
+
+CREATE TABLE IF NOT EXISTS public.waitlist (
+  email      TEXT        NOT NULL PRIMARY KEY,
+  user_id    TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_waitlist_user_id
+  ON public.waitlist (user_id)
+  WHERE user_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_waitlist_created_at
+  ON public.waitlist (created_at DESC);
+
+CREATE OR REPLACE TRIGGER trg_waitlist_updated_at
+  BEFORE UPDATE ON public.waitlist
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+ALTER TABLE public.waitlist ENABLE ROW LEVEL SECURITY;
