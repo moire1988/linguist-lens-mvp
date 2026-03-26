@@ -139,7 +139,15 @@ async function fetchAnalysisRow(id: string): Promise<AnalysisOgRow | null> {
   }
 }
 
-type OgFont = { name: string; data: ArrayBuffer; weight: number; style: "normal" };
+/** `next/og` → @vercel/og の FontOptions.weight（number ではなく 100–900 リテラル） */
+type OgFontWeight = 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
+
+type OgFont = {
+  name: string;
+  data: ArrayBuffer;
+  weight: OgFontWeight;
+  style: "normal" | "italic";
+};
 
 async function loadOgFonts(): Promise<{
   fonts: OgFont[];

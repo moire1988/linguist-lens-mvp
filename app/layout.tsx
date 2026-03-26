@@ -1,4 +1,3 @@
-export const dynamic = 'force-dynamic';
 import type { Metadata } from "next";
 import { Inter, Goldman } from "next/font/google";
 import "./globals.css";
@@ -13,9 +12,12 @@ import { SiteFooter } from "@/components/site-footer";
 import { NavigationDrawerProvider } from "@/components/navigation-drawer-context";
 import { AppContentShell } from "@/components/app-content-shell";
 
+export const dynamic = "force-dynamic";
+
 const inter = Inter({ subsets: ["latin"] });
 
-export const goldman = Goldman({
+/** ルートレイアウトからは default / metadata 等のみ export（Next 型生成と整合） */
+const goldman = Goldman({
   subsets: ["latin"],
   weight: ["400"],
   variable: "--font-goldman",
