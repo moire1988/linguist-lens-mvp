@@ -49,6 +49,7 @@ export type AnalyzeErrorCode =
   | "missing_supadata_key"
   | "subtitle_api_error"
   | "ai_error"
+  | "ai_parse_error"
   | "ai_rate_limit"
   | "ai_auth_error"
   | "generic";

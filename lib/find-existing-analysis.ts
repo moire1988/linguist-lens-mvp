@@ -3,12 +3,13 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { extractYouTubeVideoId } from "@/lib/youtube-url";
 
+/** `result_json.source_type`（アプリは Web 記事を `web` で保存） */
+const JSON_SOURCE_YOUTUBE = { source_type: "youtube" as const };
+const JSON_SOURCE_WEB = { source_type: "web" as const };
+
 /**
- * 同一 YouTube 動画（video_id）＋同一 CEFR レベル（`target_level` 相当の列は `level`）、または同一 URL 文字列＋レベルで
- * 既存の `saved_analyses`（アプリ上の解析永続化テーブル; 要件上の analyses と同一）行があればその id を返す。
- * `analyzeContent` の Pre-check で最優先呼び出し（外部 API より先）。
- * 検索順: (1) video_id + level → (2) url 完全一致 + level → (3) YouTube は url に ID を含む行を候補取得し、
- * extractYouTubeVideoId で同一動画と判定（video_id 未設定・URL表記違いの重複防止）。
+ * 同一内容の既存 `saved_analyses` 行があれば id を返す（`analyzeContent` の Pre-check）。
+ * YouTube と Web で検索を分離し、`source_type` 不一致・video_id 未設定行の誤ヒットを防ぐ。
  */
 export async function findExistingSavedAnalysisId(
   url: string,
@@ -27,42 +28,48 @@ export async function findExistingSavedAnalysisId(
 
   const vid = extractYouTubeVideoId(trimmed);
 
-  // 1) video_id 列が埋まっている行（新規保存済み）
   if (vid) {
-    const { data, error } = await db
+    const { data: byVid, error: errVid } = await db
       .from("saved_analyses")
       .select("id")
       .eq("video_id", vid)
       .eq("level", level)
+      .contains("result_json", JSON_SOURCE_YOUTUBE)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (!error && data && typeof (data as { id: unknown }).id === "string") {
-      return (data as { id: string }).id;
+    if (
+      !errVid &&
+      byVid &&
+      typeof (byVid as { id: unknown }).id === "string"
+    ) {
+      return (byVid as { id: string }).id;
     }
-  }
 
-  // 2) 入力 URL 文字列の完全一致（旧データで video_id が NULL の行もここで拾える）
-  const { data: byUrl, error: urlErr } = await db
-    .from("saved_analyses")
-    .select("id")
-    .eq("url", trimmed)
-    .eq("level", level)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    const { data: byUrlYt, error: errUrlYt } = await db
+      .from("saved_analyses")
+      .select("id")
+      .eq("url", trimmed)
+      .eq("level", level)
+      .contains("result_json", JSON_SOURCE_YOUTUBE)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (!urlErr && byUrl && typeof (byUrl as { id: unknown }).id === "string") {
-    return (byUrl as { id: string }).id;
-  }
+    if (
+      !errUrlYt &&
+      byUrlYt &&
+      typeof (byUrlYt as { id: unknown }).id === "string"
+    ) {
+      return (byUrlYt as { id: string }).id;
+    }
 
-  // 3) YouTube かつ video_id 未設定／表記ゆれ（youtu.be ↔ watch?v= 等）で 2) が外れた場合
-  if (vid) {
     const { data: fuzzyRows, error: fuzzyErr } = await db
       .from("saved_analyses")
       .select("id, url")
       .eq("level", level)
+      .contains("result_json", JSON_SOURCE_YOUTUBE)
       .not("url", "is", null)
       .ilike("url", `%${vid}%`)
       .order("created_at", { ascending: false })
@@ -76,6 +83,26 @@ export async function findExistingSavedAnalysisId(
         }
       }
     }
+
+    return null;
+  }
+
+  const { data: byWeb, error: errWeb } = await db
+    .from("saved_analyses")
+    .select("id")
+    .eq("url", trimmed)
+    .eq("level", level)
+    .contains("result_json", JSON_SOURCE_WEB)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (
+    !errWeb &&
+    byWeb &&
+    typeof (byWeb as { id: unknown }).id === "string"
+  ) {
+    return (byWeb as { id: string }).id;
   }
 
   return null;

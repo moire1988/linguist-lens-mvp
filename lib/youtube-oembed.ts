@@ -9,7 +9,7 @@ export async function fetchYoutubeOembedTitle(
     u.searchParams.set("url", videoUrl);
     u.searchParams.set("format", "json");
     const res = await fetch(u.toString(), {
-      next: { revalidate: 86_400 },
+      cache: "no-store",
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { title?: string };

@@ -30,14 +30,21 @@ function legacyCacheKey(url: string, cefrLevel: string): string {
 }
 
 /**
- * YouTube は video_id ベースでキー統一（youtu.be / watch?v= の表記ゆれで重複しない）。
- * それ以外は URL 文字列ベース。
+ * YouTube: `yt:videoId::level` — Web 記事: `web:canonicalUrl::level`（旧 `u:` は読み取り互換のみ）。
+ * テキスト解析はこのキャッシュを使わない（page 側で URL モードのみ参照）。
  */
 export function buildCacheKey(url: string, cefrLevel: string): string {
   const level = cefrLevel.trim();
-  const vid = extractYouTubeVideoId(url.trim());
+  const u = url.trim();
+  if (!u || !level) return `__invalid__::${level}`;
+  const vid = extractYouTubeVideoId(u);
   if (vid) return `yt:${vid}::${level}`;
-  return `u:${url.trim()}::${level}`;
+  return `web:${u}::${level}`;
+}
+
+/** 移行前の Web 用プレフィックス */
+function legacyWebCacheKey(url: string, cefrLevel: string): string {
+  return `u:${url.trim()}::${cefrLevel.trim()}`;
 }
 
 function persistStore(store: CacheStore): void {
@@ -59,11 +66,20 @@ export function getCachedEntry(
   const store = getStore();
   const newKey = buildCacheKey(url, cefrLevel);
   const legacyKey = legacyCacheKey(url, cefrLevel);
+  const legacyWebKey = legacyWebCacheKey(url, cefrLevel);
 
   let entry = store[newKey];
   let fromKey: string | null = entry ? newKey : null;
 
-  if (!entry && legacyKey !== newKey) {
+  if (!entry && legacyWebKey !== newKey) {
+    const lw = store[legacyWebKey];
+    if (lw) {
+      entry = lw;
+      fromKey = legacyWebKey;
+    }
+  }
+
+  if (!entry && legacyKey !== newKey && legacyKey !== legacyWebKey) {
     const leg = store[legacyKey];
     if (leg) {
       entry = leg;
@@ -72,6 +88,24 @@ export function getCachedEntry(
   }
 
   if (!entry) return null;
+
+  /** URL 種別と source_type の不一致（誤キャッシュ）は破棄する */
+  const st = entry.data.source_type;
+  const keyUsed = fromKey ?? newKey;
+  const isYtKey = keyUsed.startsWith("yt:");
+  const isWebKey =
+    keyUsed.startsWith("web:") || keyUsed.startsWith("u:");
+
+  if (isWebKey && st === "youtube") {
+    delete store[keyUsed];
+    persistStore(store);
+    return null;
+  }
+  if (isYtKey && st !== "youtube") {
+    delete store[keyUsed];
+    persistStore(store);
+    return null;
+  }
 
   if (!entry.data.full_script_with_highlight) {
     const k = fromKey ?? newKey;
@@ -117,8 +151,12 @@ export function setCachedResult(
   const store = getStore();
   const newKey = buildCacheKey(url, cefrLevel);
   const legacyKey = legacyCacheKey(url, cefrLevel);
+  const legacyWebKey = legacyWebCacheKey(url, cefrLevel);
   if (legacyKey !== newKey) {
     delete store[legacyKey];
+  }
+  if (legacyWebKey !== newKey) {
+    delete store[legacyWebKey];
   }
   const prev = store[newKey];
   store[newKey] = {

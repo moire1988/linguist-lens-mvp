@@ -27,13 +27,13 @@ export async function fetchPageTitle(urlString: string): Promise<string | null> 
 
   try {
     const res = await fetch(url.href, {
+      cache: "no-store",
       signal: controller.signal,
       headers: {
         Accept: "text/html,application/xhtml+xml",
         "User-Agent":
           "Mozilla/5.0 (compatible; LinguistLens/1.0; +https://linguist-lens-mvp.vercel.app)",
       },
-      next: { revalidate: 86_400 },
     });
     if (!res.ok) return null;
     const html = await res.text();

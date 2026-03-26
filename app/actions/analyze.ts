@@ -219,6 +219,7 @@ async function getYouTubeTranscriptSupadata(
   const endpoint = `https://api.supadata.ai/v1/youtube/transcript?${params.toString()}`;
 
   const res = await fetch(endpoint, {
+    cache: "no-store",
     headers: { "x-api-key": apiKey },
     signal: AbortSignal.timeout(SUPADATA_FETCH_MS),
   });
@@ -318,6 +319,7 @@ async function getWebContent(url: string, cefrLevel: string): Promise<string> {
   }
 
   const res = await fetch(url, {
+    cache: "no-store",
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -329,6 +331,11 @@ async function getWebContent(url: string, cefrLevel: string): Promise<string> {
   if (!res.ok) throw new Error(`ページの取得に失敗しました (HTTP ${res.status})`);
 
   const html = await res.text();
+  if (!html || html.trim().length === 0) {
+    throw new Error(
+      "ページの取得結果が空でした。別のURLをお試しください。"
+    );
+  }
   const text = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -362,43 +369,153 @@ interface ClaudeResult {
   coachComment?: string;
 }
 
+/** 最初の ``` … ``` ブロックを取り出す（前後に説明文があっても可） */
+function stripMarkdownJsonFence(raw: string): string {
+  const t = raw.trim();
+  const start = t.indexOf("```");
+  if (start === -1) return t;
+  const afterOpen = t.slice(start);
+  const firstNl = afterOpen.indexOf("\n");
+  if (firstNl === -1) return t;
+  const body = afterOpen.slice(firstNl + 1);
+  const close = body.indexOf("```");
+  if (close === -1) return body.trim();
+  return body.slice(0, close).trim();
+}
+
+/**
+ * 先頭の `{` から対応する `}` まで（文字列内の括弧は無視）を切り出す。
+ * 貪欲な `/\{[\s\S]*\}/` はネスト JSON で誤った範囲を取ることがあるため使わない。
+ */
+function extractFirstBalancedJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === "\\" && i + 1 < text.length) {
+        i++;
+        continue;
+      }
+      if (c === "\"") inString = false;
+      continue;
+    }
+    if (c === "\"") {
+      inString = true;
+      continue;
+    }
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/** 先頭の `[` から対応する `]` まで（文字列内は無視） */
+function extractFirstBalancedJsonArray(text: string): string | null {
+  const start = text.indexOf("[");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === "\\" && i + 1 < text.length) {
+        i++;
+        continue;
+      }
+      if (c === "\"") inString = false;
+      continue;
+    }
+    if (c === "\"") {
+      inString = true;
+      continue;
+    }
+    if (c === "[") depth++;
+    else if (c === "]") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/** Claude がスネーク／キャメル混在で返す場合に対応 */
+function pickCoachCommentFromParsed(
+  parsed: Record<string, unknown>
+): string | undefined {
+  const raw = parsed["coach_comment"] ?? parsed["coachComment"];
+  const s = typeof raw === "string" ? raw.trim() : "";
+  return s.length > 0 ? s : undefined;
+}
+
+function pickFullScriptHighlight(
+  parsed: Record<string, unknown>,
+  fallback: string
+): string {
+  const a = parsed["fullScriptWithHighlight"];
+  const b = parsed["full_script_with_highlight"];
+  if (typeof a === "string" && a.trim() !== "") return a;
+  if (typeof b === "string" && b.trim() !== "") return b;
+  return fallback;
+}
+
+function pickOverallLevel(parsed: Record<string, unknown>): string | undefined {
+  const a = parsed["overallLevel"];
+  const b = parsed["overall_level"];
+  if (typeof a === "string" && a.trim() !== "") return a.trim();
+  if (typeof b === "string" && b.trim() !== "") return b.trim();
+  return undefined;
+}
+
 function parseClaudeRawOutput(rawText: string, snippet: string): ClaudeResult {
-  const objMatch = rawText.match(/\{[\s\S]*\}/);
-  if (objMatch) {
+  const cleaned = stripMarkdownJsonFence(rawText.trim());
+
+  const objectCandidates = [
+    extractFirstBalancedJsonObject(cleaned),
+    extractFirstBalancedJsonObject(rawText.trim()),
+  ].filter((s): s is string => typeof s === "string" && s.length > 0);
+
+  for (const jsonStr of objectCandidates) {
     try {
-      const parsed = JSON.parse(objMatch[0]) as {
-        error?: string;
-        phrases?: PhraseResult[];
-        fullScriptWithHighlight?: string;
-        overallLevel?: string;
-        coach_comment?: string;
-      };
-      if (parsed.error === "INAPPROPRIATE_CONTENT") {
+      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+      if (parsed["error"] === "INAPPROPRIATE_CONTENT") {
         throw new Error("INAPPROPRIATE_CONTENT");
       }
-      if (Array.isArray(parsed.phrases) && parsed.phrases.length > 0) {
-        const coachRaw = parsed.coach_comment;
-        const coachComment =
-          typeof coachRaw === "string" && coachRaw.trim() !== ""
-            ? coachRaw.trim()
-            : undefined;
+      const phrasesRaw = parsed["phrases"];
+      if (Array.isArray(phrasesRaw) && phrasesRaw.length > 0) {
+        const phrases = capPhrasesAtMax(phrasesRaw as PhraseResult[]);
+        if (phrases.length === 0) continue;
         return {
-          phrases: capPhrasesAtMax(parsed.phrases),
-          fullScriptWithHighlight: parsed.fullScriptWithHighlight ?? snippet,
-          overallLevel: parsed.overallLevel,
-          coachComment,
+          phrases,
+          fullScriptWithHighlight: pickFullScriptHighlight(parsed, snippet),
+          overallLevel: pickOverallLevel(parsed),
+          coachComment: pickCoachCommentFromParsed(parsed),
         };
       }
-    } catch {
-      /* fall through */
+    } catch (err) {
+      if (err instanceof Error && err.message === "INAPPROPRIATE_CONTENT") {
+        throw err;
+      }
+      /* 次の候補へ */
     }
   }
 
-  const arrMatch = rawText.match(/\[[\s\S]*\]/);
-  if (arrMatch) {
+  const arrayCandidates = [
+    extractFirstBalancedJsonArray(cleaned),
+    extractFirstBalancedJsonArray(rawText.trim()),
+  ].filter((s): s is string => typeof s === "string" && s.length > 0);
+
+  for (const jsonStr of arrayCandidates) {
     try {
-      const phrases = capPhrasesAtMax(JSON.parse(arrMatch[0]) as PhraseResult[]);
-      return { phrases, fullScriptWithHighlight: snippet, coachComment: undefined };
+      const phrases = capPhrasesAtMax(JSON.parse(jsonStr) as PhraseResult[]);
+      if (phrases.length > 0) {
+        return { phrases, fullScriptWithHighlight: snippet, coachComment: undefined };
+      }
     } catch {
       /* fall through */
     }
@@ -463,13 +580,14 @@ async function callClaude(text: string, cefrLevel: string): Promise<ClaudeResult
 // ─── URL analysis (no unstable_cache: avoids serverless cache edge cases) ───
 
 async function runUrlAnalysis(url: string, cefrLevel: string) {
+  const targetUrl = url.trim();
   let text: string;
   let sourceType: "youtube" | "web";
-  if (extractYouTubeVideoId(url)) {
-    text = await getYouTubeTranscript(url, cefrLevel);
+  if (extractYouTubeVideoId(targetUrl)) {
+    text = await getYouTubeTranscript(targetUrl, cefrLevel);
     sourceType = "youtube";
   } else {
-    text = await getWebContent(url, cefrLevel);
+    text = await getWebContent(targetUrl, cefrLevel);
     sourceType = "web";
   }
   const { phrases, fullScriptWithHighlight, overallLevel, coachComment } =
@@ -511,6 +629,7 @@ function classifyError(msg: string): AnalyzeErrorCode {
   if (msg.includes("AIの利用上限に達しました")) return "ai_rate_limit";
   if (msg.includes("AI APIの認証に失敗")) return "ai_auth_error";
   if (msg.includes("利用可能なAIモデルが見つかりません")) return "ai_error";
+  if (msg.includes("AIの応答形式が予期しない")) return "ai_parse_error";
   if (msg.startsWith("AI解析エラー") || msg.includes("AI解析に失敗しました")) {
     return "ai_error";
   }

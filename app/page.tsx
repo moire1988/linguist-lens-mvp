@@ -141,6 +141,9 @@ export default function HomePage() {
   useEffectiveAuth(); // devAuthState を副作用で読み込む（将来的な機能フラグ用）
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [devMode, setDevMode] = useState(false);
+  /** 解析エラーの errorCode とサーバー文言を表示（next dev では開発者モードOFFでも可） */
+  const showAnalyzeErrorDebug =
+    process.env.NODE_ENV === "development" || devMode;
   const [isGenerating, setIsGenerating] = useState(false);
   const [recentPublicAnalyses, setRecentPublicAnalyses] = useState<RecentPublicAnalysis[]>([]);
   const [featuredAnalyses, setFeaturedAnalyses] = useState<FeaturedAnalysis[]>([]);
@@ -334,6 +337,7 @@ export default function HomePage() {
   const handleSubmit = useCallback(async () => {
     setError(null);
     setErrorCode(null);
+    setSubmitProgress(0);
 
     const devMagicAnalyzeUrl =
       process.env.NODE_ENV === "development" &&
@@ -445,6 +449,9 @@ export default function HomePage() {
 
           // この時点で result は存在するので、安全に success をチェックできる
           if (result.success !== true) {
+            if (process.env.NODE_ENV === "development") {
+              console.warn("[analyze] error", result.errorCode, result.error);
+            }
             if (result.errorCode === "inappropriate_content") {
               toast.error(
                 "不適切なコンテンツが含まれているため解析できませんでした。"
@@ -516,6 +523,7 @@ export default function HomePage() {
   const handleGenerateAndAnalyze = useCallback(async () => {
     setError(null);
     setErrorCode(null);
+    setSubmitProgress(0);
 
     // Guest: ログインを促す（devModeはスキップ）
     if (!isSignedIn && !devMode) {
@@ -599,6 +607,9 @@ export default function HomePage() {
           }
 
           if (result.success !== true) {
+            if (process.env.NODE_ENV === "development") {
+              console.warn("[analyze] error", result.errorCode, result.error);
+            }
             if (result.errorCode === "inappropriate_content") {
               toast.error(
                 "不適切なコンテンツが含まれているため解析できませんでした。"
@@ -1049,6 +1060,7 @@ export default function HomePage() {
           const isNoSubs  = errorCode === "no_subtitles";
           const isInvalid = errorCode === "invalid_url";
           const isBlocked = errorCode === "inappropriate_content";
+          const isAiParse = errorCode === "ai_parse_error";
 
           const icon = isNoSubs ? (
             <span className="text-2xl leading-none select-none">🥲</span>
@@ -1056,6 +1068,8 @@ export default function HomePage() {
             <span className="text-2xl leading-none select-none">👀</span>
           ) : isBlocked ? (
             <span className="text-2xl leading-none select-none">🛡️</span>
+          ) : isAiParse ? (
+            <span className="text-2xl leading-none select-none">🤖</span>
           ) : (
             <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5 text-rose-400" />
           );
@@ -1066,6 +1080,8 @@ export default function HomePage() {
             ? "URLを確認してください"
             : isBlocked
             ? "解析できませんでした"
+            : isAiParse
+            ? "AIの応答を解釈できませんでした"
             : "解析エラーが発生しました";
 
           const body = isNoSubs
@@ -1074,6 +1090,8 @@ export default function HomePage() {
             ? "URLの形式が正しくないようです。YouTubeや英語記事のURLを確認してください👀"
             : isBlocked
             ? "不適切なコンテンツが含まれているため解析できませんでした。"
+            : isAiParse
+            ? "一時的な通信やAIの出力形式のずれの可能性があります。しばらくしてからもう一度お試しください。"
             : "解析中にエラーが発生しました。少し時間をおいて再度お試しください🙏";
 
           const borderColor = isNoSubs
@@ -1082,6 +1100,8 @@ export default function HomePage() {
             ? "border-sky-200/70"
             : isBlocked
             ? "border-violet-200/70"
+            : isAiParse
+            ? "border-orange-200/70"
             : "border-rose-200/70";
 
           const bgColor = isNoSubs
@@ -1090,6 +1110,8 @@ export default function HomePage() {
             ? "bg-sky-50/80"
             : isBlocked
             ? "bg-violet-50/80"
+            : isAiParse
+            ? "bg-orange-50/80"
             : "bg-rose-50/80";
 
           const titleColor = isNoSubs
@@ -1098,6 +1120,8 @@ export default function HomePage() {
             ? "text-sky-800"
             : isBlocked
             ? "text-violet-900"
+            : isAiParse
+            ? "text-orange-900"
             : "text-rose-800";
 
           const bodyColor = isNoSubs
@@ -1106,6 +1130,8 @@ export default function HomePage() {
             ? "text-sky-700"
             : isBlocked
             ? "text-violet-800"
+            : isAiParse
+            ? "text-orange-800"
             : "text-rose-600";
 
           return (
@@ -1119,10 +1145,12 @@ export default function HomePage() {
                   <p className={`text-sm leading-relaxed ${bodyColor}`}>
                     {body}
                   </p>
-                  {devMode && errorCode && (
+                  {showAnalyzeErrorDebug && errorCode && (
                     <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white/80 px-3 py-2.5">
                       <p className="text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                        Dev · 検証用（設定の開発者モードON時のみ）
+                        {process.env.NODE_ENV === "development"
+                          ? "Dev · next dev では開発者モードOFFでも表示"
+                          : "Dev · 検証用（設定の開発者モードON）"}
                       </p>
                       <p className="text-xs font-mono text-slate-700 break-all leading-relaxed">
                         <span className="text-indigo-600 font-semibold">[{errorCode}]</span>

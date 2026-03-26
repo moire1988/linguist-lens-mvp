@@ -21,9 +21,10 @@ export type SaveAnalysisResult =
   | { success: false; error: string };
 
 /**
- * 同一 YouTube（video_id）＋同一レベル、または同一 URL 文字列＋レベルで
- * 既存の解析ページがあればその id を返す（LLM 前のキャッシュ再利用用）。
- * 失敗時は null（フル解析へ）。
+ * 既存 `saved_analyses` を再利用する Pre-check。
+ * YouTube: `source_type: youtube` かつ video_id または同一 URL＋レベル。
+ * Web: `source_type: web` かつ URL＋レベル（video_id では検索しない）。
+ * 空の URL／レベルは検索しない。失敗時は null。
  */
 export async function findExistingAnalysisIdAction(
   url: string,
@@ -215,13 +216,13 @@ export async function getAnalysisDetailResult(
   }
 
   /**
-   * coach_comment 列はマイグレーション未適用でも壊れないよう SELECT に含めない（本文は result_json 内）。
+   * coach_comment 列は result_json と同一内容を想定。JSON に欠けた場合のみ列で補完する。
    * .single() は 0 行時に PGRST116 になるため .maybeSingle() を使う。
    */
   const { data, error } = await db
     .from("saved_analyses")
     .select(
-      "id, url, title, level, result_json, is_shared, is_approved, created_at, user_id, is_public"
+      "id, url, title, level, result_json, coach_comment, is_shared, is_approved, created_at, user_id, is_public"
     )
     .eq("id", normalizedId)
     .maybeSingle();
@@ -246,6 +247,16 @@ export async function getAnalysisDetailResult(
 
   const resultJson = row.result_json as AnalysisResult;
   const mergedData: AnalysisResult = { ...resultJson };
+  const colCoach =
+    typeof row.coach_comment === "string" && row.coach_comment.trim() !== ""
+      ? row.coach_comment.trim()
+      : null;
+  if (
+    colCoach &&
+    (!mergedData.coach_comment || mergedData.coach_comment.trim() === "")
+  ) {
+    mergedData.coach_comment = colCoach;
+  }
 
   const isPublic = row.is_public;
   const isGuestAnalysis = row.user_id == null;

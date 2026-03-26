@@ -1,7 +1,30 @@
 const ID11 = /^[a-zA-Z0-9_-]{11}$/;
 
 /**
+ * `youtube.com/watch?...` 断片（プロトコルなし等）から v= のみ解決。
+ * 非 YouTube ドメインの `?v=11文字` にはマッチしない（誤って YouTube 扱いしない）。
+ */
+function tryExtractWatchPageVideoId(raw: string): string | null {
+  const lower = raw.toLowerCase();
+  const idx = lower.indexOf("youtube.com/watch");
+  if (idx === -1) return null;
+  const slice = raw.slice(idx).split("#")[0] ?? "";
+  const href = slice.startsWith("http") ? slice : `https://${slice}`;
+  try {
+    const u = new URL(href);
+    const host = u.hostname.replace(/^www\./, "");
+    if (!host.endsWith("youtube.com")) return null;
+    const v = u.searchParams.get("v");
+    if (v && ID11.test(v)) return v;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
  * Extract 11-character YouTube video id from common URL shapes (www / m / shorts / embed / music).
+ * 注意: 任意サイトのクエリ `v=11文字` にはマッチさせない（Web 記事 URL の誤判定防止）。
  */
 export function extractYouTubeVideoId(input: string): string | null {
   const s = input.trim();
@@ -32,8 +55,10 @@ export function extractYouTubeVideoId(input: string): string | null {
     /* not absolute URL — try patterns below */
   }
 
+  const watchId = tryExtractWatchPageVideoId(s);
+  if (watchId) return watchId;
+
   const patterns: RegExp[] = [
-    /[?&]v=([a-zA-Z0-9_-]{11})(?:[&#[/]|$)/,
     /youtu\.be\/([a-zA-Z0-9_-]{11})(?:[?#]|$)/,
     /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})(?:[?#]|$)/,
     /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})(?:[?#]|$)/,
