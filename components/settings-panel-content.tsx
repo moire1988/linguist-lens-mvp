@@ -12,9 +12,11 @@ import {
   type DevAuthState,
 } from "@/lib/settings";
 import {
+  formatPreferencesDbErrorForDev,
   getDbPreferences,
   upsertDbPreferences,
   USER_PREFERENCES_CHANGED_EVENT,
+  type PreferencesDbError,
 } from "@/lib/db/preferences";
 
 const ACCENTS: { value: Accent; flag: string; sublabel: string }[] = [
@@ -33,6 +35,15 @@ const CEFR_LABELS: Record<CefrLevel, string> = {
   C1: "上級",
   C2: "熟達",
 };
+
+function logPreferencesDbError(context: string, err: PreferencesDbError): void {
+  console.error(`[LinguistLens] ${context}`, {
+    code: err.code,
+    message: err.message,
+    details: err.details,
+    hint: err.hint,
+  });
+}
 
 /**
  * 設定フォーム本体（スライドメニュー内・旧モーダルと共有）。
@@ -78,7 +89,10 @@ export function SettingsPanelContent() {
     saveSettings({ accent: a });
     if (isSignedIn && userId) {
       const token = await getToken({ template: "supabase" });
-      if (token) void upsertDbPreferences(token, userId, { accent: a });
+      if (token)
+        void upsertDbPreferences(token, userId, { accent: a }).then((r) => {
+          if (r.error) logPreferencesDbError("user_preferences upsert (accent)", r.error);
+        });
     }
   };
 
@@ -87,7 +101,11 @@ export function SettingsPanelContent() {
     saveSettings({ defaultLevel: l });
     if (isSignedIn && userId) {
       const token = await getToken({ template: "supabase" });
-      if (token) void upsertDbPreferences(token, userId, { defaultLevel: l });
+      if (token)
+        void upsertDbPreferences(token, userId, { defaultLevel: l }).then((r) => {
+          if (r.error)
+            logPreferencesDbError("user_preferences upsert (defaultLevel)", r.error);
+        });
     }
   };
 
@@ -99,7 +117,14 @@ export function SettingsPanelContent() {
       const token = await getToken({ template: "supabase" });
       if (!token) {
         setWantsEmail(prev);
-        toast.error("認証トークンを取得できませんでした。");
+        console.error(
+          "[LinguistLens] getToken({ template: \"supabase\" }) returned null — JWT テンプレートや Clerk 連携を確認してください"
+        );
+        toast.error("認証トークンを取得できませんでした。", {
+          description: devMode
+            ? "Clerk の JWT テンプレート「supabase」が未設定、または取得に失敗している可能性があります。"
+            : undefined,
+        });
         return;
       }
       const { error } = await upsertDbPreferences(token, userId, {
@@ -107,7 +132,10 @@ export function SettingsPanelContent() {
       });
       if (error) {
         setWantsEmail(prev);
-        toast.error("メール設定の保存に失敗しました。もう一度お試しください。");
+        logPreferencesDbError("user_preferences upsert (newsletter)", error);
+        toast.error("メール設定の保存に失敗しました。もう一度お試しください。", {
+          description: devMode ? formatPreferencesDbErrorForDev(error) : undefined,
+        });
         return;
       }
       window.dispatchEvent(new CustomEvent(USER_PREFERENCES_CHANGED_EVENT));

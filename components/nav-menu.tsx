@@ -46,7 +46,7 @@ const PRIMARY_LINKS: NavLinkDef[] = [
   },
   {
     icon: BookOpen,
-    title: "学習記事",
+    title: "学習記事一覧",
     description: "学習のコツと文化背景",
     href: "/articles",
   },

@@ -44,7 +44,7 @@ export interface AppRouteConfig {
 /** 主要ページ（カテゴリ内は UI 上でソート可能だが、ここでは登録順を維持） */
 export const APP_ROUTES: AppRouteConfig[] = [
   {
-    title: "トップ",
+    title: "トップページ",
     href: "/",
     requiredRole: "public",
     category: "プロダクト",
@@ -56,7 +56,7 @@ export const APP_ROUTES: AppRouteConfig[] = [
     ],
   },
   {
-    title: "このサービスについて",
+    title: "LinguistLensについて",
     href: "/about",
     requiredRole: "public",
     category: "プロダクト",
@@ -77,7 +77,7 @@ export const APP_ROUTES: AppRouteConfig[] = [
     ],
   },
   {
-    title: "記事一覧",
+    title: "学習記事一覧",
     href: "/articles",
     requiredRole: "public",
     category: "プロダクト",

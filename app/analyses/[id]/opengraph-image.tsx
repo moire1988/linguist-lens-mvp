@@ -1,40 +1,134 @@
 import { ImageResponse } from "next/og";
+import { Buffer } from "node:buffer";
+import { createAdminClient } from "@/lib/supabase-admin";
+import { normalizeAnalysisId } from "@/lib/analysis-id";
+import { extractYouTubeVideoId } from "@/lib/youtube-url";
 import type { AnalysisResult } from "@/lib/types";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
+
 export const alt = "LinguistLens 解析結果";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-interface AnalysisRow {
+export const revalidate = 600;
+
+const OG_WIDTH = 1200;
+const OG_HEIGHT = 630;
+
+const NOTO_JP_WOFF =
+  "https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-jp@5.0.18/files/noto-sans-jp-japanese-700-normal.woff";
+
+interface AnalysisOgRow {
   title: string | null;
   url: string | null;
   level: string;
-  result_json: AnalysisResult;
+  video_id: string | null;
+  result_json: AnalysisResult | null;
 }
 
-async function fetchAnalysisRow(id: string): Promise<AnalysisRow | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return null;
+function resolvePhraseCount(row: AnalysisOgRow): number {
+  const raw = row.result_json;
+  if (!raw) return 0;
+  const phrases = Array.isArray(raw.phrases) ? raw.phrases : [];
+  const len = phrases.length;
+  const tc = raw.total_count as unknown;
+  let nFromTotal: number | null = null;
+  if (typeof tc === "number" && Number.isFinite(tc) && tc >= 0) {
+    nFromTotal = Math.floor(tc);
+  } else if (typeof tc === "string" && tc.trim() !== "") {
+    const p = parseInt(tc.trim(), 10);
+    if (!Number.isNaN(p) && p >= 0) nFromTotal = p;
+  }
+  if (nFromTotal !== null) return Math.max(nFromTotal, len);
+  return len;
+}
 
+function displayTitleFromRow(row: AnalysisOgRow | null): string {
+  if (!row) return "LinguistLens";
+  const fromRow = row.title?.trim();
+  if (fromRow) return fromRow;
+  const fromJson =
+    typeof row.result_json?.title === "string" ? row.result_json.title.trim() : "";
+  if (fromJson) return fromJson;
+  const { url } = row;
+  if (url?.includes("youtube.com") || url?.includes("youtu.be")) {
+    return "YouTube動画から抽出した英語フレーズ";
+  }
+  if (url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return "Web記事から抽出した英語フレーズ";
+    }
+  }
+  return "テキストから抽出した英語フレーズ";
+}
+
+function truncateTitle(text: string, maxChars: number): string {
+  const t = text.trim();
+  if (t.length <= maxChars) return t;
+  return `${t.slice(0, Math.max(0, maxChars - 1))}…`;
+}
+
+function resolveYoutubeId(row: AnalysisOgRow): string | null {
+  const fromCol = row.video_id?.trim();
+  if (fromCol && /^[a-zA-Z0-9_-]{11}$/.test(fromCol)) return fromCol;
+  const u = row.url;
+  if (u) {
+    const id = extractYouTubeVideoId(u);
+    if (id) return id;
+  }
+  return null;
+}
+
+async function fetchYoutubeThumbnailDataUrl(videoId: string): Promise<string | null> {
+  const variants = ["maxresdefault", "hqdefault", "mqdefault"] as const;
+  for (const v of variants) {
+    const imageUrl = `https://img.youtube.com/vi/${videoId}/${v}.jpg`;
+    try {
+      const res = await fetch(imageUrl, { next: { revalidate: 3600 } });
+      if (!res.ok) continue;
+      const contentTypeHeader = res.headers.get("content-type") ?? "";
+      if (!contentTypeHeader.startsWith("image/")) continue;
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength < 2500) continue;
+      const mime = contentTypeHeader.includes("png") ? "image/png" : "image/jpeg";
+      const b64 = Buffer.from(buf).toString("base64");
+      return `data:${mime};base64,${b64}`;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function fetchAnalysisRow(id: string): Promise<AnalysisOgRow | null> {
   try {
-    const res = await fetch(
-      `${supabaseUrl}/rest/v1/saved_analyses?id=eq.${encodeURIComponent(id)}&select=title,url,level,result_json&limit=1`,
-      {
-        headers: {
-          apikey:        serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
-      }
-    );
-    if (!res.ok) return null;
-    const rows: AnalysisRow[] = await res.json();
-    return rows[0] ?? null;
+    const db = createAdminClient();
+    const { data, error } = await db
+      .from("saved_analyses")
+      .select("title,url,level,result_json,video_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as AnalysisOgRow;
   } catch {
     return null;
+  }
+}
+
+async function loadOgFonts(): Promise<
+  { name: string; data: ArrayBuffer; weight: number; style: "normal" }[]
+> {
+  try {
+    const res = await fetch(NOTO_JP_WOFF, { next: { revalidate: 86400 } });
+    if (!res.ok) return [];
+    const data = await res.arrayBuffer();
+    return [{ name: "Noto Sans JP", data, weight: 700, style: "normal" as const }];
+  } catch {
+    return [];
   }
 }
 
@@ -43,29 +137,84 @@ export default async function OgImage({
 }: {
   params: { id: string };
 }) {
-  const row = await fetchAnalysisRow(params.id);
+  const id = normalizeAnalysisId(params.id ?? "");
+  const [row, fonts] = await Promise.all([fetchAnalysisRow(id), loadOgFonts()]);
 
-  const count = row?.result_json?.total_count ?? 0;
-  const level = row?.level ?? "";
+  const phraseCount = row ? resolvePhraseCount(row) : 0;
+  const level = row?.level?.trim() ?? "";
+  const rawTitle = displayTitleFromRow(row);
+  const title = truncateTitle(rawTitle, 68);
+  const ytId = row ? resolveYoutubeId(row) : null;
+  const thumbDataUrl = ytId ? await fetchYoutubeThumbnailDataUrl(ytId) : null;
 
-  const rawTitle = (() => {
-    if (!row) return "保存した解析結果";
-    const { title, url } = row;
-    if (title) return title;
-    if (url?.includes("youtube.com") || url?.includes("youtu.be"))
-      return "YouTube動画から抽出した英語フレーズ";
-    if (url) {
-      try {
-        return new URL(url).hostname.replace("www.", "");
-      } catch {
-        return "Web記事から抽出した英語フレーズ";
-      }
-    }
-    return "保存した解析結果";
-  })();
+  const fontFamily = fonts.length ? "Noto Sans JP" : "system-ui, sans-serif";
 
-  const displayTitle =
-    rawTitle.length > 32 ? rawTitle.slice(0, 31) + "…" : rawTitle;
+  if (!row) {
+    return new ImageResponse(
+      (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#fafafa",
+            position: "relative",
+            overflow: "hidden",
+            fontFamily,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(165deg, rgba(255,255,255,0) 40%, rgba(139,92,246,0.18) 72%, rgba(124,58,237,0.35) 100%)",
+              display: "flex",
+            }}
+          />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 96,
+              height: 96,
+              borderRadius: 24,
+              background: "linear-gradient(135deg, #8b5cf6, #6366f1)",
+              marginBottom: 28,
+              boxShadow: "0 24px 48px rgba(99,102,241,0.35)",
+            }}
+          >
+            <span style={{ color: "white", fontSize: 44, lineHeight: 1 }}>✦</span>
+          </div>
+          <div
+            style={{
+              fontSize: 52,
+              fontWeight: 800,
+              color: "#1e1b4b",
+              letterSpacing: "-1px",
+            }}
+          >
+            LinguistLens
+          </div>
+          <div
+            style={{
+              marginTop: 16,
+              fontSize: 26,
+              fontWeight: 700,
+              color: "#64748b",
+            }}
+          >
+            AI 英語フレーズ解析
+          </div>
+        </div>
+      ),
+      { width: OG_WIDTH, height: OG_HEIGHT, fonts }
+    );
+  }
 
   return new ImageResponse(
     (
@@ -75,158 +224,188 @@ export default async function OgImage({
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
-          background: "#ffffff",
-          padding: "64px 72px",
+          background: "#f8fafc",
           position: "relative",
           overflow: "hidden",
+          fontFamily,
         }}
       >
-        {/* 背景グリッド（薄い）*/}
         <div
           style={{
             position: "absolute",
-            inset: 0,
-            backgroundImage:
-              "linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-            display: "flex",
-          }}
-        />
-
-        {/* 右上アクセントサークル */}
-        <div
-          style={{
-            position: "absolute",
-            top: -160,
-            right: -160,
-            width: 480,
-            height: 480,
-            borderRadius: "50%",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 220,
             background:
-              "radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 70%)",
+              "linear-gradient(180deg, rgba(248,250,252,0) 0%, rgba(196,181,253,0.35) 55%, rgba(124,58,237,0.55) 100%)",
             display: "flex",
           }}
         />
 
-        {/* ─── ヘッダー：ブランド名 ─── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1,
+            display: "flex",
+            flexDirection: "row",
+            flex: 1,
+            padding: "48px 56px 40px",
+            gap: 44,
+            alignItems: "stretch",
+          }}
+        >
           <div
             style={{
               display: "flex",
+              width: 520,
+              flexShrink: 0,
               alignItems: "center",
               justifyContent: "center",
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              background: "linear-gradient(135deg, #8b5cf6, #3b82f6)",
             }}
           >
-            <span style={{ color: "white", fontSize: 22, lineHeight: 1 }}>✦</span>
+            {thumbDataUrl ? (
+              <div
+                style={{
+                  display: "flex",
+                  borderRadius: 20,
+                  overflow: "hidden",
+                  boxShadow: "0 20px 50px rgba(15,23,42,0.12)",
+                  border: "1px solid rgba(148,163,184,0.35)",
+                }}
+              >
+                <img
+                  src={thumbDataUrl}
+                  alt=""
+                  width={520}
+                  height={292}
+                  style={{
+                    display: "flex",
+                    objectFit: "cover",
+                  }}
+                />
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  width: 520,
+                  height: 292,
+                  borderRadius: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background:
+                    "linear-gradient(145deg, #ede9fe 0%, #e0e7ff 45%, #f5f3ff 100%)",
+                  border: "1px solid rgba(167,139,250,0.45)",
+                  boxShadow: "0 16px 40px rgba(99,102,241,0.12)",
+                }}
+              >
+                <span style={{ fontSize: 72, opacity: 0.35 }}>▶</span>
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              justifyContent: "center",
+              gap: 22,
+              minWidth: 0,
+              paddingRight: 8,
+            }}
+          >
+            {level ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignSelf: "flex-start",
+                  background: "linear-gradient(135deg, #7c3aed, #6366f1)",
+                  borderRadius: 999,
+                  padding: "10px 22px",
+                  boxShadow: "0 8px 24px rgba(99,102,241,0.35)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 800,
+                    color: "#ffffff",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {level}レベルの重要フレーズ
+                </span>
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                display: "flex",
+                fontSize: title.length > 48 ? 40 : 46,
+                fontWeight: 800,
+                color: "#0f172a",
+                lineHeight: 1.22,
+                letterSpacing: "-0.5px",
+              }}
+            >
+              {title}
+            </div>
+
+            {phraseCount > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 24,
+                  fontWeight: 700,
+                  color: "#475569",
+                }}
+              >
+                {phraseCount} 件の表現を抽出
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            zIndex: 2,
+            right: 48,
+            bottom: 36,
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: "linear-gradient(135deg, #8b5cf6, #3b82f6)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span style={{ color: "white", fontSize: 18, lineHeight: 1 }}>✦</span>
           </div>
           <span
             style={{
-              fontSize: 28,
+              fontSize: 22,
               fontWeight: 700,
-              color: "#1e1b4b",
-              letterSpacing: "-0.5px",
+              color: "#64748b",
+              letterSpacing: "-0.3px",
             }}
           >
             LinguistLens
           </span>
-          {level && (
-            <div
-              style={{
-                display: "flex",
-                marginLeft: 16,
-                background: "#eef2ff",
-                border: "1px solid #c7d2fe",
-                borderRadius: 8,
-                padding: "4px 14px",
-              }}
-            >
-              <span style={{ fontSize: 20, fontWeight: 700, color: "#4338ca" }}>
-                {level}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ─── メインコピー：タイトル ─── */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-            flex: 1,
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              fontSize: 14,
-              fontWeight: 600,
-              color: "#6366f1",
-              textTransform: "uppercase",
-              letterSpacing: "3px",
-            }}
-          >
-            AI Phrase Extraction
-          </div>
-          <div
-            style={{
-              display: "flex",
-              fontSize: displayTitle.length > 22 ? 52 : 64,
-              fontWeight: 800,
-              color: "#0f172a",
-              lineHeight: 1.15,
-              letterSpacing: "-1.5px",
-              maxWidth: 900,
-            }}
-          >
-            {displayTitle}
-          </div>
-        </div>
-
-        {/* ─── フッター：抽出数バッジ ─── */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 16,
-              background: "linear-gradient(135deg, #f5f3ff, #eff6ff)",
-              border: "1px solid #ddd6fe",
-              borderRadius: 16,
-              padding: "18px 32px",
-            }}
-          >
-            <span style={{ fontSize: 36 }}>✨</span>
-            <span style={{ fontSize: 30, fontWeight: 700, color: "#4c1d95" }}>
-              {count}個の生きた表現を抽出しました
-            </span>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              fontSize: 18,
-              color: "#94a3b8",
-              fontWeight: 500,
-            }}
-          >
-            linguist-lens-mvp.vercel.app
-          </div>
         </div>
       </div>
     ),
-    { width: 1200, height: 630 }
+    { width: OG_WIDTH, height: OG_HEIGHT, fonts }
   );
 }

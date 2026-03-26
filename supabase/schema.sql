@@ -1,6 +1,6 @@
 -- ============================================================
 -- LinguistLens — Supabase Schema
--- Clerk JWT の sub クレームが auth.uid() にマッピングされる前提
+-- Clerk JWT の sub は auth.jwt() ->> 'sub' で参照（auth.uid() は UUID 型のため Clerk ID で 22P02 になる）
 -- Supabase Dashboard > SQL Editor に貼り付けて Run してください
 -- ============================================================
 
@@ -8,7 +8,7 @@
 -- ─── 1. user_preferences ────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.user_preferences (
-  user_id       TEXT        PRIMARY KEY,           -- Clerk userId (sub クレーム)
+  user_id       TEXT        PRIMARY KEY,           -- Clerk "user_..."（uuid 型にすると 22P02）
   voice_accent  TEXT        NOT NULL DEFAULT 'US'
                             CHECK (voice_accent IN ('US', 'UK', 'AU')),
   default_level TEXT        NOT NULL DEFAULT 'B2'
@@ -38,17 +38,17 @@ CREATE OR REPLACE TRIGGER trg_user_preferences_updated_at
 ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "select_own_preferences" ON public.user_preferences
-  FOR SELECT USING (user_id = auth.uid()::text);
+  FOR SELECT USING (user_id = (auth.jwt() ->> 'sub'));
 
 CREATE POLICY "insert_own_preferences" ON public.user_preferences
-  FOR INSERT WITH CHECK (user_id = auth.uid()::text);
+  FOR INSERT WITH CHECK (user_id = (auth.jwt() ->> 'sub'));
 
 CREATE POLICY "update_own_preferences" ON public.user_preferences
-  FOR UPDATE USING (user_id = auth.uid()::text)
-  WITH CHECK   (user_id = auth.uid()::text);
+  FOR UPDATE USING (user_id = (auth.jwt() ->> 'sub'))
+  WITH CHECK   (user_id = (auth.jwt() ->> 'sub'));
 
 CREATE POLICY "delete_own_preferences" ON public.user_preferences
-  FOR DELETE USING (user_id = auth.uid()::text);
+  FOR DELETE USING (user_id = (auth.jwt() ->> 'sub'));
 
 
 -- ─── 2. saved_analyses ──────────────────────────────────────
@@ -88,14 +88,14 @@ CREATE INDEX IF NOT EXISTS idx_saved_analyses_user_created
 ALTER TABLE public.saved_analyses ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "select_own_analyses" ON public.saved_analyses
-  FOR SELECT USING (user_id = auth.uid()::text);
+  FOR SELECT USING (user_id = (auth.jwt() ->> 'sub'));
 
 CREATE POLICY "insert_own_analyses" ON public.saved_analyses
-  FOR INSERT WITH CHECK (user_id = auth.uid()::text);
+  FOR INSERT WITH CHECK (user_id = (auth.jwt() ->> 'sub'));
 
 CREATE POLICY "update_own_analyses" ON public.saved_analyses
-  FOR UPDATE USING (user_id = auth.uid()::text)
-  WITH CHECK   (user_id = auth.uid()::text);
+  FOR UPDATE USING (user_id = (auth.jwt() ->> 'sub'))
+  WITH CHECK   (user_id = (auth.jwt() ->> 'sub'));
 
 CREATE POLICY "delete_own_analyses" ON public.saved_analyses
-  FOR DELETE USING (user_id = auth.uid()::text);
+  FOR DELETE USING (user_id = (auth.jwt() ->> 'sub'));

@@ -12,7 +12,11 @@ import { toast } from "sonner";
 import { generateCmsArticle } from "@/app/actions/generate-cms-article";
 import { getAdminArticles, updateArticlePublish, deleteAdminArticle } from "@/app/actions/admin-articles";
 import type { Article } from "@/lib/article-types";
-import { getArticleCategoryDisplayLabel } from "@/lib/article-categories";
+import {
+  ARTICLE_CATEGORIES,
+  ARTICLE_CATEGORY_SHORT_LABEL,
+  getArticleCategoryDisplayLabel,
+} from "@/lib/article-categories";
 import { VariantBadge } from "@/components/variant-badge";
 
 // ─── CEFR / Variant helpers ───────────────────────────────────────────────────
@@ -54,6 +58,14 @@ function AdminFilterRow({ label, options, active, onChange }: {
     </div>
   );
 }
+
+/** `generate-cms-article.ts` の VARIANT_WEIGHTS と一致（目標比率の説明用） */
+const VARIANT_RATIO_HELP =
+  "🇺🇸 US 30% · 🇬🇧 UK 10% · 🇦🇺 AU 10% · 🌐 共通 50%";
+
+const CATEGORY_GENERATION_HELP = (ARTICLE_CATEGORIES as readonly string[])
+  .map((c) => ARTICLE_CATEGORY_SHORT_LABEL[c] ?? c)
+  .join(" / ");
 
 const LEVEL_COLORS: Record<string, string> = {
   A1: "bg-slate-100 text-slate-600 border-slate-200",
@@ -221,6 +233,24 @@ export default function AdminPage() {
                 {level}
               </button>
             ))}
+          </div>
+
+          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-3 text-[11px] leading-relaxed text-slate-600 space-y-2">
+            <p>
+              <span className="font-semibold text-slate-700">英語バリアントの目標割合</span>
+              <span className="text-slate-400 mx-1">—</span>
+              {VARIANT_RATIO_HELP}
+              <span className="block mt-1 text-slate-500">
+                直近20件の生成履歴を見て不足分を優先します。履歴が少ないときは上記の重み付きランダムに近い出方になります。
+              </span>
+            </p>
+            <p className="border-t border-slate-200/80 pt-2">
+              <span className="font-semibold text-slate-700">生成カテゴリ</span>
+              <span className="text-slate-400 mx-1">—</span>
+              次のいずれか1つが選ばれます（
+              <span className="font-medium text-slate-700">{CATEGORY_GENERATION_HELP}</span>
+              ）。各カテゴリが偏りすぎないよう直近20件を参照してバランスします。
+            </p>
           </div>
 
           {/* Generate button */}

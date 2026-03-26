@@ -20,7 +20,7 @@ CREATE POLICY "select_analyses"
   FOR SELECT
   USING (
     is_public = true
-    OR auth.uid()::text = user_id
+    OR (auth.jwt() ->> 'sub') = user_id
   );
 
 -- ── INSERT ──────────────────────────────────────────────────
@@ -31,7 +31,7 @@ CREATE POLICY "insert_own_analyses"
   ON public.saved_analyses
   FOR INSERT
   WITH CHECK (
-    auth.uid()::text = user_id
+    (auth.jwt() ->> 'sub') = user_id
     AND is_public = false
   );
 
@@ -42,9 +42,9 @@ CREATE POLICY "insert_own_analyses"
 CREATE POLICY "update_own_analyses"
   ON public.saved_analyses
   FOR UPDATE
-  USING  (auth.uid()::text = user_id)
+  USING  ((auth.jwt() ->> 'sub') = user_id)
   WITH CHECK (
-    auth.uid()::text = user_id
+    (auth.jwt() ->> 'sub') = user_id
     AND is_public = false
   );
 
@@ -52,4 +52,4 @@ CREATE POLICY "update_own_analyses"
 CREATE POLICY "delete_own_analyses"
   ON public.saved_analyses
   FOR DELETE
-  USING (auth.uid()::text = user_id);
+  USING ((auth.jwt() ->> 'sub') = user_id);
