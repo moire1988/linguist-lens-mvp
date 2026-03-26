@@ -376,11 +376,24 @@ function FlashCard({
   cards: SavedPhrase[];
   onExit: () => void;
 }) {
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [deck, setDeck] = useState<SavedPhrase[]>([]);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [score, setScore] = useState({ known: 0, unknown: 0 });
   const [finished, setFinished] = useState(false);
+
+  useEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   useEffect(() => {
     setDeck([...cards].sort(() => Math.random() - 0.5));
@@ -425,13 +438,21 @@ function FlashCard({
     return null;
   }
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+  const overlay = (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="flashcard-title"
+    >
+      <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
         {/* Header */}
-        <div className="px-6 pt-5 pb-4 border-b border-slate-100">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-slate-500">
+        <div className="border-b border-slate-100 px-6 pb-4 pt-5">
+          <div className="mb-3 flex items-center justify-between">
+            <span
+              id="flashcard-title"
+              className="text-sm font-semibold text-slate-500"
+            >
               フラッシュカード
             </span>
             <button
@@ -567,6 +588,9 @@ function FlashCard({
       </div>
     </div>
   );
+
+  if (!portalTarget) return null;
+  return createPortal(overlay, portalTarget);
 }
 
 // ─── Learning Dashboard ────────────────────────────────────────────────────
