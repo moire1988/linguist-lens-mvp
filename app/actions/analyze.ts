@@ -12,6 +12,15 @@ import {
 } from "@/lib/find-existing-analysis";
 import { extractYouTubeVideoId } from "@/lib/youtube-url";
 import { isAnalyzeDebugMagicUrlInput } from "@/lib/analyze-debug-magic";
+import {
+  ANALYSIS_MAX_OUTPUT_TOKENS,
+  ANALYSIS_SNIPPET_MAX_CHARS,
+  ANALYSIS_TEMPERATURE,
+  buildAnalysisSystemPrompt,
+  buildAnalysisUserPrompt,
+  capPhrasesAtMax,
+  getAnthropicAnalysisModelsToTry,
+} from "@/lib/ai/analyze-video";
 
 export type {
   AnalyzeErrorCode,
@@ -38,15 +47,6 @@ The hardest part was dealing with a stakeholder who kept moving the goalposts. E
 In the long run, the experience was a real eye-opener. I learned to roll with the punches and not get bogged down by setbacks. I'm glad I didn't throw in the towel when things got tough. It really paid off in the end.
 
 The key takeaway was that you have to be willing to go the extra mile if you want to stand out. You can't just sit on the fence when an opportunity comes your way. Sometimes you need to take the bull by the horns and make things happen.`.trim();
-
-const LEVEL_DESCRIPTIONS: Record<string, string> = {
-  A1: "英語学習を始めたばかりの超入門者（TOEIC 〜225程度）",
-  A2: "基本的な日常表現を理解できる初級者（TOEIC 225〜549程度）",
-  B1: "日常的な話題で意思疎通できる中級者（TOEIC 550〜780 / TOEFL iBT 42〜71程度）",
-  B2: "幅広いトピックで流暢にコミュニケーションできる中上級者（TOEIC 785〜940 / TOEFL iBT 72〜94程度）",
-  C1: "複雑な内容も柔軟に使いこなせる上級者（TOEIC 945〜990 / TOEFL iBT 95〜120程度）",
-  C2: "ネイティブに近い表現力を持つ熟達者",
-};
 
 function getMaxCharsForLevel(level: string): number {
   if (level === "A1" || level === "A2") return 3000;
@@ -361,17 +361,6 @@ interface ClaudeResult {
   overallLevel?: string;
 }
 
-function anthropicModelsToTry(): string[] {
-  const envModel = process.env.ANTHROPIC_ANALYSIS_MODEL?.trim();
-  const candidates = [
-    envModel,
-    "claude-sonnet-4-5-20250929",
-    "claude-sonnet-4-5",
-    "claude-3-5-sonnet-20241022",
-  ].filter((m): m is string => typeof m === "string" && m.length > 0);
-  return Array.from(new Set(candidates));
-}
-
 function parseClaudeRawOutput(rawText: string, snippet: string): ClaudeResult {
   const objMatch = rawText.match(/\{[\s\S]*\}/);
   if (objMatch) {
@@ -383,7 +372,7 @@ function parseClaudeRawOutput(rawText: string, snippet: string): ClaudeResult {
       };
       if (Array.isArray(parsed.phrases) && parsed.phrases.length > 0) {
         return {
-          phrases: parsed.phrases,
+          phrases: capPhrasesAtMax(parsed.phrases),
           fullScriptWithHighlight: parsed.fullScriptWithHighlight ?? snippet,
           overallLevel: parsed.overallLevel,
         };
@@ -396,7 +385,7 @@ function parseClaudeRawOutput(rawText: string, snippet: string): ClaudeResult {
   const arrMatch = rawText.match(/\[[\s\S]*\]/);
   if (arrMatch) {
     try {
-      const phrases = JSON.parse(arrMatch[0]) as PhraseResult[];
+      const phrases = capPhrasesAtMax(JSON.parse(arrMatch[0]) as PhraseResult[]);
       return { phrases, fullScriptWithHighlight: snippet };
     } catch {
       /* fall through */
@@ -425,78 +414,20 @@ function claudeErrorToUserMessage(err: unknown): Error {
 
 async function callClaude(text: string, cefrLevel: string): Promise<ClaudeResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const snippet = text.slice(0, 5500);
+  const snippet = text.slice(0, ANALYSIS_SNIPPET_MAX_CHARS);
 
-  const systemPrompt = `あなたは英語教育の専門家です。日本人英語学習者のために、英語テキストから学習価値の高い表現を分析・抽出します。出力は必ず指定されたJSON形式のみとし、前置きや説明文は一切出力しないでください。`;
+  const systemPrompt = buildAnalysisSystemPrompt();
+  const userPrompt = buildAnalysisUserPrompt(cefrLevel, snippet);
 
-  const userPrompt = `以下の英語テキストを分析し、**${cefrLevel}レベルの日本人英語学習者**（${LEVEL_DESCRIPTIONS[cefrLevel]}）にとって学習価値の高い重要表現を抽出してください。
-
-## 抽出ターゲット（優先順位順）
-
-1. **句動詞（Phrasal Verbs）**
-   - "figure out", "pull off", "bring up", "get away with" など
-   - 分離・非分離のパターン、前置詞との微妙なニュアンス差も含む
-
-2. **イディオム・慣用表現**
-   - ネイティブが日常的に使う固定表現
-   - 文字通りに訳すと意味が取れないもの
-
-3. **コロケーション（自然な語の組み合わせ）**
-   - "make a decision" ではなく "reach a decision" のような、日本人が間違えやすい語の組み合わせ
-   - 動詞＋名詞、形容詞＋名詞の自然なペア
-
-4. **日本人が苦手な文法パターン**
-   - 自然な仮定法・条件文の使い方
-   - 分詞構文の慣用的用法
-   - 強調構文（It is ... that）・倒置
-   - 前置詞の選択が難しいパターン
-
-## 抽出基準（最重要）
-
-- **「意味は推測できるが、自分では咄嗟に使えない（Active Vocabularyになっていない）」**表現を最優先する
-- ${cefrLevel}レベルの学習者がちょうど習得すべき難易度の表現を選ぶ
-- 単純な単語や基礎表現（${cefrLevel}以下のレベル）は絶対に含めない
-- **8〜12個**を目安に、質を重視して厳選する
-
-## expression フィールドの表記ルール（必須）
-
-- 必ず辞書に載っている**原形（ベースフォーム）**で出力すること
-- 文脈上の目的語（someone / something / oneself 等）は**含めない**
-- 活用形（過去形・ing 形・三単現 -s 等）は原形に戻すこと
-- 例: 「lug something」→「lug」 ／ 「took off」→「take off」 ／ 「burned the midnight oil」→「burn the midnight oil」 ／ 「figuring out」→「figure out」
-
-## テキスト
-${snippet}
-
-## 出力形式
-以下のJSONオブジェクトのみを返してください（他のテキストは一切不要）：
-{
-  "overallLevel": "テキスト全体の難易度をCEFRで総合判定（語彙・文法・内容の複雑さを考慮）。A1/A2/B1/B2/C1/C2 のいずれか1つ",
-  "phrases": [
-    {
-      "expression": "表現の基本形（例: give it a shot, end up -ing, talk oneself out of）",
-      "type": "phrasal_verb | idiom | collocation | grammar_pattern",
-      "context": "テキスト内での使用箇所（前後の文脈を含む1〜2文。原文を正確に引用）",
-      "context_translation": "context フィールドの自然な日本語訳（直訳でなく意訳）",
-      "meaning_ja": "この文脈での自然な日本語訳（直訳でなく意訳）",
-      "nuance": "なぜこの場面でこの表現が選ばれたか、語感・ニュアンス・使用場面の解説（2〜3文）",
-      "example": "別のシチュエーションでの自然な使用例文（英語）",
-      "example_translation": "example フィールドの自然な日本語訳",
-      "cefr_level": "A1 | A2 | B1 | B2 | C1 | C2",
-      "why_hard_for_japanese": "日本人学習者がこの表現を能動的に使いこなすのが難しい理由（1〜2文）"
-    }
-  ],
-  "fullScriptWithHighlight": "【重要】上記テキストを一字一句正確にコピーし、抽出した各表現が実際に使われている箇所のみHTMLタグで囲んだ文字列。タグ形式は必ずシングルクォートを使うこと: <b data-expr='expressionの値'>実際のテキスト</b>。ルール：①代名詞の変化（oneself→himself等）があっても同じ表現として囲む ②動詞活用形（end up→ended up）も囲む ③テキストの文字は一切変更せずタグ追加のみ ④data-exprにはphrasesのexpressionの値をそのまま入れる"
-}`;
-
-  const models = anthropicModelsToTry();
+  const models = getAnthropicAnalysisModelsToTry();
   let lastModelError: unknown;
 
   for (const model of models) {
     try {
       const response = await client.messages.create({
         model,
-        max_tokens: 8000,
+        max_tokens: ANALYSIS_MAX_OUTPUT_TOKENS,
+        temperature: ANALYSIS_TEMPERATURE,
         messages: [{ role: "user", content: userPrompt }],
         system: systemPrompt,
       });
@@ -633,6 +564,17 @@ export async function analyzeContent(
       };
     }
 
+    /**
+     * Supabase `saved_analyses`（解析の永続化テーブル）で video_id + level が一致する行があれば、
+     * 字幕取得・AI を呼ばず既存 ID のみ返す（ANTHROPIC 未設定でもヒット時はリダイレクト可）。
+     */
+    if (inputMode === "url" && !devMode) {
+      const existingId = await findExistingSavedAnalysisId(input.trim(), cefrLevel);
+      if (existingId) {
+        return { success: true, existingAnalysisId: existingId };
+      }
+    }
+
     if (!process.env.ANTHROPIC_API_KEY) {
       return {
         success: false,
@@ -678,14 +620,6 @@ export async function analyzeContent(
           overall_level: overallLevel,
         },
       };
-    }
-
-    // URL mode: 同一 YouTube video_id + 同一レベル（または同一 URL 文字列）の既存解析があれば LLM を呼ばない
-    if (!devMode) {
-      const existingId = await findExistingSavedAnalysisId(input.trim(), cefrLevel);
-      if (existingId) {
-        return { success: true, existingAnalysisId: existingId };
-      }
     }
 
     // URL mode（新規のみ）
