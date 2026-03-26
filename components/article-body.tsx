@@ -258,7 +258,7 @@ function VocabPopup({
               ) : isSaved ? (
                 <><Check className="h-3.5 w-3.5" /> 保存済み</>
               ) : (
-                <><BookmarkPlus className="h-3.5 w-3.5" /> 単語帳に保存</>
+                <><BookmarkPlus className="h-3.5 w-3.5" /> マイページに保存</>
               )}
               {!isSaved && dailyRemaining <= 2 && dailyRemaining > 0 && (
                 <span className="ml-auto text-[10px] text-amber-500 font-semibold">本日あと{dailyRemaining}件</span>
@@ -371,7 +371,7 @@ export function ArticleBody({
         });
         setDailyRem((r) => Math.max(0, r - 1));
         toast.success("保存しました", {
-          description: `「${popup.word}」をマイ単語帳に追加しました`,
+          description: `「${popup.word}」をマイページに追加しました`,
         });
       } else if (result.reason === "limit_reached") {
         toast.error(`本日の保存上限（${FREE_DAILY_LIMIT}件）に達しました`);
@@ -399,7 +399,7 @@ export function ArticleBody({
           return n;
         });
         toast.success("保存しました", {
-          description: `「${popup.word}」をマイ単語帳に追加しました`,
+          description: `「${popup.word}」をマイページに追加しました`,
         });
       } else if (result.reason === "duplicate") {
         setSavedWords((s) => {
@@ -562,7 +562,7 @@ export function ArticleVocabCard({
       if (result.success) {
         setIsSaved(true);
         toast.success("保存しました", {
-          description: `「${item.word}」をマイ単語帳に追加しました`,
+          description: `「${item.word}」をマイページに追加しました`,
         });
       } else if (result.reason === "duplicate") {
         setIsSaved(true);
@@ -676,7 +676,7 @@ export function ArticleVocabCard({
         )}
       </div>
 
-      {/* 単語帳に保存 */}
+      {/* マイページに保存 */}
       <div className="px-5 pb-4 pt-1 border-t border-slate-100 bg-slate-50/50">
         <button
           onClick={() => void handleSave()}
@@ -693,10 +693,10 @@ export function ArticleVocabCard({
           {saving ? (
             <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 保存中…</>
           ) : isSaved ? (
-            <><Check className="h-3.5 w-3.5" /> 単語帳に保存済み</>
+            <><Check className="h-3.5 w-3.5" /> マイページに保存済み</>
           ) : (
             <>
-              <BookmarkPlus className="h-3.5 w-3.5" /> 単語帳に保存
+              <BookmarkPlus className="h-3.5 w-3.5" /> マイページに保存
               {isSignedIn && dailyRemaining <= 2 && dailyRemaining > 0 && (
                 <span className="ml-auto text-[10px] text-amber-500 font-semibold">本日あと{dailyRemaining}件</span>
               )}

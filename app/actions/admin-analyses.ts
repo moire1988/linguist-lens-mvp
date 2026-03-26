@@ -73,7 +73,7 @@ function isYoutubeAnalysisRow(row: AnalysisRow): boolean {
 // ─── Server Actions ───────────────────────────────────────────────────────────
 
 /**
- * ユーザーが掲載トグル ON（public_review_requested）かつ未承認（is_public = false）、
+ * 掲載申請あり（public_review_requested）かつ未承認（is_approved = false）、
  * かつ YouTube 解析のみ。テキスト／web は含めない。
  */
 export async function getAdminPendingAnalyses(): Promise<PendingAnalysis[]> {
@@ -84,8 +84,8 @@ export async function getAdminPendingAnalyses(): Promise<PendingAnalysis[]> {
   const { data, error } = await supabase
     .from("saved_analyses")
     .select("id, user_id, title, url, level, result_json, created_at")
-    .eq("is_public", false)
     .eq("public_review_requested", true)
+    .eq("is_approved", false)
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];
@@ -95,7 +95,7 @@ export async function getAdminPendingAnalyses(): Promise<PendingAnalysis[]> {
 }
 
 /**
- * is_public = true の解析一覧（管理画面・公開済みタブ用）。新しい順、最大 200 件。
+ * トップ掲載承認済み（is_approved = true）の YouTube 解析一覧。新しい順、最大 200 件。
  */
 export async function getAdminPublishedAnalyses(): Promise<PendingAnalysis[]> {
   const { userId } = await auth();
@@ -105,7 +105,8 @@ export async function getAdminPublishedAnalyses(): Promise<PendingAnalysis[]> {
   const { data, error } = await supabase
     .from("saved_analyses")
     .select("id, user_id, title, url, level, result_json, created_at")
-    .eq("is_public", true)
+    .eq("is_approved", true)
+    .contains("result_json", { source_type: "youtube" })
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -115,7 +116,8 @@ export async function getAdminPublishedAnalyses(): Promise<PendingAnalysis[]> {
 }
 
 /**
- * 解析を公開する（is_public = true に更新）。YouTube 以外は拒否。
+ * トップ「みんなの解析」への掲載を承認（is_approved = true）。YouTube 以外は拒否。
+ * ユーザーがリンク共有（is_public）をオンにしている必要がある。
  */
 export async function publishAnalysisAction(
   id: string
@@ -128,24 +130,32 @@ export async function publishAnalysisAction(
   const supabase = createAdminClient();
   const { data: row, error: fetchError } = await supabase
     .from("saved_analyses")
-    .select("result_json")
+    .select("result_json, is_public")
     .eq("id", id)
     .maybeSingle();
 
   if (fetchError) return { ok: false, error: fetchError.message };
   if (!row) return { ok: false, error: "解析が見つかりません" };
 
-  const resultJson = (row as { result_json: AnalysisResult }).result_json;
+  const typed = row as { result_json: AnalysisResult; is_public: boolean };
+  const resultJson = typed.result_json;
   if (!analysisResultIsYoutubePublicable(resultJson)) {
     return {
       ok: false,
-      error: "一般公開できるのは YouTube 解析のみです",
+      error: "掲載できるのは YouTube 解析のみです",
+    };
+  }
+
+  if (!typed.is_public) {
+    return {
+      ok: false,
+      error: "ユーザーがリンク共有を有効にしていないため承認できません",
     };
   }
 
   const { error } = await supabase
     .from("saved_analyses")
-    .update({ is_public: true, public_review_requested: false })
+    .update({ is_approved: true, public_review_requested: false })
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };

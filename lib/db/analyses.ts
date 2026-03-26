@@ -193,6 +193,8 @@ export async function getRecentPublicAnalyses(
     .from("saved_analyses")
     .select("id, title, url, level, result_json, created_at")
     .eq("is_public", true)
+    .eq("is_approved", true)
+    .contains("result_json", { source_type: "youtube" })
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -245,7 +247,9 @@ export async function getFeaturedAnalyses(
     .from("saved_analyses")
     .select("id, url, level, result_json, created_at")
     .eq("is_public", true)
+    .eq("is_approved", true)
     .eq("is_featured", true)
+    .contains("result_json", { source_type: "youtube" })
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -270,6 +274,8 @@ export async function getAllPublicAnalysisIds(): Promise<
     .from("saved_analyses")
     .select("id, created_at")
     .eq("is_public", true)
+    .eq("is_approved", true)
+    .contains("result_json", { source_type: "youtube" })
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];

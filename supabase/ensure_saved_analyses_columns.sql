@@ -25,6 +25,10 @@ ALTER TABLE public.saved_analyses
 ALTER TABLE public.saved_analyses
   ADD COLUMN IF NOT EXISTS coach_comment TEXT;
 
+-- トップ「みんなの解析」掲載（管理者承認）。リンク共有 is_public とは独立
+ALTER TABLE public.saved_analyses
+  ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT false;
+
 -- ゲスト解析（user_id なし）を許可
 ALTER TABLE public.saved_analyses
   ALTER COLUMN user_id DROP NOT NULL;

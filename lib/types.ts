@@ -44,6 +44,7 @@ export interface AnalysisResult {
 export type AnalyzeErrorCode =
   | "no_subtitles"
   | "invalid_url"
+  | "inappropriate_content"
   | "missing_anthropic_key"
   | "missing_supadata_key"
   | "subtitle_api_error"

@@ -104,6 +104,7 @@ export async function saveAnalysisAction(payload: {
       result_json: payload.data,
       coach_comment: coachComment,
       is_public:   false,
+      is_approved: false,
       is_featured: false,
       public_review_requested: false,
     })
@@ -123,6 +124,7 @@ export async function saveAnalysisAction(payload: {
     }
     if (
       raw.includes("is_public") ||
+      raw.includes("is_approved") ||
       raw.includes("is_featured") ||
       raw.includes("public_review_requested") ||
       raw.includes("video_id") ||
@@ -153,7 +155,9 @@ export async function getUserAnalysesAction(): Promise<SavedAnalysis[]> {
 
   const { data, error } = await db
     .from("saved_analyses")
-    .select("id, url, level, result_json, is_shared, is_approved, created_at")
+    .select(
+      "id, url, title, level, result_json, is_shared, is_approved, is_public, public_review_requested, created_at"
+    )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -163,11 +167,14 @@ export async function getUserAnalysesAction(): Promise<SavedAnalysis[]> {
     id: row.id,
     savedAt: row.created_at,
     sourceUrl: row.url ?? undefined,
+    contentTitle: row.title?.trim() ? row.title.trim() : undefined,
     inputMode: row.url ? "url" : "text",
     cefrLevel: row.level,
     data: row.result_json,
     isShared: row.is_shared ?? false,
     isApproved: row.is_approved ?? false,
+    isPublic: row.is_public ?? false,
+    publicReviewRequested: row.public_review_requested ?? false,
   }));
 }
 
@@ -384,9 +391,9 @@ export async function getAnalysisMetadataAction(id: string): Promise<{
 // ─── 公開 / 非公開を切り替え（オーナーのみ）──────────────────────────────────
 
 /**
- * 「みんなの解析に掲載」トグル。
- * ON: public_review_requested（承認待ち）のみ立てる。is_public は管理者承認まで false。
- * OFF: 申請取消。既に is_public の場合は非公開に戻す。
+ * リンク共有（限定公開）: URL を知っている第三者が /analyses/[id] を閲覧可能にする。
+ * ON: 即座に is_public = true（管理者承認不要）。
+ * OFF: is_public を false にし、掲載申請・承認もクリア。
  */
 export async function toggleAnalysisPublicAction(
   id: string,
@@ -412,8 +419,62 @@ export async function toggleAnalysisPublicAction(
     .from("saved_analyses")
     .update(
       enabled
+        ? { is_public: true }
+        : {
+            is_public: false,
+            public_review_requested: false,
+            is_approved: false,
+          }
+    )
+    .eq("id", id);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * トップ「みんなの解析」への掲載申請（YouTube のみ）。承認は is_approved。
+ * リンク共有がオンのときのみ申請可能。
+ */
+export async function toggleListingRequestAction(
+  id: string,
+  enabled: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  const { userId } = await auth();
+  if (!userId) return { ok: false, error: "ログインが必要です" };
+
+  let db;
+  try { db = createAdminClient(); } catch { return { ok: false, error: "DB接続エラー" }; }
+
+  const { data: row, error: fetchError } = await db
+    .from("saved_analyses")
+    .select("user_id, is_public, result_json")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !row) {
+    return { ok: false, error: fetchError?.message ?? "解析が見つかりません" };
+  }
+
+  if ((row as { user_id: string | null }).user_id !== userId) {
+    return { ok: false, error: "この操作を行う権限がありません" };
+  }
+
+  const rj = (row as { result_json: AnalysisResult }).result_json;
+  if (rj?.source_type !== "youtube") {
+    return { ok: false, error: "YouTube解析のみ掲載を申請できます" };
+  }
+
+  if (enabled && !(row as { is_public: boolean }).is_public) {
+    return { ok: false, error: "先にリンク共有をオンにしてください" };
+  }
+
+  const { error } = await db
+    .from("saved_analyses")
+    .update(
+      enabled
         ? { public_review_requested: true }
-        : { public_review_requested: false, is_public: false }
+        : { public_review_requested: false, is_approved: false }
     )
     .eq("id", id);
 

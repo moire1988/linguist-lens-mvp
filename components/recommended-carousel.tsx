@@ -4,29 +4,11 @@ import { useRef } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RECOMMENDED_VIDEOS } from "@/lib/recommended-videos-data";
 import {
-  RECOMMENDED_VIDEOS,
-  type VideoCategory,
-} from "@/lib/recommended-videos-data";
-
-// ─── Style maps ──────────────────────────────────────────────────────────────
-
-const LEVEL_STYLES: Record<string, string> = {
-  A1: "bg-slate-100 text-slate-600 border-slate-300",
-  A2: "bg-green-50 text-green-700 border-green-200",
-  B1: "bg-blue-50 text-blue-700 border-blue-200",
-  B2: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  C1: "bg-purple-50 text-purple-700 border-purple-200",
-  C2: "bg-rose-50 text-rose-700 border-rose-200",
-};
-
-const CATEGORY_STYLES: Record<VideoCategory, string> = {
-  TED:     "bg-red-50 text-red-600 border-red-200",
-  Speech:  "bg-amber-50 text-amber-700 border-amber-200",
-  Vlog:    "bg-emerald-50 text-emerald-700 border-emerald-200",
-  News:    "bg-sky-50 text-sky-700 border-sky-200",
-  Podcast: "bg-violet-50 text-violet-700 border-violet-200",
-};
+  RECOMMENDED_CATEGORY_STYLES,
+  RECOMMENDED_LEVEL_STYLES,
+} from "@/lib/recommended-video-badges";
 
 const CARD_W = 256; // px — sync with w-[256px] below
 const GAP    = 12;  // px — sync with gap-3 below
@@ -174,7 +156,8 @@ export function RecommendedCarousel() {
                   <span
                     className={cn(
                       "absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border bg-white/90 backdrop-blur-sm",
-                      LEVEL_STYLES[v.level] ?? LEVEL_STYLES["B1"]
+                      RECOMMENDED_LEVEL_STYLES[v.level] ??
+                      RECOMMENDED_LEVEL_STYLES["B1"]
                     )}
                   >
                     {v.level}
@@ -184,7 +167,7 @@ export function RecommendedCarousel() {
                   <span
                     className={cn(
                       "absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border bg-white/90 backdrop-blur-sm",
-                      CATEGORY_STYLES[v.category]
+                      RECOMMENDED_CATEGORY_STYLES[v.category]
                     )}
                   >
                     {v.category}

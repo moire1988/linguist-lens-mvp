@@ -11,3 +11,16 @@ export function resolveTranscriptPlainText(data: AnalysisResult): string {
   }
   return "";
 }
+
+/**
+ * 本文の先頭から最初の非空行のみ（テキスト解析のカード見出し用）。
+ */
+export function getFirstLineFromAnalysisBody(data: AnalysisResult): string {
+  const plain = resolveTranscriptPlainText(data);
+  if (!plain) return "";
+  for (const line of plain.split(/\r?\n/)) {
+    const t = line.trim();
+    if (t.length > 0) return t;
+  }
+  return "";
+}

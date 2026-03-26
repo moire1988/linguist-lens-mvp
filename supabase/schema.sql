@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS public.saved_analyses (
   level       TEXT        NOT NULL
               CHECK (level IN ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')),
   result_json JSONB       NOT NULL,               -- AIが返した AnalysisResult 全体
-  is_public   BOOLEAN     NOT NULL DEFAULT false, -- 公開シェア用
+  is_public   BOOLEAN     NOT NULL DEFAULT false, -- URL共有（リンクを知る人のみ閲覧可）
+  is_approved BOOLEAN     NOT NULL DEFAULT false, -- 管理者承認: トップ「みんなの解析」掲載
   is_featured BOOLEAN   NOT NULL DEFAULT false, -- トップ「注目」用
   public_review_requested BOOLEAN NOT NULL DEFAULT false, -- 「みんなの解析」掲載申請（承認待ち）
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -78,6 +79,9 @@ ALTER TABLE public.saved_analyses
 
 ALTER TABLE public.saved_analyses
   ADD COLUMN IF NOT EXISTS coach_comment TEXT;
+
+ALTER TABLE public.saved_analyses
+  ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS idx_saved_analyses_video_id_level
   ON public.saved_analyses (video_id, level)

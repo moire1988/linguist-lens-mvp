@@ -367,11 +367,15 @@ function parseClaudeRawOutput(rawText: string, snippet: string): ClaudeResult {
   if (objMatch) {
     try {
       const parsed = JSON.parse(objMatch[0]) as {
-        phrases: PhraseResult[];
+        error?: string;
+        phrases?: PhraseResult[];
         fullScriptWithHighlight?: string;
         overallLevel?: string;
         coach_comment?: string;
       };
+      if (parsed.error === "INAPPROPRIATE_CONTENT") {
+        throw new Error("INAPPROPRIATE_CONTENT");
+      }
       if (Array.isArray(parsed.phrases) && parsed.phrases.length > 0) {
         const coachRaw = parsed.coach_comment;
         const coachComment =
@@ -491,6 +495,9 @@ function sleep(ms: number): Promise<void> {
 }
 
 function classifyError(msg: string): AnalyzeErrorCode {
+  if (msg === "INAPPROPRIATE_CONTENT" || msg.includes("INAPPROPRIATE_CONTENT")) {
+    return "inappropriate_content";
+  }
   if (
     msg.includes("ANTHROPIC_API_KEY") ||
     (msg.includes("APIキーが設定されていません") &&
@@ -673,6 +680,11 @@ export async function analyzeContent(
   } catch (error) {
     const msg =
       error instanceof Error ? error.message : "予期しないエラーが発生しました";
-    return { success: false, error: msg, errorCode: classifyError(msg) };
+    const code = classifyError(msg);
+    const userMessage =
+      code === "inappropriate_content"
+        ? "不適切なコンテンツが含まれているため解析できませんでした。"
+        : msg;
+    return { success: false, error: userMessage, errorCode: code };
   }
 }

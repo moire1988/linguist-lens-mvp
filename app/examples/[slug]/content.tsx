@@ -101,7 +101,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
           setDailyRemaining((r) => Math.max(0, r - 1));
           setVocabCount((c) => c + 1);
           toast.success("保存しました", {
-            description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+            description: `「${phrase.expression}」をマイページに追加しました`,
           });
         } else if (result.reason === "limit_reached") {
           setShowPremium(true);
@@ -132,7 +132,7 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
           });
           setVocabCount((c) => c + 1);
           toast.success("保存しました", {
-            description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+            description: `「${phrase.expression}」をマイページに追加しました`,
           });
         } else if (result.reason === "duplicate") {
           setSavedExpressions((s) => {

@@ -90,14 +90,14 @@ const SUBMIT_PROGRESS_MS = 60_000;
 const SUBMIT_LOAD_LABELS_URL = [
   "動画を取得中...",
   "AIが表現を抽出中...",
-  "単語帳を作成中...",
+  "マイページを準備中...",
   "結果を保存中...",
 ];
 
 const SUBMIT_LOAD_LABELS_TEXT = [
   "テキストを読み込み中...",
   "AIが表現を抽出中...",
-  "単語帳を作成中...",
+  "マイページを準備中...",
   "結果を保存中...",
 ];
 
@@ -148,7 +148,7 @@ export default function HomePage() {
   const [isUrlTyping, setIsUrlTyping] = useState(false);
   const urlTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 設定・単語帳件数をロード（ログイン時は Supabase）
+  // 設定・マイページ保存件数をロード（ログイン時は Supabase）
   useEffect(() => {
     const s = getSettings();
     setSelectedLevel(s.defaultLevel);
@@ -445,6 +445,11 @@ export default function HomePage() {
 
           // この時点で result は存在するので、安全に success をチェックできる
           if (result.success !== true) {
+            if (result.errorCode === "inappropriate_content") {
+              toast.error(
+                "不適切なコンテンツが含まれているため解析できませんでした。"
+              );
+            }
             setError(result.error ?? "解析に失敗しました");
             setErrorCode(result.errorCode ?? "generic");
             return;
@@ -594,6 +599,11 @@ export default function HomePage() {
           }
 
           if (result.success !== true) {
+            if (result.errorCode === "inappropriate_content") {
+              toast.error(
+                "不適切なコンテンツが含まれているため解析できませんでした。"
+              );
+            }
             setError(result.error ?? "解析に失敗しました");
             setErrorCode(result.errorCode ?? "generic");
             return;
@@ -662,13 +672,13 @@ export default function HomePage() {
         maxWidth="5xl"
         right={
           <>
-            {/* マイ単語帳 */}
+            {/* マイページ */}
             <Link
-              href="/vocabulary"
+              href="/mypage"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-100 transition-colors"
             >
               <BookMarked className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">マイ単語帳</span>
+              <span className="hidden sm:inline">マイページ</span>
               {vocabCount > 0 && (
                 <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                   {vocabCount}
@@ -1038,11 +1048,14 @@ export default function HomePage() {
         {error && !analysisBusy && (() => {
           const isNoSubs  = errorCode === "no_subtitles";
           const isInvalid = errorCode === "invalid_url";
+          const isBlocked = errorCode === "inappropriate_content";
 
           const icon = isNoSubs ? (
             <span className="text-2xl leading-none select-none">🥲</span>
           ) : isInvalid ? (
             <span className="text-2xl leading-none select-none">👀</span>
+          ) : isBlocked ? (
+            <span className="text-2xl leading-none select-none">🛡️</span>
           ) : (
             <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5 text-rose-400" />
           );
@@ -1051,36 +1064,48 @@ export default function HomePage() {
             ? "英語字幕が見つかりませんでした"
             : isInvalid
             ? "URLを確認してください"
+            : isBlocked
+            ? "解析できませんでした"
             : "解析エラーが発生しました";
 
           const body = isNoSubs
             ? "申し訳ありません、この動画には英語字幕が設定されていないようです🥲 別の動画でお試しください！"
             : isInvalid
             ? "URLの形式が正しくないようです。YouTubeや英語記事のURLを確認してください👀"
+            : isBlocked
+            ? "不適切なコンテンツが含まれているため解析できませんでした。"
             : "解析中にエラーが発生しました。少し時間をおいて再度お試しください🙏";
 
           const borderColor = isNoSubs
             ? "border-amber-200/70"
             : isInvalid
             ? "border-sky-200/70"
+            : isBlocked
+            ? "border-violet-200/70"
             : "border-rose-200/70";
 
           const bgColor = isNoSubs
             ? "bg-amber-50/80"
             : isInvalid
             ? "bg-sky-50/80"
+            : isBlocked
+            ? "bg-violet-50/80"
             : "bg-rose-50/80";
 
           const titleColor = isNoSubs
             ? "text-amber-800"
             : isInvalid
             ? "text-sky-800"
+            : isBlocked
+            ? "text-violet-900"
             : "text-rose-800";
 
           const bodyColor = isNoSubs
             ? "text-amber-700"
             : isInvalid
             ? "text-sky-700"
+            : isBlocked
+            ? "text-violet-800"
             : "text-rose-600";
 
           return (

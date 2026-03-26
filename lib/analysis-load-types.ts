@@ -4,7 +4,7 @@ import type { SavedAnalysis } from "@/lib/saved-analyses";
 export type AnalysisDetail = SavedAnalysis & {
   isPublic: boolean;
   isOwner: boolean;
-  /** ユーザーが掲載トグル ON（管理者の is_public 承認待ち） */
+  /** ユーザーがトップ掲載を申請中（管理者の is_approved 承認待ち） */
   publicReviewRequested: boolean;
 };
 

@@ -383,7 +383,7 @@ export default function AboutPage() {
                 step="STEP 2"
                 icon={BookMarked}
                 title="コアイメージで理解・保存"
-                description="抽出された表現を、ニュアンス解説とともにマイ単語帳に保存。丸暗記ではなく感覚で理解します。"
+                description="抽出された表現を、ニュアンス解説とともにマイページに保存。丸暗記ではなく感覚で理解します。"
               />
               <StepCard
                 step="STEP 3"

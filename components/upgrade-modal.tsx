@@ -42,7 +42,7 @@ const NOTICE: Record<UpgradeReason, { title: string; sub: string }> = {
 
 const FEATURES = [
   "解析回数無制限",
-  "無制限の単語帳保存",
+  "無制限のマイページ保存",
   "優先 AI モデルアクセス",
   "高度なフラッシュカード機能",
 ];

@@ -40,9 +40,9 @@ type NavLinkDef = {
 const PRIMARY_LINKS: NavLinkDef[] = [
   {
     icon: BookMarked,
-    title: "マイ単語帳",
+    title: "マイページ",
     description: "解析した表現を復習",
-    href: "/vocabulary",
+    href: "/mypage",
   },
   {
     icon: BookOpen,
@@ -219,7 +219,7 @@ export function NavMenu({ vocabCount }: NavMenuProps) {
                   {PRIMARY_LINKS.map((item) =>
                     renderLinkRow(
                       item,
-                      item.href === "/vocabulary" && vocabCount && vocabCount > 0
+                      item.href === "/mypage" && vocabCount && vocabCount > 0
                         ? vocabCount
                         : undefined
                     )

@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  Fragment,
+} from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,9 +28,6 @@ import {
   Mic,
   MicOff,
   RotateCcw,
-  Youtube,
-  Globe,
-  FileText,
   Quote,
   CheckCheck,
   Flame,
@@ -67,6 +71,10 @@ import {
   clearVocabularyAction,
 } from "@/app/actions/vocabulary";
 import { EXAMPLES } from "@/lib/examples-data";
+import {
+  SavedAnalysesCarouselNavButtons,
+  SavedAnalysesCarouselTrack,
+} from "@/components/saved-analyses-carousel";
 
 const MIN_COACH_PHRASES = 5;
 
@@ -500,7 +508,7 @@ function FlashCard({
                 onClick={onExit}
                 className="px-5 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
               >
-                単語帳に戻る
+                マイページに戻る
               </button>
             </div>
           </div>
@@ -710,7 +718,7 @@ function LearningDashboard({ total, mastered, analysisCount }: DashboardProps) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 
-export function VocabularyPageClient({
+export function MypagePageClient({
   initialVocabulary,
 }: {
   initialVocabulary: SavedPhrase[];
@@ -720,6 +728,7 @@ export function VocabularyPageClient({
   const [vocabulary, setVocabulary] = useState<SavedPhrase[]>(initialVocabulary);
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [loadingAnalyses, setLoadingAnalyses] = useState(false);
+  const savedAnalysesScrollRef = useRef<HTMLDivElement>(null);
   const [statusTab, setStatusTab] = useState<'learning' | 'archived'>('learning');
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -981,7 +990,7 @@ export function VocabularyPageClient({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              マイ単語帳
+              マイページ
             </h1>
             {vocabulary.length > 0 ? (
               <div className="text-sm text-slate-400 mt-0.5 space-x-1.5">
@@ -1052,11 +1061,16 @@ export function VocabularyPageClient({
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-bold text-slate-700">保存した解析結果</h2>
-            <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-              {loadingAnalyses ? "読み込み中…" : isSignedIn
-                ? `${savedAnalyses.length} 件`
-                : `${savedAnalyses.length} / ${ANALYSIS_MAX_SLOTS} 枠`}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                {loadingAnalyses ? "読み込み中…" : isSignedIn
+                  ? `${savedAnalyses.length} 件`
+                  : `${savedAnalyses.length} / ${ANALYSIS_MAX_SLOTS} 枠`}
+              </span>
+              {!loadingAnalyses && savedAnalyses.length > 0 && (
+                <SavedAnalysesCarouselNavButtons scrollRef={savedAnalysesScrollRef} />
+              )}
+            </div>
           </div>
 
           {loadingAnalyses ? (
@@ -1073,79 +1087,17 @@ export function VocabularyPageClient({
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {savedAnalyses.map((analysis) => {
-                const isYt = analysis.data.source_type === "youtube";
-                const isWeb = analysis.data.source_type === "web";
-                const truncUrl = analysis.sourceUrl
-                  ? analysis.sourceUrl.length > 52
-                    ? analysis.sourceUrl.slice(0, 49) + "…"
-                    : analysis.sourceUrl
-                  : null;
-                const ytId = analysis.sourceUrl?.match(/[?&]v=([^&]{11})/)?.[1]
-                  ?? analysis.sourceUrl?.match(/youtu\.be\/([^?&]{11})/)?.[1];
-                return (
-                  <div key={analysis.id}
-                    className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col sm:flex-row sm:items-stretch gap-0">
-                    {/* YouTube thumbnail */}
-                    {ytId && (
-                      <div className="sm:w-32 w-full h-20 sm:h-auto flex-shrink-0">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          {isYt && <Youtube className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />}
-                          {isWeb && <Globe className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />}
-                          {!isYt && !isWeb && <FileText className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />}
-                          <span className="text-xs font-medium text-slate-600 truncate">
-                            {truncUrl ?? "テキスト入力"}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-400">
-                          <span className="font-bold text-indigo-600">{analysis.cefrLevel}</span>
-                          {analysis.data.overall_level && (
-                            <span>→ {analysis.data.overall_level}</span>
-                          )}
-                          <span>·</span>
-                          <span>{analysis.data.total_count}個の表現</span>
-                          <span>·</span>
-                          <span>{new Date(analysis.savedAt).toLocaleDateString("ja-JP")}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => router.push(`/analyses/${analysis.id}`)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold border border-indigo-100 transition-colors"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          詳細を見る
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAnalysis(analysis.id)}
-                          className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-300 hover:text-rose-400 transition-colors"
-                          title="削除"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <SavedAnalysesCarouselTrack
+              ref={savedAnalysesScrollRef}
+              items={savedAnalyses}
+              onDelete={handleDeleteAnalysis}
+            />
           )}
         </div>
 
         {/* Ad placeholder — top */}
         {vocabulary.length > 0 && (
-          <AdPlaceholder slot="単語帳トップ · 728×90" className="mb-6" size="sm" />
+          <AdPlaceholder slot="マイページ上部 · 728×90" className="mb-6" size="sm" />
         )}
 
         {/* Empty state */}
@@ -1156,7 +1108,7 @@ export function VocabularyPageClient({
               まだ単語が保存されていません
             </h2>
             <p className="text-sm text-slate-400 mb-6 max-w-xs mx-auto">
-              解析結果のカードにある「単語帳に保存」ボタンを押すと、ここに表示されます。
+              解析結果のカードにある「マイページに保存」ボタンを押すと、ここに表示されます。
             </p>
             <Link
               href="/"
@@ -1321,15 +1273,16 @@ export function VocabularyPageClient({
               </div>
             )}
 
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filtered.map((phrase, i) => (
-                <div key={phrase.id}>
+                <Fragment key={phrase.id}>
                   {i > 0 && i % 8 === 0 && (
-                    <AdPlaceholder
-                      slot={`インフィード広告 · 336×280`}
-                      size="md"
-                      className="mb-3"
-                    />
+                    <div className="col-span-full">
+                      <AdPlaceholder
+                        slot={`インフィード広告 · 336×280`}
+                        size="md"
+                      />
+                    </div>
                   )}
                   <VocabCard
                     phrase={phrase}
@@ -1338,7 +1291,7 @@ export function VocabularyPageClient({
                     onArchive={handleArchive}
                     onRestore={handleRestore}
                   />
-                </div>
+                </Fragment>
               ))}
             </div>
           </>

@@ -269,7 +269,7 @@ export function PhraseCard({
     setIsListening(true);
   }, [isListening, phrase.example, phrase.expression]);
 
-  // ─── 単語帳に保存 ─────────────────────────────────────────────────────
+  // ─── マイページに保存 ─────────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
     if (saved || isSavingThis) return;
@@ -420,7 +420,7 @@ export function PhraseCard({
         )}
       </div>
 
-      {/* ── 単語帳に保存 ── */}
+      {/* ── マイページに保存 ── */}
       <div className="px-5 pb-4 pt-1 border-t border-slate-100 bg-slate-50/50">
         <button
           onClick={handleSave}
@@ -440,12 +440,12 @@ export function PhraseCard({
           ) : saved ? (
             <>
               <Check className="h-3.5 w-3.5" />
-              単語帳に保存済み
+              マイページに保存済み
             </>
           ) : (
             <>
               <BookmarkPlus className="h-3.5 w-3.5" />
-              単語帳に保存
+              マイページに保存
               {dailyRemaining <= 2 && dailyRemaining > 0 && (
                 <span className="ml-auto text-[10px] text-amber-500 font-semibold">
                   本日あと{dailyRemaining}件

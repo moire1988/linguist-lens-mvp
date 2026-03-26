@@ -80,7 +80,7 @@ export async function analyzeVocabulary(
     )
     .join("\n");
 
-  const userPrompt = `以下は、ある日本人英語学習者が LinguistLens のマイ単語に保存した英語表現リストです。
+  const userPrompt = `以下は、ある日本人英語学習者が LinguistLens のマイページに保存した英語表現リストです。
 
 ${phraseList}
 

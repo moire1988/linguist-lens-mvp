@@ -1,10 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { getUserVocabularyAction } from "@/app/actions/vocabulary";
-import { VocabularyPageClient } from "./vocabulary-page-client";
+import { MypagePageClient } from "./mypage-page-client";
 
-export default async function VocabularyPage() {
+export default async function MypagePage() {
   const { userId } = await auth();
   const initialVocabulary = userId ? await getUserVocabularyAction() : [];
 
-  return <VocabularyPageClient initialVocabulary={initialVocabulary} />;
+  return <MypagePageClient initialVocabulary={initialVocabulary} />;
 }

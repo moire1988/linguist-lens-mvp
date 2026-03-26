@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Youtube, Globe, FileText } from "lucide-react";
+import { ArrowLeft, ExternalLink, Youtube } from "lucide-react";
 import { auth } from "@clerk/nextjs/server";
 import {
   getAnalysisDetailResult,
@@ -16,6 +16,8 @@ import { SiteHeader } from "@/components/site-header";
 import { GlobalNav } from "@/components/global-nav";
 import { AdBanner } from "@/components/ad-banner";
 import { fetchYoutubeOembedTitle } from "@/lib/youtube-oembed";
+import { extractYouTubeVideoId } from "@/lib/youtube-url";
+import { fetchPageTitle } from "@/lib/fetch-page-title";
 import { resolveTranscriptPlainText } from "@/lib/analysis-transcript";
 import { cn } from "@/lib/utils";
 import { CEFR_CONTENT_META } from "@/lib/cefr-content-meta";
@@ -28,6 +30,20 @@ function fallbackLabelFromUrl(url: string): string {
     return u.hostname.replace(/^www\./, "") || "Web";
   } catch {
     return "Web";
+  }
+}
+
+/** ヒーロー用: youtube.com / youtu.be 上のページか（URL 解析は Globe に統一するため source_type だけに依存しない） */
+function isLikelyYoutubeHostname(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.replace(/^www\./, "");
+    return (
+      h === "youtu.be" ||
+      h.endsWith("youtube.com") ||
+      h.endsWith("youtube-nocookie.com")
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -152,6 +168,7 @@ export default async function AnalysisDetailPage({ params }: Props) {
     savedAt,
     data,
     isPublic,
+    isApproved,
     isOwner,
     publicReviewRequested,
   } = analysis;
@@ -164,27 +181,40 @@ export default async function AnalysisDetailPage({ params }: Props) {
 
   const showPaywall = !userId;
 
-  const isYoutube = data.source_type === "youtube";
-  const ytId =
-    sourceUrl?.match(/[?&]v=([^&]{11})/)?.[1] ??
-    sourceUrl?.match(/youtu\.be\/([^?&]{11})/)?.[1];
+  const isTextSource = data.source_type === "text";
+  const ytVideoId = sourceUrl ? extractYouTubeVideoId(sourceUrl) : null;
+  /** 実際の YouTube 動画 URL のみ。Web 解析ページの見た目を変えないため source_type と動画 ID の両方で判定 */
+  const isYoutubeVideoPage =
+    data.source_type === "youtube" && ytVideoId !== null;
 
   const shareUrl = `${SITE_URL}/analyses/${id}`;
 
-  let headingTitle: string | null =
-    (typeof data.title === "string" && data.title.trim() !== ""
-      ? data.title.trim()
-      : null) ??
-    (analysis.contentTitle?.trim() || null);
+  /** ヒーロー（動画・Web）。テキスト解析は別レイアウトのため未使用。 */
+  let headingTitle: string | null = null;
+  if (!isTextSource) {
+    headingTitle =
+      (typeof data.title === "string" && data.title.trim() !== ""
+        ? data.title.trim()
+        : null) ??
+      (analysis.contentTitle?.trim() || null);
 
-  if (!headingTitle && sourceUrl && isYoutube) {
-    headingTitle = await fetchYoutubeOembedTitle(sourceUrl);
-  }
-  if (!headingTitle && sourceUrl) {
-    headingTitle = isYoutube ? "YouTube 動画" : fallbackLabelFromUrl(sourceUrl);
-  }
-  if (!headingTitle) {
-    headingTitle = "貼り付けテキスト";
+    if (sourceUrl) {
+      const urlIsYoutubeHost = isLikelyYoutubeHostname(sourceUrl);
+      if (!headingTitle && urlIsYoutubeHost) {
+        headingTitle = await fetchYoutubeOembedTitle(sourceUrl);
+      }
+      if (!headingTitle && !urlIsYoutubeHost) {
+        headingTitle = await fetchPageTitle(sourceUrl);
+      }
+      if (!headingTitle) {
+        headingTitle = urlIsYoutubeHost
+          ? "YouTube 動画"
+          : fallbackLabelFromUrl(sourceUrl);
+      }
+    }
+    if (!headingTitle) {
+      headingTitle = "貼り付けテキスト";
+    }
   }
 
   const transcriptPlain = resolveTranscriptPlainText(data);
@@ -228,38 +258,53 @@ export default async function AnalysisDetailPage({ params }: Props) {
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              {ytId ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
-                  alt={headingTitle}
-                  className="w-[120px] h-[68px] object-cover rounded-xl flex-shrink-0 shadow-sm border border-slate-200"
-                />
-              ) : isYoutube ? (
-                <div className="w-[120px] h-[68px] rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <Youtube className="h-8 w-8 text-red-400" />
-                </div>
-              ) : sourceUrl ? (
-                <div className="w-[120px] h-[68px] rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <Globe className="h-8 w-8 text-slate-300" />
-                </div>
-              ) : (
-                <div className="w-[120px] h-[68px] rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <FileText className="h-8 w-8 text-slate-300" />
-                </div>
+            <div
+              className={cn(
+                "flex min-w-0 flex-1",
+                !isTextSource &&
+                  (ytVideoId ||
+                    (sourceUrl &&
+                      data.source_type === "youtube" &&
+                      isLikelyYoutubeHostname(sourceUrl))) &&
+                  "items-center gap-3"
+              )}
+            >
+              {!isTextSource && (
+                <>
+                  {ytVideoId ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={`https://img.youtube.com/vi/${ytVideoId}/hqdefault.jpg`}
+                      alt={headingTitle ?? ""}
+                      className="w-[120px] h-[68px] object-cover rounded-xl flex-shrink-0 shadow-sm border border-slate-200"
+                    />
+                  ) : sourceUrl &&
+                    data.source_type === "youtube" &&
+                    isLikelyYoutubeHostname(sourceUrl) ? (
+                    <div className="w-[120px] h-[68px] rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <Youtube className="h-8 w-8 text-red-400" />
+                    </div>
+                  ) : null}
+                </>
               )}
               <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight tracking-tight">
-                  {headingTitle}
-                </h1>
-                <p className="text-sm text-slate-500 mt-0.5 sm:mt-1">
-                  {cefrLevel}レベルの英語表現 {totalCount}選
-                </p>
+                {isTextSource ? (
+                  <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight tracking-tight">
+                    {cefrLevel}レベルの英語表現 {totalCount}選
+                  </h1>
+                ) : (
+                  <>
+                    <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight tracking-tight">
+                      {headingTitle}
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-0.5 sm:mt-1">
+                      {cefrLevel}レベルの英語表現 {totalCount}選
+                    </p>
+                  </>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              <FavoriteFakeDoorButton />
               {data.overall_level && (
                 <span
                   className={cn(
@@ -282,19 +327,25 @@ export default async function AnalysisDetailPage({ params }: Props) {
                   )}
                 </span>
               )}
+              <FavoriteFakeDoorButton />
               {sourceUrl ? (
                 <a
                   href={sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-500 transition-colors"
+                  className={cn(
+                    "flex items-center gap-1 text-xs transition-colors",
+                    isYoutubeVideoPage
+                      ? "text-slate-500 hover:text-red-500"
+                      : "text-slate-500 hover:text-sky-600"
+                  )}
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  {isYoutube ? "YouTube" : "Web"}
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    {isYoutubeVideoPage ? "YouTube" : "ページリンク"}
+                  </span>
                 </a>
-              ) : (
-                <span className="text-xs text-slate-500">テキスト入力</span>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -331,40 +382,6 @@ export default async function AnalysisDetailPage({ params }: Props) {
           </div>
         </div>
 
-        {typeof data.coach_comment === "string" && data.coach_comment.trim() !== "" && (
-          <AnalysisCoachCallout text={data.coach_comment} />
-        )}
-
-        {/* 抽出サマリー */}
-        <div className="flex items-center gap-4 bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-3.5 mb-8">
-          <div className="text-center">
-            <p className="text-2xl font-extrabold text-indigo-600">{totalCount}</p>
-            <p className="text-[10px] text-indigo-400 font-medium">抽出表現</p>
-          </div>
-          {data.overall_level && (
-            <>
-              <div className="w-px h-8 bg-indigo-200" />
-              <div className="text-center">
-                <p className="flex flex-wrap items-baseline justify-center gap-1.5 text-2xl font-extrabold text-indigo-600">
-                  <span>{data.overall_level}</span>
-                  {contentLevelMeta?.label != null && (
-                    <span className="text-sm font-semibold text-indigo-500/90">
-                      {contentLevelMeta.label}
-                    </span>
-                  )}
-                </p>
-                <p className="text-[10px] font-normal text-indigo-400">
-                  コンテンツレベル
-                </p>
-              </div>
-            </>
-          )}
-          <div className="w-px h-8 bg-indigo-200" />
-          <div className="text-sm text-indigo-700 font-medium flex-1">
-            {cefrLevel}レベルに合わせて抽出した重要フレーズ集
-          </div>
-        </div>
-
         <AdBanner className="mb-8" />
 
         <AnalysisDetailBody
@@ -375,6 +392,12 @@ export default async function AnalysisDetailPage({ params }: Props) {
           showPaywall={showPaywall}
           totalCount={totalCount}
           sourceAnalysisId={id}
+          coachSlot={
+            typeof data.coach_comment === "string" &&
+            data.coach_comment.trim() !== "" ? (
+              <AnalysisCoachCallout text={data.coach_comment} />
+            ) : null
+          }
         />
 
         <AnalysisDetailFooter
@@ -382,6 +405,8 @@ export default async function AnalysisDetailPage({ params }: Props) {
           isOwner={isOwner}
           initialIsPublic={isPublic}
           initialPublicReviewRequested={publicReviewRequested}
+          initialIsApproved={isApproved ?? false}
+          showYoutubeListingPanel={isYoutubeVideoPage}
           shareUrl={shareUrl}
           phraseCount={totalCount}
           cefrLevel={cefrLevel}

@@ -72,7 +72,7 @@ export const APP_ROUTES: AppRouteConfig[] = [
     category: "プロダクト",
     permissionDetails: [
       "Guest ⚠️ ｜ Free ✅ ｜ Premium ✅",
-      "一覧・各 `/examples/[slug]` は公開。サンプル上の単語帳保存は Guest でもローカル可（`lib/vocabulary.ts`）。",
+      "一覧・各 `/examples/[slug]` は公開。サンプル上のマイページ保存は Guest でもローカル可（`lib/vocabulary.ts`）。",
       "Guest のローカル保存は同日あたり `FREE_DAILY_LIMIT`（現在 5）件までのガードあり。ログイン後は `saveVocabularyAction` で Supabase 同期の流れ。",
     ],
   },
@@ -100,8 +100,8 @@ export const APP_ROUTES: AppRouteConfig[] = [
     ],
   },
   {
-    title: "マイ単語帳",
-    href: "/vocabulary",
+    title: "マイページ",
+    href: "/mypage",
     requiredRole: "free",
     category: "アカウント・学習",
     permissionDetails: [

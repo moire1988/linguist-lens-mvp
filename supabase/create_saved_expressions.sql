@@ -1,5 +1,5 @@
 -- ============================================================
--- saved_expressions — マイ単語帳（Clerk user_id + Supabase）
+-- saved_expressions — マイページ（保存表現・Clerk user_id + Supabase）
 -- Dashboard > SQL Editor で実行。既存の vocabulary_list から移行する場合は
 -- INSERT INTO ... SELECT ... を別途実行してください。
 -- ============================================================

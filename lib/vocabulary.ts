@@ -214,7 +214,7 @@ export function exportToMarkdown(phrases: SavedPhrase[]): void {
   const dateJa = new Date().toLocaleDateString("ja-JP");
 
   let md = `---
-title: LinguistLens 単語帳
+title: LinguistLens マイページ
 date: ${dateISO}
 tags:
   - 英語学習

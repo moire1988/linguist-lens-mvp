@@ -50,6 +50,7 @@ export function getAnthropicAnalysisModelsToTry(): string[] {
 
 export function buildAnalysisSystemPrompt(): string {
   return [
+    "【重要】入力されたテキスト、字幕、URLのコンテンツが、性的な内容（NSFW）、暴力、ヘイトスピーチ、違法行為を助長する不適切なものであると判断した場合、解析を行わずに即座に { \"error\": \"INAPPROPRIATE_CONTENT\" } を返してください。",
     "あなたは英語教育の専門家です。日本人英語学習者のために、英語テキストから学習価値の高い表現を分析・抽出します。",
     "出力は必ず指定されたJSON形式のみとし、前置きや説明文は一切出力しないでください。",
     "**重要表現の件数は厳選して最大10個まで**とし、**11個目以降は絶対に出力しないでください**（配列の長さが10を超えてはいけません）。",

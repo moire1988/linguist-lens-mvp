@@ -1350,12 +1350,12 @@ function ExpressionCard({
           ) : saved ? (
             <>
               <Check className="h-3.5 w-3.5" />
-              単語帳に保存済み
+              マイページに保存済み
             </>
           ) : (
             <>
               <BookmarkPlus className="h-3.5 w-3.5" />
-              単語帳に保存
+              マイページに保存
               {flash === "limit" && (
                 <span className="ml-auto text-[10px] text-rose-400 font-semibold">
                   上限に達しました

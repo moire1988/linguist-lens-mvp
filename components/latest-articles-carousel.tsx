@@ -119,7 +119,7 @@ export function LatestArticlesCarousel() {
                 )}
               >
                 <div className="flex flex-1 flex-col p-3.5 pr-11">
-                  {/* Badges */}
+                  {/* Level + variant（カテゴリはタイトル下） */}
                   <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
                     <span
                       className={cn(
@@ -140,28 +140,26 @@ export function LatestArticlesCarousel() {
                         </span>
                       );
                     })()}
-                    {catClass && (
-                      <span
-                        className={cn(
-                          "px-1.5 py-0.5 rounded text-[10px] font-mono border truncate max-w-[120px]",
-                          catClass
-                        )}
-                      >
-                        {getArticleCategoryDisplayLabel(article.category)}
-                      </span>
-                    )}
                   </div>
 
-                  {/* Main title (JA) + English subline */}
-                  <p className="text-slate-700 font-mono text-xs font-semibold leading-snug line-clamp-3 mb-1.5 group-hover:text-indigo-600 transition-colors flex-1">
-                    {titles.primary}
-                  </p>
-
-                  {titles.secondary && (
-                    <p className="text-slate-400 text-[10px] font-mono leading-snug line-clamp-1 mb-2">
-                      {titles.secondary}
+                  <div className="flex flex-1 flex-col min-h-0">
+                    <p className="text-slate-700 font-mono text-xs font-semibold leading-snug line-clamp-3 group-hover:text-indigo-600 transition-colors">
+                      {titles.primary}
                     </p>
-                  )}
+
+                    {catClass && article.category && (
+                      <div className="mt-2">
+                        <span
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 rounded text-[10px] font-mono border truncate max-w-full",
+                            catClass
+                          )}
+                        >
+                          {getArticleCategoryDisplayLabel(article.category)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Footer */}
                   <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">

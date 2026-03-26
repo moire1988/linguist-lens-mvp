@@ -38,8 +38,8 @@ const FEATURE_COPY: Record<
     iconClass: "text-indigo-500",
     iconBg: "bg-indigo-50",
     title: "ログインが必要です",
-    body: "フレーズを単語帳に保存するには\nログインが必要です。",
-    cta: "ログインして単語帳を使う",
+    body: "フレーズをマイページに保存するには\nログインが必要です。",
+    cta: "ログインしてマイページを使う",
   },
   practice: {
     icon: Mic,

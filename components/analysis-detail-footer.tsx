@@ -1,14 +1,19 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { AnalysisSharePanel } from "@/components/analysis-share-panel";
+import { AnalysisYoutubeListingPanel } from "@/components/analysis-youtube-listing-panel";
 
 interface Props {
   analysisId: string;
   isOwner: boolean;
   initialIsPublic: boolean;
   initialPublicReviewRequested: boolean;
+  initialIsApproved: boolean;
+  /** YouTube のときのみ掲載パネルを出す */
+  showYoutubeListingPanel: boolean;
   shareUrl: string;
   phraseCount: number;
   cefrLevel: string;
@@ -19,22 +24,45 @@ export function AnalysisDetailFooter({
   isOwner,
   initialIsPublic,
   initialPublicReviewRequested,
+  initialIsApproved,
+  showYoutubeListingPanel,
   shareUrl,
   phraseCount,
   cefrLevel,
 }: Props) {
+  const [linkShared, setLinkShared] = useState(initialIsPublic);
+
+  useEffect(() => {
+    setLinkShared(initialIsPublic);
+  }, [initialIsPublic]);
+
+  const handleLinkSharedChange = useCallback((shared: boolean) => {
+    setLinkShared(shared);
+  }, []);
+
   if (isOwner) {
     return (
       <>
         <AnalysisSharePanel
           analysisId={analysisId}
           initialIsPublic={initialIsPublic}
-          initialPublicReviewRequested={initialPublicReviewRequested}
           isOwner
           shareUrl={shareUrl}
           phraseCount={phraseCount}
           cefrLevel={cefrLevel}
+          onLinkSharedChange={
+            showYoutubeListingPanel ? handleLinkSharedChange : undefined
+          }
         />
+
+        {showYoutubeListingPanel && (
+          <AnalysisYoutubeListingPanel
+            analysisId={analysisId}
+            initialPublicReviewRequested={initialPublicReviewRequested}
+            initialIsApproved={initialIsApproved}
+            linkShared={linkShared}
+          />
+        )}
 
         <div className="flex flex-col sm:flex-row justify-center gap-3 mt-10 mb-16">
           <Link
@@ -48,7 +76,7 @@ export function AnalysisDetailFooter({
             href="/mypage"
             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
           >
-            マイ単語帳を見る
+            マイページを見る
           </Link>
         </div>
       </>

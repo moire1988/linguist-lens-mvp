@@ -34,6 +34,16 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
+  // 旧URL → マイページ（認可より先にリダイレクト）
+  if (
+    request.nextUrl.pathname === "/vocabulary" ||
+    request.nextUrl.pathname.startsWith("/vocabulary/")
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/mypage";
+    return NextResponse.redirect(url);
+  }
+
   if (!isPublicRoute(request)) {
     await auth.protect();
   }

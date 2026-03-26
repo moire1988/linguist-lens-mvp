@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "@/lib/types";
+import { getFirstLineFromAnalysisBody } from "@/lib/analysis-transcript";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -19,7 +20,55 @@ export interface SavedAnalysis {
   cefrLevel: string;
   data: AnalysisResult;
   isShared?: boolean;
+  /** DB `saved_analyses.is_approved`（トップ「みんなの解析」掲載・管理者承認） */
   isApproved?: boolean;
+  /** DB `saved_analyses.is_public`（リンク共有・URLを知る人のみ閲覧可） */
+  isPublic?: boolean;
+  /** DB `saved_analyses.public_review_requested` */
+  publicReviewRequested?: boolean;
+}
+
+/**
+ * 解析詳細のシェアパネル（`AnalysisSharePanel`）と同じ公開ステータス表記。
+ */
+/**
+ * マイページの解析カード等で表示するタイトル。
+ * 取得できない場合は transcript / source_text 等の本文1行目に寄せる（表示は `line-clamp` で省略）。
+ */
+export function getSavedAnalysisCardTitle(analysis: SavedAnalysis): string {
+  const titleFromDb = analysis.contentTitle?.trim() ?? "";
+  if (titleFromDb !== "") return titleFromDb;
+
+  const isTextSource =
+    analysis.data.source_type === "text" ||
+    (analysis.inputMode === "text" && !analysis.sourceUrl);
+
+  if (isTextSource) {
+    const first = getFirstLineFromAnalysisBody(analysis.data);
+    if (first !== "") return first;
+  }
+
+  const titleFromResult = analysis.data.title?.trim() ?? "";
+  if (titleFromResult !== "") return titleFromResult;
+
+  const firstLineFallback = getFirstLineFromAnalysisBody(analysis.data);
+  if (firstLineFallback !== "") return firstLineFallback;
+
+  if (isTextSource) return "テキスト入力";
+  return "解析結果";
+}
+
+export function getAnalysisPublicStatusLabel(analysis: SavedAnalysis): string {
+  const linkOn = analysis.isPublic === true;
+  const approved = analysis.isApproved === true;
+  const pendingListing =
+    analysis.publicReviewRequested === true && !approved;
+  const isYt = analysis.data?.source_type === "youtube";
+
+  if (linkOn && isYt && approved) return "みんなの解析に掲載中";
+  if (linkOn && pendingListing) return "掲載審査待ち";
+  if (linkOn) return "リンク共有中";
+  return "非公開";
 }
 
 export type SaveAnalysisResult =

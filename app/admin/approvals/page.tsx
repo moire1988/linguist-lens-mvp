@@ -158,17 +158,17 @@ function AnalysisQueueCard(props: AnalysisQueueCardProps) {
               ) : (
                 <Globe className="w-3.5 h-3.5" />
               )}
-              公開する
+              掲載を承認
             </button>
             <a
               href={`/analyses/${item.id}`}
               target="_blank"
               rel="noopener noreferrer"
-              title="作成者がログインしていれば未公開でも閲覧できます（ゲスト解析は URL を知る限り閲覧可）"
+              title="ユーザーがリンク共有をオンにしていれば、未掲載でも URL を知る人は閲覧できます"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              オーナー用ページ
+              解析ページ
             </a>
           </>
         ) : (
@@ -179,7 +179,7 @@ function AnalysisQueueCard(props: AnalysisQueueCardProps) {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-700 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            公開ページ
+            解析ページ
           </a>
         )}
 
@@ -269,12 +269,12 @@ export default function ApprovalsPage() {
     setLoadingId(null);
 
     if (!result.ok) {
-      toast.error(result.error ?? "公開に失敗しました");
+      toast.error(result.error ?? "掲載の承認に失敗しました");
       return;
     }
 
     await loadItems();
-    toast.success("公開しました");
+    toast.success("トップの「みんなの解析」に掲載しました");
     setTab("published");
   };
 
@@ -296,7 +296,7 @@ export default function ApprovalsPage() {
   const handleDeletePublished = async (id: string) => {
     if (
       !confirm(
-        "公開中の解析を削除します。共有リンクは無効になります。続行しますか？"
+        "この解析を削除します。リンク共有・トップ掲載の両方が無効になります。続行しますか？"
       )
     ) {
       return;

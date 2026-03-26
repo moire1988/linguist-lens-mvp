@@ -26,65 +26,61 @@ function XIcon({ className }: { className: string }) {
 interface Props {
   analysisId: string;
   initialIsPublic: boolean;
-  initialPublicReviewRequested: boolean;
   isOwner: boolean;
   shareUrl: string;
   phraseCount: number;
   cefrLevel: string;
+  /** リンク共有の状態が変わったとき（みんなの解析パネル用・親は YouTube のみ利用） */
+  onLinkSharedChange?: (shared: boolean) => void;
 }
 
 export function AnalysisSharePanel({
   analysisId,
   initialIsPublic,
-  initialPublicReviewRequested,
   isOwner,
   shareUrl,
   phraseCount,
   cefrLevel,
+  onLinkSharedChange,
 }: Props) {
-  const [isLive, setIsLive] = useState(initialIsPublic);
-  const [reviewRequested, setReviewRequested] = useState(
-    initialPublicReviewRequested
-  );
-  const [isPending, startTransition] = useTransition();
+  const [linkOn, setLinkOn] = useState(initialIsPublic);
+  const [isPendingLink, startLinkTransition] = useTransition();
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    setIsLive(initialIsPublic);
-    setReviewRequested(initialPublicReviewRequested);
-  }, [initialIsPublic, initialPublicReviewRequested]);
+    setLinkOn(initialIsPublic);
+  }, [initialIsPublic]);
+
+  useEffect(() => {
+    onLinkSharedChange?.(initialIsPublic);
+  }, [initialIsPublic, onLinkSharedChange]);
 
   if (!isOwner) return null;
 
-  const toggleOn = isLive || reviewRequested;
-  const pendingOnly = reviewRequested && !isLive;
-
-  const handleToggle = () => {
-    const wasOn = isLive || reviewRequested;
-    const next = !wasOn;
-    const snapshot = { live: isLive, req: reviewRequested };
+  const handleLinkToggle = () => {
+    const next = !linkOn;
+    const snapshot = linkOn;
 
     if (next) {
-      setReviewRequested(true);
+      setLinkOn(true);
     } else {
-      setIsLive(false);
-      setReviewRequested(false);
+      setLinkOn(false);
     }
 
-    startTransition(async () => {
+    startLinkTransition(async () => {
       const result = await toggleAnalysisPublicAction(analysisId, next);
       if (!result.ok) {
-        setIsLive(snapshot.live);
-        setReviewRequested(snapshot.req);
+        setLinkOn(snapshot);
         toast.error("更新に失敗しました", { description: result.error });
         return;
       }
+      onLinkSharedChange?.(next);
       if (next) {
-        toast.success("掲載を申請しました。承認後に公開されます");
-      } else if (snapshot.live) {
-        toast.success("公開を取り消しました");
+        toast.success(
+          "リンク共有を有効にしました。URLを知っている人がこのページを閲覧できます。"
+        );
       } else {
-        toast.success("申請を取り下げました");
+        toast.success("リンク共有をオフにしました");
       }
     });
   };
@@ -104,63 +100,55 @@ export function AnalysisSharePanel({
     }
   };
 
-  const headline =
-    isLive ? "公開中" : pendingOnly ? "承認待ち" : "非公開";
-
-  const description = isLive
-    ? "トップページの『みんなの解析』に掲載され、他の学習者も閲覧できるようになります。"
-    : pendingOnly
-      ? "管理者が承認すると、みんなの解析に掲載されます。承認前はあなただけがこのページを閲覧できます。"
-      : "マイページからあなただけがアクセスできます。";
+  const linkHeadline = linkOn ? "リンク共有オン" : "リンク共有オフ";
+  const linkDescription = linkOn
+    ? "このページのURLを知っている人なら、誰でも閲覧できます（SNSでシェアできます）。"
+    : "マイページからあなただけがアクセスできます。";
 
   return (
     <div
       className={cn(
         "rounded-2xl border p-5 mb-8 transition-colors duration-300",
-        isLive
+        linkOn
           ? "border-indigo-200 bg-indigo-50/50 shadow-sm shadow-indigo-100/40"
-          : pendingOnly
-            ? "border-amber-200 bg-amber-50/40 shadow-sm shadow-amber-100/30"
-            : "border-slate-200 bg-white"
+          : "border-slate-200 bg-white"
       )}
     >
       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
-        シェア設定
+        リンク共有
       </p>
 
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-1.5">
           <p className="text-base font-bold text-slate-900 leading-tight">
-            {isLive ? "🌍 " : pendingOnly ? "⏳ " : "🔒 "}
-            {headline}
+            {linkOn ? "🔗 " : "🔒 "}
+            {linkHeadline}
           </p>
-          <p className="text-sm text-slate-600 leading-relaxed">{description}</p>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            {linkDescription}
+          </p>
         </div>
 
         <button
           type="button"
-          onClick={handleToggle}
-          disabled={isPending}
-          aria-pressed={toggleOn}
+          onClick={handleLinkToggle}
+          disabled={isPendingLink}
+          aria-pressed={linkOn}
           className="relative flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-60 self-start sm:mt-1"
           style={{
-            background: toggleOn
-              ? pendingOnly
-                ? "#f59e0b"
-                : "#6366f1"
-              : "#e2e8f0",
+            background: linkOn ? "#6366f1" : "#e2e8f0",
           }}
         >
-          {isPending ? (
+          {isPendingLink ? (
             <Loader2
               className="absolute inset-0 m-auto h-3.5 w-3.5 animate-spin"
-              style={{ color: toggleOn ? "#fff" : "#94a3b8" }}
+              style={{ color: linkOn ? "#fff" : "#94a3b8" }}
             />
           ) : (
             <span
               className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
               style={{
-                transform: toggleOn ? "translateX(20px)" : "translateX(0)",
+                transform: linkOn ? "translateX(20px)" : "translateX(0)",
               }}
             />
           )}
@@ -170,18 +158,18 @@ export function AnalysisSharePanel({
       <div
         className={cn(
           "grid transition-[grid-template-rows] duration-300 ease-out",
-          isLive ? "grid-rows-[1fr] mt-5" : "grid-rows-[0fr] mt-0"
+          linkOn ? "grid-rows-[1fr] mt-5" : "grid-rows-[0fr] mt-0"
         )}
       >
         <div className="min-h-0 overflow-hidden">
           <div
             className={cn(
               "space-y-3 border-t pt-4 transition-opacity duration-300 ease-out",
-              isLive
+              linkOn
                 ? "border-indigo-200/80 opacity-100 translate-y-0"
                 : "border-transparent opacity-0 pointer-events-none -translate-y-1"
             )}
-            aria-hidden={!isLive}
+            aria-hidden={!linkOn}
           >
             <p className="text-xs font-medium text-indigo-700/90">
               シェアして学習仲間を増やそう

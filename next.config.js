@@ -32,6 +32,11 @@ const nextConfig = {
   },
   // Vercel: コミットごとにビルドIDが変わり、/_next/static のハッシュが必ず更新される
   // ローカル dev で毎回 Date.now() にするとキャッシュとズレて欠落チャンク (Cannot find module './xxxx.js') が出やすい
+  async redirects() {
+    return [
+      { source: "/vocabulary", destination: "/mypage", permanent: true },
+    ];
+  },
   generateBuildId: async () => {
     if (process.env.NODE_ENV === "development") {
       return "development";

@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -42,6 +48,8 @@ export function AnalysisDetailBody(props: {
   scriptSectionTitle?: string;
   /** この解析の saved_analyses.id（単語保存時に紐づけ） */
   sourceAnalysisId?: string;
+  /** 全文スクリプトと表現カードの間（Server Component から渡すとハイドレーション安全） */
+  coachSlot?: ReactNode;
 }) {
   const {
     sourceUrl,
@@ -52,6 +60,7 @@ export function AnalysisDetailBody(props: {
     totalCount,
     scriptSectionTitle = "全文スクリプト",
     sourceAnalysisId,
+    coachSlot,
   } = props;
   const { isSignedIn } = useAuth();
   const { isPro } = useEffectiveAuth();
@@ -104,7 +113,7 @@ export function AnalysisDetailBody(props: {
           });
           setDailyRemaining((r) => Math.max(0, r - 1));
           toast.success("保存しました", {
-            description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+            description: `「${phrase.expression}」をマイページに追加しました`,
           });
         } else if (result.reason === "limit_reached") {
           setShowPremium(true);
@@ -135,7 +144,7 @@ export function AnalysisDetailBody(props: {
             return n;
           });
           toast.success("保存しました", {
-            description: `「${phrase.expression}」をマイ単語帳に追加しました`,
+            description: `「${phrase.expression}」をマイページに追加しました`,
           });
         } else if (result.reason === "duplicate") {
           setSavedExpressions((s) => {
@@ -191,6 +200,8 @@ export function AnalysisDetailBody(props: {
           savingExpressionKey={savingKey}
         />
       </div>
+
+      {coachSlot}
 
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">

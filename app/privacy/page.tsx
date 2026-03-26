@@ -62,7 +62,7 @@ export default function PrivacyPage() {
               <li>入力されたYouTube URL・Web記事URL</li>
               <li>選択した学習レベル（CEFR）・アクセントの設定</li>
               <li>解析結果（フレーズ・翻訳・解説等）の保存データ</li>
-              <li>保存した単語帳データ</li>
+              <li>マイページに保存した表現データ</li>
             </ul>
 
             <h3 className="text-sm font-semibold text-slate-700 mb-2">（3）アクセスログ・技術情報</h3>
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
                 },
                 {
                   name: "Supabase",
-                  desc: "解析結果・単語帳データ等の保存のため、データをSupabaseのデータベースに格納します。",
+                  desc: "解析結果・マイページの保存データ等のため、データをSupabaseのデータベースに格納します。",
                   url: "https://supabase.com/privacy",
                 },
                 {
@@ -182,7 +182,7 @@ export default function PrivacyPage() {
               第7条　データの保持期間と削除
             </h2>
             <ul className="list-disc list-inside space-y-1.5 text-slate-600 text-sm">
-              <li>解析結果・単語帳データ：アカウント削除まで保持</li>
+              <li>解析結果・マイページの保存データ：アカウント削除まで保持</li>
               <li>利用制限管理データ（IPハッシュ等）：当日分のみ保持し、翌日以降に自動削除</li>
               <li>アクセスログ：最大90日間保持</li>
             </ul>

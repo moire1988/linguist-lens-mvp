@@ -272,7 +272,7 @@ export function PhrasePopup({
               ) : isSaved ? (
                 <><Check className="h-3.5 w-3.5" /> 保存済み</>
               ) : (
-                <><BookmarkPlus className="h-3.5 w-3.5" /> 単語帳に保存</>
+                <><BookmarkPlus className="h-3.5 w-3.5" /> マイページに保存</>
               )}
               {!isSaved && dailyRemaining <= 2 && dailyRemaining > 0 && (
                 <span className="ml-auto text-[10px] text-amber-500 font-semibold">
