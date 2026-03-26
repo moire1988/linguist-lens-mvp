@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FooterSitemap } from "@/components/footer-sitemap";
 
 function XIcon() {
   return (
@@ -16,42 +17,43 @@ function XIcon() {
 export function SiteFooter() {
   return (
     <footer className="relative mt-auto border-t border-slate-200/60 bg-white/70 backdrop-blur-md">
-      <div className="max-w-5xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="mx-auto max-w-5xl px-6 pb-5 pt-8">
+        <FooterSitemap />
+        <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+          {/* Left: brand + copyright */}
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold tracking-tight text-slate-700">
+              LinguistLens
+            </span>
+            <span className="select-none text-xs text-slate-300">|</span>
+            <span className="text-xs text-slate-400">© 2026 LinguistLens</span>
+          </div>
 
-        {/* Left: brand + copyright */}
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold tracking-tight text-slate-700">
-            LinguistLens
-          </span>
-          <span className="text-slate-300 text-xs select-none">|</span>
-          <span className="text-xs text-slate-400">© 2026 LinguistLens</span>
+          {/* Right: nav links */}
+          <nav className="flex items-center gap-5">
+            <a
+              href="https://x.com/LinguistLens"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="X (Twitter)"
+              className="text-slate-400 transition-colors hover:text-violet-600"
+            >
+              <XIcon />
+            </a>
+            <Link
+              href="/terms"
+              className="text-xs text-slate-400 transition-colors hover:text-violet-600"
+            >
+              利用規約
+            </Link>
+            <Link
+              href="/privacy"
+              className="text-xs text-slate-400 transition-colors hover:text-violet-600"
+            >
+              プライバシーポリシー
+            </Link>
+          </nav>
         </div>
-
-        {/* Right: nav links */}
-        <nav className="flex items-center gap-5">
-          <a
-            href="https://x.com/LinguistLens"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="X (Twitter)"
-            className="text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <XIcon />
-          </a>
-          <Link
-            href="/terms"
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            利用規約
-          </Link>
-          <Link
-            href="/privacy"
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            プライバシーポリシー
-          </Link>
-        </nav>
-
       </div>
     </footer>
   );

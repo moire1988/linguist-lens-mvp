@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
+import { isAppAdminUser } from "@/lib/is-app-admin";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -226,10 +227,14 @@ function ListSkeleton() {
 }
 
 export default function ApprovalsPage() {
-  const { userId, isLoaded } = useAuth();
+  const { user, isLoaded } = useUser();
   const router = useRouter();
-  const adminId = process.env.NEXT_PUBLIC_ADMIN_USER_ID;
-  const isAdmin = isLoaded && userId === adminId;
+  const isAdmin =
+    isLoaded &&
+    isAppAdminUser(
+      user?.id,
+      user?.publicMetadata as Record<string, unknown> | undefined
+    );
 
   const [tab, setTab] = useState<AdminQueueTab>("pending");
   const [pendingItems, setPendingItems] = useState<PendingAnalysis[]>([]);

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
+import { isAppAdminUser } from "@/lib/is-app-admin";
 import { useRouter } from "next/navigation";
 import { Wand2, RefreshCw, Globe, EyeOff, Trash2, ExternalLink, ChevronLeft, Loader2 } from "lucide-react";
 import type { EnglishVariant } from "@/lib/article-types";
@@ -66,10 +67,14 @@ const LEVEL_COLORS: Record<string, string> = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const { userId, isLoaded } = useAuth();
+  const { user, isLoaded } = useUser();
   const router = useRouter();
-  const adminId = process.env.NEXT_PUBLIC_ADMIN_USER_ID;
-  const isAdmin = isLoaded && userId === adminId;
+  const isAdmin =
+    isLoaded &&
+    isAppAdminUser(
+      user?.id,
+      user?.publicMetadata as Record<string, unknown> | undefined
+    );
 
   // Redirect non-admins
   useEffect(() => {

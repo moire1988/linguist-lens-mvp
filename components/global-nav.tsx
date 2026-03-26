@@ -8,10 +8,10 @@ import { NavMenu } from "@/components/nav-menu";
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface GlobalNavProps {
-  /** 設定パネルを開くコールバック。省略時はメニューに「設定」が表示されない */
-  onSettings?: () => void;
   /** ログイン済みのとき /vocabulary へのショートカット（記事ページなど） */
   showVocabularyLink?: boolean;
+  /** ドロワー内「マイ単語帳」行のバッジ用（省略可） */
+  vocabCount?: number;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -20,7 +20,7 @@ interface GlobalNavProps {
  * サイト共通のナビゲーション右側 (NavMenu + UserButton/SignIn)。
  * SiteHeader の right スロットに渡す想定。
  */
-export function GlobalNav({ onSettings, showVocabularyLink }: GlobalNavProps) {
+export function GlobalNav({ showVocabularyLink, vocabCount }: GlobalNavProps) {
   const { isSignedIn, isLoaded } = useAuth();
   const { openSignIn } = useClerk();
 
@@ -37,7 +37,7 @@ export function GlobalNav({ onSettings, showVocabularyLink }: GlobalNavProps) {
           <span className="hidden sm:inline">マイ単語帳</span>
         </Link>
       )}
-      <NavMenu onSettings={onSettings} />
+      <NavMenu vocabCount={vocabCount} />
       {isSignedIn ? (
         <UserButton />
       ) : (

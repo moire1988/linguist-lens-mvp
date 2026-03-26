@@ -43,7 +43,6 @@ import { callAnalyzeApi } from "@/lib/analyze-client";
 import { generateArticle } from "@/app/actions/generate-article";
 import { getVocabularyCount } from "@/lib/vocabulary";
 import { getCachedEntry, setCachedResult } from "@/lib/cache";
-import { SettingsModal } from "@/components/settings-modal";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import { NewsletterBanner } from "@/components/newsletter-banner";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
@@ -137,7 +136,6 @@ export default function HomePage() {
   const { isSignedIn } = useAuth();
   const { openSignIn } = useClerk();
   useEffectiveAuth(); // devAuthState を副作用で読み込む（将来的な機能フラグ用）
-  const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [devMode, setDevMode] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -638,16 +636,6 @@ export default function HomePage() {
           onStart={handleOnboardingStart}
         />
       )}
-      {showSettings && (
-        <SettingsModal
-          onClose={() => {
-            setShowSettings(false);
-            const s = getSettings();
-            setDevMode(s.devMode);
-            if (s.devMode) setUrl(DEV_TEST_URL);
-          }}
-        />
-      )}
       <SiteHeader
         maxWidth="5xl"
         right={
@@ -667,10 +655,7 @@ export default function HomePage() {
             </Link>
 
             {/* ナビゲーションメニュー */}
-            <NavMenu
-              onSettings={() => setShowSettings((v) => !v)}
-              vocabCount={vocabCount}
-            />
+            <NavMenu vocabCount={vocabCount} />
 
             {/* 認証 */}
             {isSignedIn ? (
