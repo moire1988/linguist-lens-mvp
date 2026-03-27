@@ -4,7 +4,7 @@
  * 環境変数（.env.local 推奨）:
  * - GEMINI_API_KEY（親ツイートの生成に必須）
  * - TWITTER_API_KEY / TWITTER_API_SECRET / TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_SECRET
- * 使用モデル: gemini-2.5-flash に固定（429 回避のため環境変数では切り替えない）
+ * 使用モデル: gemini-2.0-flash に固定（429 回避のため環境変数では切り替えない）
  *
  * 実行: npm run post-to-x
  */
@@ -59,7 +59,7 @@ function pickRandom<T>(arr: readonly T[]): T {
 const SITE_URL = "https://linguistlens.app";
 
 /** Gemini 呼び出しに使うモデル（Actions/ローカル共通で固定） */
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-2.0-flash";
 
 /** 親ツイート: 解説中心のため X 標準上限に合わせる */
 const PARENT_TWEET_MAX = 280;
