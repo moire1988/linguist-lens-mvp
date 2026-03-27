@@ -59,7 +59,7 @@ function pickRandom<T>(arr: readonly T[]): T {
 const SITE_URL = "https://linguistlens.app";
 
 /** Gemini 呼び出しに使うモデル（Actions/ローカル共通で固定） */
-const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 /** 親ツイート: 解説中心のため X 標準上限に合わせる */
 const PARENT_TWEET_MAX = 280;
