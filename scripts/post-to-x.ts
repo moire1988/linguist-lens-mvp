@@ -4,7 +4,7 @@
  * 環境変数（.env.local 推奨）:
  * - GEMINI_API_KEY（親ツイートの生成に必須）
  * - TWITTER_API_KEY / TWITTER_API_SECRET / TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_SECRET
- * 使用モデル: gemini-1.5-flash に固定（429 回避のため環境変数では切り替えない）
+ * 使用モデル: gemini-2.5-flash に固定（429 回避のため環境変数では切り替えない）
  *
  * 実行: npm run post-to-x
  */
