@@ -96,15 +96,24 @@ async function generateParentTweetGemini(
 ): Promise<string> {
   const apiKey = requireEnv("GEMINI_API_KEY");
   console.log(`[post-to-x] Gemini model: ${GEMINI_MODEL}`);
+
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
   const prompt = buildParentPrompt(phrase, meaning);
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
-  if (!text) {
-    throw new Error("Gemini から空の応答が返りました");
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text().trim();
+    if (!text) {
+      throw new Error("Gemini から空の応答が返りました");
+    }
+    return text;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[post-to-x] Gemini error: ${msg}`);
+    throw error;
   }
-  return text;
 }
 
 function ensureMaxLength(text: string, max: number): string {
