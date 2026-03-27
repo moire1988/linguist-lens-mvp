@@ -20,7 +20,7 @@ jobs:
       - run: npm install
       - run: npm run post-to-x
         env:
-          # Gemini モデルは scripts/post-to-x.ts 内で gemini-1.5-flash に固定
+          # 変数名は据え置き: 値は Groq API キー（scripts/post-to-x.ts が Groq を呼ぶ）
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
           TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
