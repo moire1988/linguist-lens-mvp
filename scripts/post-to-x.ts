@@ -93,7 +93,7 @@ async function generateParentTweetGemini(
 ): Promise<string> {
   const apiKey = requireEnv("GEMINI_API_KEY");
   const modelName =
-    process.env.GEMINI_POST_MODEL?.trim() || "gemini-2.0-flash";
+    process.env.GEMINI_POST_MODEL?.trim() || "gemini-2.5-flash";
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
   const prompt = buildParentPrompt(phrase, meaning);
