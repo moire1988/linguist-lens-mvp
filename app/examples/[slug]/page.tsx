@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { EXAMPLES } from "@/lib/examples-data";
+import { getPublicSiteUrl } from "@/lib/site-url";
 import { ExamplePageContent } from "./content";
 
 // ─── SSG ─────────────────────────────────────────────────────────────────────
@@ -16,13 +17,14 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const ex = EXAMPLES.find((e) => e.slug === params.slug);
   if (!ex) return {};
-  const siteUrl = "https://linguist-lens-mvp.vercel.app";
+  const siteUrl = getPublicSiteUrl();
+  const canonical = `${siteUrl}/examples/${ex.slug}`;
   return {
     title: ex.pageTitle,
     description: ex.description,
     openGraph: {
       type: "article",
-      url: `${siteUrl}/examples/${ex.slug}`,
+      url: canonical,
       title: ex.pageTitle,
       description: ex.description,
       images: [{ url: "/og", width: 1200, height: 630 }],
@@ -33,6 +35,7 @@ export async function generateMetadata({
       description: ex.description,
       images: ["/og"],
     },
+    alternates: { canonical },
   };
 }
 

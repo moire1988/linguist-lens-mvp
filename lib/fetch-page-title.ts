@@ -1,3 +1,5 @@
+import { getPublicSiteUrl } from "@/lib/site-url";
+
 /**
  * 公開 Web ページの `<title>` / `og:title` を取得（解析詳細の Web URL 見出し用）。
  * 失敗時は null。
@@ -31,8 +33,7 @@ export async function fetchPageTitle(urlString: string): Promise<string | null> 
       signal: controller.signal,
       headers: {
         Accept: "text/html,application/xhtml+xml",
-        "User-Agent":
-          "Mozilla/5.0 (compatible; LinguistLens/1.0; +https://linguist-lens-mvp.vercel.app)",
+        "User-Agent": `Mozilla/5.0 (compatible; LinguistLens/1.0; +${getPublicSiteUrl()})`,
       },
     });
     if (!res.ok) return null;

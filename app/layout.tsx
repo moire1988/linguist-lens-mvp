@@ -11,6 +11,7 @@ import { LoginPromptModal } from "@/components/login-prompt-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { NavigationDrawerProvider } from "@/components/navigation-drawer-context";
 import { AppContentShell } from "@/components/app-content-shell";
+import { getPublicSiteUrl } from "@/lib/site-url";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ const goldman = Goldman({
   variable: "--font-goldman",
 });
 
-const siteUrl = "https://linguist-lens-mvp.vercel.app";
+const siteUrl = getPublicSiteUrl();
 
 const title    = "LinguistLens - YouTubeで英語学習を加速させるAIコーチ";
 const description =
@@ -59,7 +60,7 @@ export const metadata: Metadata = {
     images:      ["/og"],
   },
   verification: {
-    google: "kSoQYfzuQWKb1sw4IUvJ8DpzUT3fibG21bEDDKfBRec",
+    google: "YL836JuNSH_H4ECwGtf0tbIzdoPR-ezgwgDHzhgMyCw",
   },
 };
 

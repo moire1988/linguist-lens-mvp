@@ -19,10 +19,7 @@ import { articleDisplayTitles } from "@/lib/article-display";
 import { cn } from "@/lib/utils";
 import { FavoriteFakeDoorButton } from "@/components/favorite-fake-door-button";
 import { RelatedArticleCard } from "@/components/related-article-card";
-
-// ─── 定数 ────────────────────────────────────────────────────────────────────
-
-const SITE_URL = "https://linguist-lens-mvp.vercel.app";
+import { getPublicSiteUrl } from "@/lib/site-url";
 
 // ─── generateMetadata ─────────────────────────────────────────────────────────
 
@@ -38,7 +35,7 @@ export async function generateMetadata({
     ? `${article.titleJa} | LinguistLens`
     : `${article.titleEn} | LinguistLens`;
   const description = `${article.level}レベルの英語学習記事。語彙ハイライト付きで重要表現を自然に身につけられます。日本語訳・単語リスト付き。`;
-  const canonical   = `${SITE_URL}/articles/${article.slug}`;
+  const canonical   = `${getPublicSiteUrl()}/articles/${article.slug}`;
 
   return {
     title: seoTitle,

@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://linguist-lens-mvp.vercel.app";
+import { getPublicSiteUrl } from "@/lib/site-url";
+
+const SITE_URL = getPublicSiteUrl();
 
 export default function robots(): MetadataRoute.Robots {
   return {

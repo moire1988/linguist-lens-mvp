@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { CEFR_CONTENT_META } from "@/lib/cefr-content-meta";
 import { FavoriteFakeDoorButton } from "@/components/favorite-fake-door-button";
 import { AnalysisCoachCallout } from "@/components/analysis-coach-callout";
+import { getPublicSiteUrl } from "@/lib/site-url";
 
 function fallbackLabelFromUrl(url: string): string {
   try {
@@ -46,8 +47,6 @@ function isLikelyYoutubeHostname(url: string): boolean {
     return false;
   }
 }
-
-const SITE_URL = "https://linguist-lens-mvp.vercel.app";
 
 export const dynamic = "force-dynamic";
 
@@ -110,8 +109,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const description = buildMetaDescription(cefrLevel, phraseCount, sourceUrl);
 
-  const ogUrl = `${SITE_URL}/analyses/${id}`;
-  const ogImage = `${SITE_URL}/analyses/${id}/opengraph-image`;
+  const siteOrigin = getPublicSiteUrl();
+  const ogUrl = `${siteOrigin}/analyses/${id}`;
+  const ogImage = `${siteOrigin}/analyses/${id}/opengraph-image`;
 
   return {
     title: `${pageTitle} | LinguistLens`,
@@ -187,7 +187,7 @@ export default async function AnalysisDetailPage({ params }: Props) {
   const isYoutubeVideoPage =
     data.source_type === "youtube" && ytVideoId !== null;
 
-  const shareUrl = `${SITE_URL}/analyses/${id}`;
+  const shareUrl = `${getPublicSiteUrl()}/analyses/${id}`;
 
   /** ヒーロー（動画・Web）。テキスト解析は別レイアウトのため未使用。 */
   let headingTitle: string | null = null;

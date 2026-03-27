@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import type { AnalysisResult } from "@/lib/types";
 import { fetchYoutubeOembedTitle } from "@/lib/youtube-oembed";
+import { getPublicSiteUrl } from "@/lib/site-url";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -72,7 +73,7 @@ export async function savePublicAnalysis(payload: {
   }
 
   const id = (data as { id: string }).id;
-  const siteUrl = "https://linguist-lens-mvp.vercel.app";
+  const siteUrl = getPublicSiteUrl();
 
   return {
     success:  true,

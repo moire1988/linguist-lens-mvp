@@ -2,8 +2,9 @@ import type { MetadataRoute } from "next";
 import { getAllPublicAnalysisIds } from "@/lib/db/analyses";
 import { getAllPublishedArticleSlugs } from "@/lib/db/articles";
 import { EXAMPLES } from "@/lib/examples-data";
+import { getPublicSiteUrl } from "@/lib/site-url";
 
-const SITE_URL = "https://linguist-lens-mvp.vercel.app";
+const SITE_URL = getPublicSiteUrl();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (
