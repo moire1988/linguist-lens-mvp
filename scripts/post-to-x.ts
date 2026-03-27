@@ -4,7 +4,7 @@
  * 環境変数（.env.local 推奨）:
  * - GEMINI_API_KEY（親ツイートの生成に必須）
  * - TWITTER_API_KEY / TWITTER_API_SECRET / TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_SECRET
- * 任意: GEMINI_POST_MODEL（未設定時は gemini-1.5-flash）
+ * 使用モデル: gemini-1.5-flash に固定（429 回避のため環境変数では切り替えない）
  *
  * 実行: npm run post-to-x
  */
@@ -58,17 +58,11 @@ function pickRandom<T>(arr: readonly T[]): T {
 
 const SITE_URL = "https://linguistlens.app";
 
-/** 既定モデル（429 回避のため 2.0 系は使わない。.env.local で上書き可） */
-const DEFAULT_GEMINI_POST_MODEL = "gemini-1.5-flash";
+/** Gemini 呼び出しに使うモデル（Actions/ローカル共通で固定） */
+const GEMINI_MODEL = "gemini-1.5-flash";
 
 /** 親ツイート: 解説中心のため X 標準上限に合わせる */
 const PARENT_TWEET_MAX = 280;
-
-function resolveGeminiPostModel(): string {
-  const raw = process.env.GEMINI_POST_MODEL?.trim();
-  if (raw && raw.length > 0) return raw;
-  return DEFAULT_GEMINI_POST_MODEL;
-}
 
 function requireEnv(name: string): string {
   const v = process.env[name]?.trim();
@@ -101,10 +95,9 @@ async function generateParentTweetGemini(
   meaning: string
 ): Promise<string> {
   const apiKey = requireEnv("GEMINI_API_KEY");
-  const modelName = resolveGeminiPostModel();
-  console.log(`[post-to-x] Gemini model: ${modelName}`);
+  console.log(`[post-to-x] Gemini model: ${GEMINI_MODEL}`);
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: modelName });
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
   const prompt = buildParentPrompt(phrase, meaning);
   const result = await model.generateContent(prompt);
   const text = result.response.text().trim();
