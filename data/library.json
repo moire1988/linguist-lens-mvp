@@ -1,50 +1,62 @@
 [
   {
     "phrase": "Can I have...?",
-    "meaning": "〜をいただけますか？（丁寧な依頼・注文）"
+    "meaning": "〜をいただけますか？（丁寧な依頼・注文）",
+    "cefr": "B1"
   },
   {
     "phrase": "I'd like to...",
-    "meaning": "〜したいのですが（丁寧な希望・意志）"
+    "meaning": "〜したいのですが（丁寧な希望・意志）",
+    "cefr": "B1"
   },
   {
     "phrase": "Never mind",
-    "meaning": "気にしないで・もういいです・大丈夫です"
+    "meaning": "気にしないで・もういいです・大丈夫です",
+    "cefr": "B1"
   },
   {
     "phrase": "No problem / No worries",
-    "meaning": "どういたしまして・大丈夫ですよ"
+    "meaning": "どういたしまして・大丈夫ですよ",
+    "cefr": "B1"
   },
   {
     "phrase": "What do you mean?",
-    "meaning": "どういう意味ですか？"
+    "meaning": "どういう意味ですか？",
+    "cefr": "B1"
   },
   {
     "phrase": "Take your time",
-    "meaning": "ゆっくりどうぞ・急がなくていいですよ"
+    "meaning": "ゆっくりどうぞ・急がなくていいですよ",
+    "cefr": "B1"
   },
   {
     "phrase": "Let me know",
-    "meaning": "（後で）教えてください・知らせてください"
+    "meaning": "（後で）教えてください・知らせてください",
+    "cefr": "B1"
   },
   {
     "phrase": "Hang out",
-    "meaning": "（友達と）過ごす・遊ぶ・つるむ"
+    "meaning": "（友達と）過ごす・遊ぶ・つるむ",
+    "cefr": "B2"
   },
   {
     "phrase": "Figure out",
-    "meaning": "理解する・解決する・答えを見つけ出す"
+    "meaning": "理解する・解決する・答えを見つけ出す",
+    "cefr": "B2"
   },
   {
     "phrase": "Find out",
-    "meaning": "（調べて・聞いて）わかる・知る"
+    "meaning": "（調べて・聞いて）わかる・知る",
+    "cefr": "B2"
   },
   {
     "phrase": "Catch up",
-    "meaning": "近況を話し合う・（遅れを）取り戻す"
+    "meaning": "近況を話し合う・（遅れを）取り戻す",
+    "cefr": "B2"
   },
   {
     "phrase": "Run out of",
-    "meaning": "〜がなくなる・切らす"
+    "meaning": "〜がなくなる・切らす",
+    "cefr": "B2"
   }
 ]

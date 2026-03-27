@@ -22,6 +22,51 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 interface LibraryItem {
   phrase: string;
   meaning: string;
+  /** data/library.json の cefr / level / difficulty のいずれか（読み込み時に正規化） */
+  level?: string;
+}
+
+function getLevelFromRow(row: Record<string, unknown>): string | undefined {
+  for (const key of ["cefr", "level", "difficulty"] as const) {
+    const v = row[key];
+    if (typeof v === "string" && v.trim() !== "") {
+      return v.trim();
+    }
+  }
+  return undefined;
+}
+
+/** B1・B2・C1、または中級・上級ラベル（初級は除外） */
+function isIntermediateAdvancedCefrOrLabel(raw: string): boolean {
+  const s = raw.trim();
+  if (/初級/.test(s)) {
+    return false;
+  }
+  if (/中級|上級/.test(s)) {
+    return true;
+  }
+  const upper = s.toUpperCase();
+  return /\b(B1|B2|C1)\b/.test(upper);
+}
+
+/**
+ * いずれかの行に cefr / level / difficulty がある場合は、
+ * B1–C1（または中級・上級）の行だけを対象にする。メタデータが一行も無い場合は従来どおり全件。
+ */
+function filterLibraryForTargetAudience(items: LibraryItem[]): LibraryItem[] {
+  const anyHasLevel = items.some((i) => i.level !== undefined);
+  if (!anyHasLevel) {
+    return items;
+  }
+  const eligible = items.filter(
+    (i) => i.level !== undefined && isIntermediateAdvancedCefrOrLabel(i.level)
+  );
+  if (eligible.length === 0) {
+    throw new Error(
+      "data/library.json に CEFR B1–C1（または中級・上級）の表現がありません。cefr / level / difficulty を確認してください。"
+    );
+  }
+  return eligible;
 }
 
 function loadLibrary(): LibraryItem[] {
@@ -41,16 +86,22 @@ function loadLibrary(): LibraryItem[] {
       typeof (row as { phrase: unknown }).phrase === "string" &&
       typeof (row as { meaning: unknown }).meaning === "string"
     ) {
-      items.push({
-        phrase: (row as LibraryItem).phrase.trim(),
-        meaning: (row as LibraryItem).meaning.trim(),
-      });
+      const rec = row as Record<string, unknown>;
+      const level = getLevelFromRow(rec);
+      const entry: LibraryItem = {
+        phrase: (rec.phrase as string).trim(),
+        meaning: (rec.meaning as string).trim(),
+      };
+      if (level !== undefined) {
+        entry.level = level;
+      }
+      items.push(entry);
     }
   }
   if (items.length === 0) {
     throw new Error("data/library.json に有効な表現がありません");
   }
-  return items;
+  return filterLibraryForTargetAudience(items);
 }
 
 function pickRandom<T>(arr: readonly T[]): T {
@@ -90,16 +141,20 @@ async function generateParentTweetGroq(
   const apiKey = requireEnv("GEMINI_API_KEY");
   console.log(`[post-to-x] Groq model: ${GROQ_MODEL}`);
 
-  const userContent = `以下の英語フレーズの解説をX（Twitter）用に作成してください。
+  const systemContent =
+    "あなたはプロの英語講師です。ターゲットはTOEIC700点以上・CEFR B1以上の英語中級者です。基礎的な直訳ではなく、ネイティブならではのニュアンス、語源、またはビジネスや日常会話でのこなれた使い方など、中級者が「へぇ！」と唸るような知的な解説を日本語で作成してください。140文字以内厳守。絵文字を効果的に使用。";
 
+  const userContent = `以下の英語フレーズの解説をX（Twitter）用に作成してください。
 フレーズ: ${phrase}
 意味: ${meaning}
 
 【構成案】
-1行目: フレーズと意味
-2行目: ニュアンスや使い方の短い解説
-3行目: 例文: 英文 (和訳)
-最後: #LinguistLens #英語学習`;
+1. フレーズと意味（絵文字つき）
+2. 中級者向けの深い解説（ニュアンスの違い、こなれた使い方など）
+3. 実践的な例文: 英文 (和訳)
+4. ハッシュタグ: #LinguistLens #英語学習
+
+※140文字を超えないように厳守してください。`;
 
   const res = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
     method: "POST",
@@ -112,8 +167,7 @@ async function generateParentTweetGroq(
       messages: [
         {
           role: "system",
-          content:
-            "あなたはプロの英語講師でありSNSマーケターです。親しみやすく知的な解説を日本語で作成してください。140文字以内厳守。絵文字を効果的に使用してください。",
+          content: systemContent,
         },
         { role: "user", content: userContent },
       ],
@@ -201,7 +255,8 @@ export async function postThreadToX(
 async function main(): Promise<void> {
   const library = loadLibrary();
   const item = pickRandom(library);
-  console.log(`Picked: ${item.phrase} / ${item.meaning}`);
+  const levelNote = item.level !== undefined ? ` [${item.level}]` : "";
+  console.log(`Picked:${levelNote} ${item.phrase} / ${item.meaning}`);
 
   const parentBody = await generateParentTweetGroq(item.phrase, item.meaning);
   console.log("--- Parent (Groq) ---\n", parentBody, "\n---");
