@@ -1,21 +1,23 @@
 /**
- * X（Twitter）自動投稿: library.json から1件選び、親ツイート（Gemini）＋リプライ（誘導文）の2段で投稿する。
+ * X（Twitter）自動投稿: library.json から1件選び、親ツイート（Groq / Llama）＋リプライ（誘導文）の2段で投稿する。
  *
  * 環境変数（.env.local 推奨）:
- * - GEMINI_API_KEY（親ツイートの生成に必須）
+ * - GEMINI_API_KEY … Groq API キー（GitHub Secrets 名を据え置くためこの名前のまま）
  * - TWITTER_API_KEY / TWITTER_API_SECRET / TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_SECRET
- * 使用モデル: gemini-2.5-flash-liteに固定（429 回避のため環境変数では切り替えない）
  *
  * 実行: npm run post-to-x
  */
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { config } from "dotenv";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { TwitterApi } from "twitter-api-v2";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 config({ path: resolve(process.cwd(), ".env") });
+
+const GROQ_CHAT_COMPLETIONS_URL =
+  "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 interface LibraryItem {
   phrase: string;
@@ -58,11 +60,8 @@ function pickRandom<T>(arr: readonly T[]): T {
 
 const SITE_URL = "https://linguistlens.app";
 
-/** Gemini 呼び出しに使うモデル（Actions/ローカル共通で固定） */
-const GEMINI_MODEL = "gemini-2.5-flash-lite";
-
-/** 親ツイート: 解説中心のため X 標準上限に合わせる */
-const PARENT_TWEET_MAX = 280;
+/** 親ツイート本文の上限（Groq 指示・substring 保険・投稿前トリムで揃える） */
+const PARENT_TWEET_MAX = 140;
 
 function requireEnv(name: string): string {
   const v = process.env[name]?.trim();
@@ -72,48 +71,81 @@ function requireEnv(name: string): string {
   return v;
 }
 
-function buildParentPrompt(phrase: string, meaning: string): string {
-  return `次の英語表現について、X（旧Twitter）の「親ツイート」用本文を1つだけ書いてください。
-
-【題材】
-・表現: ${phrase}
-・意味（参考）: ${meaning}
-
-【内容】
-・純粋に「英語表現の解説」と「例文」に特化する（英語学習者が「へぇ〜」と思うニュアンス・使いどころ）。
-・日本語を主にし、自然な英語の例文を1つ含める。
-・URL・リンク・ハッシュタグは含めない。
-・前置きや「以下は投稿です」などのメタ文は書かない。
-・出力は投稿本文のみ。
-
-【長さ】
-・全体で${PARENT_TWEET_MAX}文字以内（改行・スペース含む）。`;
+function extractGroqAssistantText(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
+  const choices = (data as { choices?: unknown }).choices;
+  if (!Array.isArray(choices) || choices.length === 0) return "";
+  const first = choices[0];
+  if (!first || typeof first !== "object") return "";
+  const message = (first as { message?: unknown }).message;
+  if (!message || typeof message !== "object") return "";
+  const content = (message as { content?: unknown }).content;
+  return typeof content === "string" ? content : "";
 }
 
-async function generateParentTweetGemini(
+async function generateParentTweetGroq(
   phrase: string,
   meaning: string
 ): Promise<string> {
   const apiKey = requireEnv("GEMINI_API_KEY");
-  console.log(`[post-to-x] Gemini model: ${GEMINI_MODEL}`);
+  console.log(`[post-to-x] Groq model: ${GROQ_MODEL}`);
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
-  const prompt = buildParentPrompt(phrase, meaning);
+  const userContent = `以下の英語フレーズの解説をX（Twitter）用に作成してください。
 
-  try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text().trim();
-    if (!text) {
-      throw new Error("Gemini から空の応答が返りました");
-    }
-    return text;
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error(`[post-to-x] Gemini error: ${msg}`);
-    throw error;
+フレーズ: ${phrase}
+意味: ${meaning}
+
+【構成案】
+1行目: フレーズと意味
+2行目: ニュアンスや使い方の短い解説
+3行目: 例文: 英文 (和訳)
+最後: #LinguistLens #英語学習`;
+
+  const res = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "あなたはプロの英語講師でありSNSマーケターです。親しみやすく知的な解説を日本語で作成してください。140文字以内厳守。絵文字を効果的に使用してください。",
+        },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0.7,
+      max_tokens: 300,
+    }),
+  });
+
+  const rawBody = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Groq API error ${res.status} ${res.statusText}: ${rawBody || "(empty body)"}`
+    );
   }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody) as unknown;
+  } catch {
+    throw new Error(
+      `Groq API の応答が JSON として解釈できません: ${rawBody.slice(0, 500)}`
+    );
+  }
+
+  let text = extractGroqAssistantText(parsed).trim();
+  if (!text) {
+    throw new Error("Groq から空の応答が返りました");
+  }
+  if (text.length > PARENT_TWEET_MAX) {
+    text = text.substring(0, PARENT_TWEET_MAX);
+  }
+  return text;
 }
 
 function ensureMaxLength(text: string, max: number): string {
@@ -171,8 +203,8 @@ async function main(): Promise<void> {
   const item = pickRandom(library);
   console.log(`Picked: ${item.phrase} / ${item.meaning}`);
 
-  const parentBody = await generateParentTweetGemini(item.phrase, item.meaning);
-  console.log("--- Parent (Gemini) ---\n", parentBody, "\n---");
+  const parentBody = await generateParentTweetGroq(item.phrase, item.meaning);
+  console.log("--- Parent (Groq) ---\n", parentBody, "\n---");
 
   const replyBody = buildReplyText();
   console.log("--- Reply ---\n", replyBody, "\n---");
