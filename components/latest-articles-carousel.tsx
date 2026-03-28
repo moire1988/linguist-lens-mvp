@@ -58,7 +58,7 @@ export function LatestArticlesCarousel() {
   if (articles.length === 0) return null;
 
   return (
-    <section className="border-t border-slate-100 bg-slate-50 py-10">
+    <section className="py-10">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
 
         {/* Header */}

@@ -39,8 +39,7 @@ export function CommunityAnalysesCarousel({
   if (items.length === 0) return null;
 
   return (
-    <section className="border-t border-slate-100 bg-slate-50 py-10">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between mb-5">
           <div>
             <p className="text-[10px] font-mono font-bold text-indigo-600 uppercase tracking-widest mb-0.5">
@@ -184,7 +183,6 @@ export function CommunityAnalysesCarousel({
             );
           })}
         </div>
-      </div>
-    </section>
+    </div>
   );
 }

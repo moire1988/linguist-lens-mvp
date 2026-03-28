@@ -32,8 +32,7 @@ export function RecommendedCarousel() {
   const items = RECOMMENDED_VIDEOS;
 
   return (
-    <section className="border-t border-slate-100 bg-slate-50 py-10">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
@@ -197,7 +196,6 @@ export function RecommendedCarousel() {
             );
           })}
         </div>
-      </div>
-    </section>
+    </div>
   );
 }

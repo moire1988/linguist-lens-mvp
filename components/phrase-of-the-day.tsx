@@ -148,13 +148,13 @@ export function PhraseOfTheDay() {
   };
 
   return (
-    <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-violet-50/40 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-1.5 px-5 pt-4 pb-2 text-indigo-600">
-        <CalendarDays className="w-4 h-4 shrink-0" aria-hidden />
+    <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md ring-1 ring-slate-100/80">
+      <div className="flex items-center gap-1.5 border-b border-slate-100 bg-indigo-50/80 px-5 py-3 text-indigo-700">
+        <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
         <span className="text-xs font-bold tracking-wide">今日のフレーズ</span>
       </div>
 
-      <div className="px-5 pb-2">
+      <div className="bg-white px-5 pb-2 pt-3">
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span
             className={cn(
@@ -204,7 +204,7 @@ export function PhraseOfTheDay() {
           </p>
         </div>
 
-        <div className="bg-white/70 border border-slate-100 rounded-xl p-3 mb-4">
+        <div className="mb-4 rounded-xl border border-slate-200/80 bg-slate-50/90 p-3">
           <div className="flex items-center justify-between gap-2 mb-1">
             <p className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">
               例文
@@ -263,7 +263,7 @@ export function PhraseOfTheDay() {
         </button>
       </div>
 
-      <div className="border-t border-indigo-100/60 px-5 py-3 bg-white/30">
+      <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[10px] text-slate-400">
             明日は新しいフレーズをお届けします

@@ -90,35 +90,54 @@ const CEFR_LEVELS = [
 /** 送信ボタン内プログレス：約60秒で99%まで（完了時はリセット） */
 const SUBMIT_PROGRESS_MS = 60_000;
 
-/** トップ：文法特集（無料）へのミニマル導線 */
+/** トップ：文法特集（無料）への特集バナー風導線 */
 function GrammarFeatureBanner() {
   return (
     <div className="mt-4 mb-2 max-w-2xl mx-auto px-0">
       <Link
         href="/library/grammar"
         className={cn(
-          "group flex items-center gap-4 rounded-2xl border border-slate-200/90 bg-white/60 backdrop-blur-sm",
-          "px-4 py-3.5 sm:px-5 sm:py-4 hover:border-violet-200/90 hover:shadow-sm transition-all",
-          "border-l-[3px] border-l-violet-500/60"
+          "group relative flex items-center gap-4 overflow-hidden rounded-2xl px-4 py-4 sm:px-6 sm:py-5",
+          "border border-indigo-200/60 bg-gradient-to-br from-indigo-50/95 via-white to-violet-100/90",
+          "shadow-md shadow-indigo-500/[0.07]",
+          "transition-all duration-300 ease-out",
+          "hover:-translate-y-0.5 hover:border-violet-300/70 hover:shadow-xl hover:shadow-violet-500/15"
         )}
       >
-        <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl border border-slate-200/80 bg-slate-50/80 text-violet-600 group-hover:border-violet-200 group-hover:bg-violet-50/50 transition-colors">
-          <GraduationCap className="w-5 h-5" aria-hidden />
+        <div
+          className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-gradient-to-br from-violet-400/20 to-indigo-400/10 blur-2xl transition-opacity duration-300 group-hover:opacity-90"
+          aria-hidden
+        />
+        <div
+          className={cn(
+            "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
+            "bg-gradient-to-br from-violet-500 to-indigo-600 text-white",
+            "shadow-lg shadow-violet-500/35 ring-2 ring-white/60",
+            "transition-transform duration-300 group-hover:scale-105 group-hover:shadow-violet-500/45"
+          )}
+        >
+          <GraduationCap className="h-6 w-6" aria-hidden strokeWidth={2.25} />
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">
-              文法コアイメージ特集
-            </p>
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full border border-emerald-200/80 bg-emerald-50/80 text-emerald-700">
+        <div className="relative min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-white/80 px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-indigo-700 shadow-sm ring-1 ring-indigo-100/80 backdrop-blur-sm">
+              特集
+            </span>
+            <span className="text-sm font-bold tracking-tight text-slate-800 sm:text-base">
+              文法コアイメージ
+            </span>
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200/80">
               無料
             </span>
           </div>
-          <p className="text-xs text-slate-500 leading-snug">
-            「ing と to」「前置詞」など、コアイメージで徹底解説
+          <p className="text-xs leading-relaxed text-slate-600 sm:text-[13px]">
+            「ing と to」「前置詞」など、感覚でつかむ解説とミニクイズ
           </p>
         </div>
-        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-violet-500 transition-colors shrink-0" aria-hidden />
+        <ChevronRight
+          className="relative h-5 w-5 shrink-0 text-slate-400 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-violet-600"
+          aria-hidden
+        />
       </Link>
     </div>
   );
@@ -789,7 +808,14 @@ export default function HomePage() {
             (analysisBusy || error) && "mb-10"
           )}
         >
-          <div className="bg-white rounded-2xl border border-purple-200/50 shadow-sm p-6 sm:p-7">
+          <div
+            className={cn(
+              "relative rounded-2xl bg-white p-6 sm:p-7",
+              "border border-slate-200/90 ring-2 ring-indigo-100/90 ring-offset-2 ring-offset-transparent",
+              "shadow-xl shadow-indigo-500/[0.12]",
+              "before:pointer-events-none before:absolute before:inset-x-4 before:-top-px before:h-px before:rounded-full before:bg-gradient-to-r before:from-transparent before:via-violet-200/80 before:to-transparent"
+            )}
+          >
             {/* Mode toggle */}
             <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-5">
               <button
@@ -979,14 +1005,14 @@ export default function HomePage() {
                 analysisBusy && "cursor-wait bg-transparent p-0 shadow-none ring-0",
                 !analysisBusy &&
                   canSubmit &&
-                  "bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white shadow-sm hover:shadow-[0_4px_20px_rgba(99,102,241,0.4)] active:scale-[0.99]",
+                  "bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-violet-400/30 hover:shadow-xl hover:shadow-indigo-500/40 hover:ring-violet-300/50 active:scale-[0.99]",
                 !analysisBusy &&
                   !canSubmit &&
                   "bg-slate-100 text-slate-400 cursor-not-allowed"
               )}
             >
               {analysisBusy ? (
-                <span className="flex w-full items-center gap-2.5 py-3.5 px-4 sm:px-5 text-white bg-gradient-to-r from-violet-500 to-indigo-600 rounded-xl">
+                <span className="flex w-full items-center gap-2.5 py-3.5 px-4 sm:px-5 text-white bg-gradient-to-r from-violet-500 to-indigo-600 rounded-xl shadow-lg shadow-indigo-500/25">
                   <Loader2
                     className="h-4 w-4 shrink-0 animate-spin text-white/95"
                     aria-hidden
@@ -1251,12 +1277,21 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* ── Recommended Carousel（コンテンツなし時のみ） ── */}
-      {!hasContent && <RecommendedCarousel />}
-
-      {/* ── みんなの最新の解析（Examples 同様の横スクロールカルーセル） ── */}
-      {!hasContent && recentPublicAnalyses.length > 0 && (
-        <CommunityAnalysesCarousel items={recentPublicAnalyses} />
+      {/* ── Examples + Community（1本のグラデーション帯・地続き） ── */}
+      {!hasContent && (
+        <div
+          className={cn(
+            "border-t border-violet-200/60",
+            "bg-gradient-to-b from-violet-50 from-[6%] via-fuchsia-50/32 via-[48%] to-indigo-50/82 to-[94%]",
+            "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)]",
+            "pt-10 pb-10 space-y-12"
+          )}
+        >
+          <RecommendedCarousel />
+          {recentPublicAnalyses.length > 0 && (
+            <CommunityAnalysesCarousel items={recentPublicAnalyses} />
+          )}
+        </div>
       )}
 
       {/* ── Latest Articles Carousel（コンテンツなし時のみ） ── */}
