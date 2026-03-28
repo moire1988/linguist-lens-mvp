@@ -6,7 +6,7 @@ export interface PhraseSavedPayload {
   expression: string;
   type: string; // phrasal_verb | idiom | collocation | grammar_pattern
   cefr_level: string; // A1〜C2
-  source: "analysis" | "library"; // 解析結果カードか、ライブラリページか
+  source: "analysis" | "library" | "daily_phrase"; // 解析 / ライブラリ / 今日のフレーズ
 }
 
 /** アコーディオン開封イベントのペイロード */
