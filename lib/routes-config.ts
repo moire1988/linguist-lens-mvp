@@ -100,6 +100,16 @@ export const APP_ROUTES: AppRouteConfig[] = [
     ],
   },
   {
+    title: "文法コアイメージ特集",
+    href: "/library/grammar",
+    requiredRole: "public",
+    category: "プロダクト",
+    permissionDetails: [
+      "Guest ✅ ｜ Free ✅ ｜ Premium ✅",
+      "`app/library/grammar` および `/library/grammar/[slug]` は静的コンテンツ。`middleware.ts` で `/library/(.*)` 公開。Premium ゲートなし。",
+    ],
+  },
+  {
     title: "マイページ",
     href: "/mypage",
     requiredRole: "free",

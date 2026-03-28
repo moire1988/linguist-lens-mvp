@@ -10,7 +10,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useWindowVirtualizer, measureElement } from "@tanstack/react-virtual";
-import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronUp,
@@ -23,8 +22,8 @@ import {
   Shuffle,
   Search,
   Volume2,
-  Crown,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, useUser } from "@clerk/nextjs";
@@ -47,7 +46,6 @@ import {
   LIBRARY_PREMIUM_TEST_OVERRIDE,
 } from "@/lib/library-premium";
 import { useEffectiveAuth } from "@/lib/dev-auth";
-import { WaitlistCta } from "@/components/waitlist-cta";
 import { trackPhraseSaved, trackAccordionOpened } from "@/lib/analytics";
 
 import type { LibraryEntry } from "@/lib/library";
@@ -166,11 +164,13 @@ function ExpressionCard({
   entry,
   isSavedInitially,
   isSignedIn,
+  isPremium,
   onSaved,
 }: {
   entry: LibraryEntry;
   isSavedInitially: boolean;
   isSignedIn: boolean;
+  isPremium: boolean;
   onSaved: (expressionLower: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -187,6 +187,19 @@ function ExpressionCard({
   }, [isSavedInitially]);
 
   const handleSave = () => {
+    if (!isPremium) {
+      toast.info("マイページへの保存はプレミアム会員限定です", {
+        description: "アップグレードですべての表現を保存し、深い解説も読み放題になります",
+        action: {
+          label: "アップグレード",
+          onClick: () => {
+            window.location.href = "/upgrade";
+          },
+        },
+        duration: 5000,
+      });
+      return;
+    }
     if (saved || saving) return;
     if (isSignedIn) {
       setSaving(true);
@@ -347,6 +360,19 @@ function ExpressionCard({
       <button
         type="button"
         onClick={() => {
+          if (!isPremium) {
+            toast.info("詳細ニュアンスはプレミアム会員限定です", {
+              description: "アップグレードで全表現の深い解説が読み放題になります",
+              action: {
+                label: "アップグレード",
+                onClick: () => {
+                  window.location.href = "/upgrade";
+                },
+              },
+              duration: 5000,
+            });
+            return;
+          }
           setOpen((v) => {
             const opening = !v;
             if (opening) {
@@ -361,15 +387,34 @@ function ExpressionCard({
         }}
         className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/40 transition-colors rounded-b-none"
       >
-        <span>{open ? "閉じる" : "詳しいニュアンスを見る"}</span>
+        <span className="flex items-center gap-1.5 min-w-0">
+          {!isPremium ? (
+            <Lock
+              className="w-3 h-3 text-violet-400/90 shrink-0"
+              aria-hidden
+            />
+          ) : null}
+          {open ? "閉じる" : "詳しいニュアンスを見る"}
+        </span>
         {open ? (
-          <ChevronUp className="w-4 h-4" />
+          <ChevronUp className="w-4 h-4 shrink-0" />
         ) : (
-          <ChevronDown className="w-4 h-4" />
+          <ChevronDown className="w-4 h-4 shrink-0" />
         )}
       </button>
 
-      {open && (
+      {!isPremium ? (
+        <div className="px-5 py-2 border-t border-dashed border-slate-200/80 bg-slate-50/30">
+          <Link
+            href="/library/grammar"
+            className="inline-flex items-center gap-1 text-[10px] font-mono font-medium text-violet-600/90 hover:text-violet-500 transition-colors"
+          >
+            文法特集で無料学習 →
+          </Link>
+        </div>
+      ) : null}
+
+      {open && isPremium ? (
         <div className="px-5 py-4 border-t border-slate-100 space-y-3 text-sm bg-white rounded-b-2xl">
           <div>
             <p className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest mb-1">
@@ -390,7 +435,7 @@ function ExpressionCard({
             <p className="text-slate-600 leading-relaxed">{entry.why_hard_for_japanese}</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* ── Save Button ── */}
       <div className="px-5 py-4 border-t border-slate-100">
@@ -401,7 +446,9 @@ function ExpressionCard({
             "w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-medium transition-all",
             saved
               ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
-              : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm"
+              : !isPremium
+                ? "bg-white border border-dashed border-slate-200 text-slate-500 hover:border-violet-200 hover:text-violet-700 hover:bg-violet-50/30"
+                : "bg-white border border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm"
           )}
         >
           {saving ? (
@@ -416,7 +463,11 @@ function ExpressionCard({
             </>
           ) : (
             <>
-              <BookmarkPlus className="h-3.5 w-3.5" />
+              {!isPremium ? (
+                <Lock className="h-3.5 w-3.5 text-violet-400/80" aria-hidden />
+              ) : (
+                <BookmarkPlus className="h-3.5 w-3.5" />
+              )}
               マイページに保存
               {flash === "limit" && (
                 <span className="ml-auto text-[10px] text-rose-400 font-semibold">
@@ -457,12 +508,14 @@ function VirtualizedExpressionRows({
   columns,
   savedExpressions,
   isSignedIn,
+  isPremium,
   onSaved,
 }: {
   entries: LibraryEntry[];
   columns: 1 | 2;
   savedExpressions: Set<string>;
   isSignedIn: boolean;
+  isPremium: boolean;
   onSaved: (expressionLower: string) => void;
 }) {
   const listAnchorRef = useRef<HTMLDivElement>(null);
@@ -536,6 +589,7 @@ function VirtualizedExpressionRows({
                       entry.expression.toLowerCase()
                     )}
                     isSignedIn={isSignedIn}
+                    isPremium={isPremium}
                     onSaved={onSaved}
                   />
                 ))}
@@ -566,22 +620,8 @@ export default function LibraryPage() {
     (devProSimulated ||
       isLibraryPremiumAccess(LIBRARY_PREMIUM_TEST_OVERRIDE, stripeStatus));
 
-  /** プレミアム以外はライブラリ本体を Teaser（ぼかし＋オーバーレイ） */
+  /** 非プレミアム向けフリーミアム案内バナー */
   const showPremiumTeaser = ready && !isPremium;
-
-  const [overlayMounted, setOverlayMounted] = useState(false);
-  useEffect(() => {
-    setOverlayMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!showPremiumTeaser) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [showPremiumTeaser]);
 
   // ── State ──────────────────────────────────────────────────────────────────
   type CefrKey = Exclude<Level, "all">;
@@ -667,11 +707,49 @@ export default function LibraryPage() {
       <SiteHeader maxWidth="5xl" right={<GlobalNav />} />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16 relative">
-        <div
-          className={cn(
-            showPremiumTeaser && "blur-md pointer-events-none select-none"
-          )}
-        >
+        <div>
+        {showPremiumTeaser ? (
+          <div
+            className={cn(
+              "mb-6 rounded-2xl border border-violet-200/70 px-4 py-3.5 sm:px-5 sm:py-4 shadow-sm shadow-violet-900/5",
+              "bg-gradient-to-br from-violet-100/90 via-purple-50/95 to-indigo-50/90",
+              "backdrop-blur-sm",
+              "ring-1 ring-inset ring-white/60"
+            )}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-violet-600/80 mb-1">
+                  Library · Freemium
+                </p>
+                <p className="text-sm font-semibold text-slate-900">
+                  ニュアンス詳細はプレミアム会員限定
+                </p>
+                <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                  一覧・コアイメージ・例文は無料。「詳しいニュアンスを見る」とマイページ保存はプレミアムのみ。
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs shrink-0 sm:pt-0.5">
+                <Link
+                  href="/upgrade"
+                  className="font-mono font-semibold text-violet-800 hover:text-violet-700 underline underline-offset-2 transition-colors"
+                >
+                  プレミアムになる →
+                </Link>
+                <span className="text-violet-300/90 font-mono hidden sm:inline" aria-hidden>
+                  |
+                </span>
+                <Link
+                  href="/library/grammar"
+                  className="font-mono font-semibold text-slate-700 hover:text-violet-800 underline underline-offset-2 transition-colors"
+                >
+                  まずは無料の文法特集を読む →
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {/* ── Page Header ── */}
         <div className="mb-10 sm:mb-14">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-600 text-xs font-mono font-semibold tracking-wider mb-4">
@@ -810,6 +888,7 @@ export default function LibraryPage() {
               columns={gridColumns}
               savedExpressions={savedExpressions}
               isSignedIn={Boolean(isSignedIn)}
+              isPremium={isPremium}
               onSaved={handleVocabSaved}
             />
           )}
@@ -825,52 +904,6 @@ export default function LibraryPage() {
         </div>
 
       </main>
-
-      {overlayMounted &&
-        showPremiumTeaser &&
-        createPortal(
-          <>
-            <div
-              className="fixed inset-0 z-[5000] bg-slate-950/35 backdrop-blur-[2px] pointer-events-none"
-              aria-hidden
-            />
-            <div className="fixed inset-0 z-[5001] flex items-center justify-center p-4 pointer-events-none">
-              <div
-                className={cn(
-                  "pointer-events-auto w-full max-w-md rounded-2xl border border-violet-200/80",
-                  "bg-gradient-to-br from-white via-violet-50/95 to-indigo-50/90",
-                  "shadow-2xl shadow-violet-900/20 px-8 py-10 text-center"
-                )}
-                role="dialog"
-                aria-labelledby="library-premium-title"
-              >
-                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-100 to-violet-200 shadow-inner">
-                  <Crown className="h-8 w-8 text-amber-700" aria-hidden />
-                </div>
-                <h2
-                  id="library-premium-title"
-                  className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight leading-snug mb-4"
-                >
-                  厳選した生きた表現ライブラリ
-                </h2>
-                <p className="text-sm text-slate-600 leading-relaxed mb-2">
-                  この機能はプレミアム会員限定です。日常会話からビジネスまで、リアルな文脈で使える表現を無制限に閲覧・保存できます。
-                </p>
-                <p className="text-xs text-slate-500 leading-relaxed mb-6">
-                  準備中のプレミアムプランでご利用いただけます。
-                </p>
-                <WaitlistCta />
-                <Link
-                  href="/"
-                  className="mt-6 inline-block text-sm text-slate-500 hover:text-indigo-600 underline underline-offset-2 transition-colors"
-                >
-                  トップに戻る
-                </Link>
-              </div>
-            </div>
-          </>,
-          document.body
-        )}
     </div>
   );
 }

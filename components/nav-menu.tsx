@@ -15,6 +15,7 @@ import {
   Library,
   Crown,
   ChevronLeft,
+  GraduationCap,
 } from "lucide-react";
 import { MembershipStatusNav } from "@/components/membership-status-nav";
 import { DrawerOverlay } from "@/components/drawer-overlay";
@@ -49,6 +50,12 @@ const PRIMARY_LINKS: NavLinkDef[] = [
     title: "学習記事一覧",
     description: "学習のコツと文化背景",
     href: "/articles",
+  },
+  {
+    icon: GraduationCap,
+    title: "文法コアイメージ特集",
+    description: "ingとto・前置詞の感覚を理解",
+    href: "/library/grammar",
   },
   {
     icon: Library,
