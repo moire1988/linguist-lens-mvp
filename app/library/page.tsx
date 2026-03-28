@@ -723,10 +723,10 @@ export default function LibraryPage() {
                   Library · Freemium
                 </p>
                 <p className="text-sm font-semibold text-slate-900">
-                  ニュアンス詳細はプレミアム会員限定
+                  150表現を無料で検索・閲覧できます
                 </p>
                 <p className="text-xs text-slate-600 leading-relaxed mt-1">
-                  一覧・コアイメージ・例文は無料。「詳しいニュアンスを見る」とマイページ保存はプレミアムのみ。
+                  コアイメージと例文はすべて開けます。「詳しいニュアンス」とマイページへの保存だけプレミアムです。
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs shrink-0 sm:pt-0.5">

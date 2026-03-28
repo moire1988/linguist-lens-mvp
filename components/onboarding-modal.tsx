@@ -463,24 +463,20 @@ export function OnboardingModal({
                         typeof window !== "undefined" ? window.location.href : "/",
                     })
                   }
-                  className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+                  className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-indigo-400/70 bg-gradient-to-r from-violet-500 to-indigo-600 py-3 text-sm font-bold text-white shadow-md transition-all hover:from-violet-600 hover:to-indigo-700 hover:shadow-[0_8px_22px_rgba(99,102,241,0.35)]"
                 >
                   <GoogleIcon />
-                  Googleでログイン / 連携
+                  Googleでログイン（無料・30秒）
                 </button>
                 <button
                   type="button"
                   onClick={() => onStart({ level, accent })}
-                  className={cn(
-                    "w-full rounded-xl border px-4 py-3 text-sm font-semibold text-white transition-all",
-                    "border-indigo-400/70 bg-gradient-to-r from-violet-500 to-blue-500",
-                    "hover:from-violet-600 hover:to-blue-600 hover:shadow-[0_8px_22px_rgba(99,102,241,0.35)]"
-                  )}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
                 >
-                  ✨ あなただけのLinguistLensをはじめる
+                  ログインせずに試してみる
                 </button>
                 <p className="text-center text-[10px] text-slate-400">
-                  ※後から右上の設定(⚙️)でいつでも変更できます
+                  ※ログインなしでは解析履歴が端末に残りません
                 </p>
               </>
             )}

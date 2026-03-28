@@ -60,9 +60,8 @@ const PRIMARY_LINKS: NavLinkDef[] = [
   {
     icon: Library,
     title: "厳選表現ライブラリ",
-    description: "生きた表現を検索",
+    description: "150表現を無料で検索・閲覧",
     href: "/library",
-    premiumCrown: true,
   },
 ];
 

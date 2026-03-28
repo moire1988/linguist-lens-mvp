@@ -1,8 +1,10 @@
 /**
- * X（Twitter）自動投稿: data/library.json（LibraryEntry）から B1–C1 を1件選び、親ツイート（Groq）＋リプライの2段で投稿する。
+ * X（Twitter）自動投稿: data/library.json（LibraryEntry）と data/grammar-lessons.ts から
+ * 1件選び、親ツイート＋リプライの2段で投稿する（本文は Groq がフォーマット別に生成）。
  *
- * 直近の重複回避: 投稿成功後に scripts/posted_history.json にフレーズ文字列を最大5件保持する。
- * GitHub Actions ではワークフローでこのファイルをキャッシュし、実行間で引き継ぐ。
+ * 直近の重複回避: 投稿成功後に scripts/posted_history.json にキーを最大5件保持する。
+ * - ライブラリ: 表現文字列（expression）
+ * - 文法特集: "grammar:{slug}"
  *
  * 環境変数（.env.local 推奨）:
  * - GEMINI_API_KEY … Groq API キー（GitHub Secrets 名を据え置くためこの名前のまま）
@@ -23,8 +25,37 @@ const GROQ_CHAT_COMPLETIONS_URL =
   "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
-/** 直近 N 件の投稿フレーズを除外する（scripts/posted_history.json） */
+/** 直近 N 件の投稿キーを除外する（scripts/posted_history.json） */
 const POSTED_HISTORY_MAX = 5;
+
+const SITE_URL = "https://linguistlens.app";
+const GRAMMAR_PAGE_BASE = `${SITE_URL}/library/grammar`;
+const LIBRARY_PAGE = `${SITE_URL}/library`;
+
+/** 親ツイート・リプライの上限（X 280 から余白） */
+const PARENT_TWEET_MAX = 270;
+const REPLY_TWEET_MAX = 270;
+
+// ─── Content source & formats ───────────────────────────────────────────────
+
+type TweetFormat = "quiz" | "ng_contrast" | "grammar_page" | "curiosity_gap";
+
+/** 文法レッスンの投稿用サマリ */
+interface GrammarLessonSummary {
+  slug: string;
+  h1: string;
+  intro: string;
+  practiceItems: {
+    prompt: string;
+    options: string[];
+    correctIndex: number;
+    explanation: string;
+  }[];
+}
+
+type ContentSource =
+  | { type: "library"; entry: LibraryEntry }
+  | { type: "grammar_lesson"; slug: string; lesson: GrammarLessonSummary };
 
 function resolvePostedHistoryPath(): string {
   return resolve(process.cwd(), "scripts/posted_history.json");
@@ -79,14 +110,36 @@ function writePostedHistory(phrases: readonly string[]): void {
 }
 
 /** 投稿成功後に呼ぶ。直近 POSTED_HISTORY_MAX 件だけ残す */
-function recordPostedPhrase(expression: string): void {
-  const trimmed = expression.trim();
+function recordPostedPhrase(historyKey: string): void {
+  const trimmed = historyKey.trim();
   if (trimmed === "") {
     return;
   }
   const prev = readPostedHistory();
   const next = [...prev, trimmed].slice(-POSTED_HISTORY_MAX);
   writePostedHistory(next);
+}
+
+/** 投稿記録のキー: library は expression、grammar は "grammar:{slug}" */
+function resolveHistoryKey(source: ContentSource): string {
+  return source.type === "grammar_lesson"
+    ? `grammar:${source.slug}`
+    : source.entry.expression;
+}
+
+/** コンテンツの種類に応じたリンク先を返す */
+function resolveCtaUrl(source: ContentSource): string {
+  if (source.type === "grammar_lesson") {
+    return `${GRAMMAR_PAGE_BASE}/${source.slug}`;
+  }
+  return LIBRARY_PAGE;
+}
+
+function fallbackReplyText(ctaUrl: string): string {
+  const line = `コアイメージで解説中 → ${ctaUrl}`;
+  return line.length <= REPLY_TWEET_MAX
+    ? line
+    : line.slice(0, REPLY_TWEET_MAX - 1) + "…";
 }
 
 /** X 投稿は中級〜上級帯（アプリのターゲット層に合わせる） */
@@ -133,30 +186,90 @@ function loadLibrary(): LibraryEntry[] {
   return items;
 }
 
+/** data/grammar-lessons から投稿用サマリを抽出（失敗時は空配列） */
+async function loadGrammarLessonSummaries(): Promise<GrammarLessonSummary[]> {
+  try {
+    const { GRAMMAR_LESSONS } = await import("../data/grammar-lessons");
+    return GRAMMAR_LESSONS.map((l) => ({
+      slug: l.slug,
+      h1: l.h1,
+      intro: l.intro,
+      practiceItems: l.practiceItems.map((p) => ({
+        prompt: p.prompt,
+        options: p.options,
+        correctIndex: p.correctIndex,
+        explanation: p.explanation,
+      })),
+    }));
+  } catch (e) {
+    console.warn(
+      "[post-to-x] grammar-lessons の読み込み失敗。library のみ使用",
+      e
+    );
+    return [];
+  }
+}
+
 function pickRandom<T>(arr: readonly T[]): T {
   const i = Math.floor(Math.random() * arr.length);
   return arr[i] as T;
 }
 
-function pickLibraryItemAvoidingRecent(
-  library: readonly LibraryEntry[]
-): LibraryEntry {
-  const history = readPostedHistory();
-  const historySet = new Set(history);
-  const candidates = library.filter((i) => !historySet.has(i.expression));
-  const pool = candidates.length > 0 ? candidates : library;
-  if (candidates.length === 0) {
+/**
+ * コンテンツソースを選択（library 80% / grammar_lesson 20% の比率目安）
+ * grammar は posted_history に grammar:slug で記録
+ */
+function pickContentSource(
+  library: LibraryEntry[],
+  grammarLessons: GrammarLessonSummary[],
+  history: Set<string>
+): ContentSource {
+  const useGrammar =
+    grammarLessons.length > 0 && Math.random() < 0.2;
+
+  if (useGrammar) {
+    const available = grammarLessons.filter(
+      (l) => !history.has(`grammar:${l.slug}`)
+    );
+    const pool = available.length > 0 ? available : grammarLessons;
+    const lesson = pickRandom(pool);
+    return { type: "grammar_lesson", slug: lesson.slug, lesson };
+  }
+
+  const available = library.filter((i) => !history.has(i.expression));
+  const pool = available.length > 0 ? available : library;
+  if (available.length === 0) {
     console.warn(
-      "[post-to-x] 履歴と重複しない候補がありません。全件から選びます。"
+      "[post-to-x] 履歴と重複しないライブラリ候補がありません。全件から選びます。"
     );
   }
-  return pickRandom(pool);
+  return { type: "library", entry: pickRandom(pool) };
 }
 
-const SITE_URL = "https://linguistlens.app";
+/** 重み付きランダムでフォーマットを選択 */
+function pickTweetFormat(source: ContentSource): TweetFormat {
+  if (source.type === "grammar_lesson") return "grammar_page";
 
-/** 親ツイート本文の上限（Groq 指示・substring 保険・投稿前トリムで揃える） */
-const PARENT_TWEET_MAX = 140;
+  const weights: [TweetFormat, number][] = [
+    ["quiz", 35],
+    ["ng_contrast", 30],
+    ["curiosity_gap", 20],
+  ];
+
+  const entry = source.entry;
+  const filtered =
+    entry.badExample || entry.warnExample
+      ? weights
+      : weights.filter(([f]) => f !== "ng_contrast");
+
+  const total = filtered.reduce((s, [, w]) => s + w, 0);
+  let r = Math.random() * total;
+  for (const [format, w] of filtered) {
+    r -= w;
+    if (r <= 0) return format;
+  }
+  return "curiosity_gap";
+}
 
 function requireEnv(name: string): string {
   const v = process.env[name]?.trim();
@@ -178,37 +291,132 @@ function extractGroqAssistantText(data: unknown): string {
   return typeof content === "string" ? content : "";
 }
 
-async function generateParentTweetGroq(entry: LibraryEntry): Promise<string> {
+// ─── Prompt builders ────────────────────────────────────────────────────────
+
+function buildQuizPrompt(entry: LibraryEntry, ctaUrl: string): string {
+  const wrong =
+    entry.badExample ?? entry.warnExample ?? "(不自然な例をモデルが簡潔に作る)";
+  return `次の英語フレーズ「${entry.expression}」（意味: ${entry.meaning_ja}）を使ったX（Twitter）投稿を作成してください。
+
+【フォーマット: クイズ型】
+親ツイート（${PARENT_TWEET_MAX}文字以内）は以下の構成で：
+1. 冒頭に「【英語クイズ】どちらが自然？」と書く
+2. A. ${wrong}
+3. B. ${entry.goodExample}
+4. 「正解は↓リプライで」で締める
+5. 末尾に #英語 #LinguistLens
+
+リプライ（${REPLY_TWEET_MAX}文字以内）は以下の構成で：
+1. 「正解: B ✅」
+2. なぜAが不自然か1〜2文（why_hard_for_japanese の要点: ${entry.why_hard_for_japanese}）
+3. CTA: 「コアイメージで150表現を解説中 → ${ctaUrl}」
+
+親ツイートとリプライを "---REPLY---" という文字列（このまま）で区切って1回の応答で出力してください。`;
+}
+
+function buildNgContrastPrompt(entry: LibraryEntry, ctaUrl: string): string {
+  const wrong =
+    entry.badExample ?? entry.warnExample ?? "(不自然な例をモデルが簡潔に作る)";
+  return `次の英語フレーズ「${entry.expression}」（意味: ${entry.meaning_ja}）を使ったX投稿を作成してください。
+
+【フォーマット: NG対比型】
+親ツイート（${PARENT_TWEET_MAX}文字以内）:
+1. 冒頭「日本人が使いがちな英語 ⚠️」または「日本人が間違えやすい英語」
+2. × "${wrong}"
+3. ○ "${entry.goodExample}"
+4. コアイメージ1文（素材: ${entry.coreImage}）
+5. #英語学習 #LinguistLens
+
+リプライ（${REPLY_TWEET_MAX}文字以内）:
+1. nuance を1〜2文（素材: ${entry.nuance}）
+2. context（使用シーン: ${entry.context}）
+3. CTA: 「なぜそうなるのかコアイメージで解説 → ${ctaUrl}」
+
+親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
+}
+
+function buildCuriosityGapPrompt(entry: LibraryEntry, ctaUrl: string): string {
+  return `次の英語フレーズ「${entry.expression}」（意味: ${entry.meaning_ja}）を使ったX投稿を作成してください。
+
+【フォーマット: 好奇心ギャップ型】
+親ツイート（${PARENT_TWEET_MAX}文字以内）:
+1. 「「${entry.meaning_ja}」を英語で言うと？」または「ネイティブはなぜ〜と言うのか」から始める
+2. 答え（フレーズ）を提示
+3. コアイメージを2〜3文で展開（素材: ${entry.coreImage} / ${entry.nuance}）
+4. #英語 #TOEIC #LinguistLens
+
+リプライ（${REPLY_TWEET_MAX}文字以内）:
+1. 例文: "${entry.goodExample}"（和訳: ${entry.goodExampleJa}）
+2. why_hard_for_japanese の要点1文: ${entry.why_hard_for_japanese}
+3. CTA: 「同じシーンの関連表現はこちら → ${ctaUrl}」
+
+親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
+}
+
+function buildGrammarLessonPrompt(
+  lesson: GrammarLessonSummary,
+  ctaUrl: string
+): string {
+  const quiz = lesson.practiceItems[0];
+  const introSnippet =
+    lesson.intro.length > 200
+      ? `${lesson.intro.slice(0, 200)}…`
+      : lesson.intro;
+  const optionLines =
+    quiz?.options.map((o, i) => `${["A", "B", "C", "D"][i] ?? "?"}. ${o}`) ??
+    [];
+  return `文法特集ページ「${lesson.h1}」の告知ツイートを作成してください。
+
+【フォーマット: 文法特集告知型】
+親ツイート（${PARENT_TWEET_MAX}文字以内）:
+1. タイトル「${lesson.h1}」を含める
+2. introの冒頭を引用・要約: ${introSnippet}
+3. 「ミニクイズつき・無料」と価値を伝える
+4. CTA: 「→ ${ctaUrl}」
+5. #英語文法 #英語 #LinguistLens
+
+リプライ（${REPLY_TWEET_MAX}文字以内）:
+1. ミニクイズ1問を抜粋:
+   "${quiz?.prompt ?? "コアイメージを問うクイズ"}"
+   ${optionLines.join(" / ")}
+2. 「全5問のクイズはこちら → ${ctaUrl}」
+
+親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
+}
+
+function buildPrompt(
+  source: ContentSource,
+  format: TweetFormat,
+  ctaUrl: string
+): string {
+  if (source.type === "grammar_lesson") {
+    return buildGrammarLessonPrompt(source.lesson, ctaUrl);
+  }
+  const entry = source.entry;
+  switch (format) {
+    case "quiz":
+      return buildQuizPrompt(entry, ctaUrl);
+    case "ng_contrast":
+      return buildNgContrastPrompt(entry, ctaUrl);
+    case "curiosity_gap":
+      return buildCuriosityGapPrompt(entry, ctaUrl);
+    default:
+      return buildCuriosityGapPrompt(entry, ctaUrl);
+  }
+}
+
+async function generateParentTweetGroq(
+  source: ContentSource,
+  format: TweetFormat
+): Promise<{ parent: string; reply: string }> {
   const apiKey = requireEnv("GEMINI_API_KEY");
+  const ctaUrl = resolveCtaUrl(source);
   console.log(`[post-to-x] Groq model: ${GROQ_MODEL}`);
 
   const systemContent =
-    "あなたは認知言語学に基づくプロの英語講師です。ターゲットは中級〜上級者（CEFR B1-C1）です。単なる日本語訳の丸暗記ではなく、「なぜその単語の組み合わせでその意味になるのか」という『ネイティブの感覚・コアイメージ』を論理的かつ直感的に解説してください。Twitter向けに見やすく改行を使い、140文字（日本語）の制限内で最大限の「ハッとする気づき」を与えてください。";
+    "あなたはCTR最大化のプロのSNSコピーライターであり、認知言語学に基づく英語教育の専門家です。X（Twitter）で英語学習者のエンゲージメントを最大化するツイートを書いてください。";
 
-  const userContent = `以下の英語フレーズの解説をX（Twitter）用に作成してください。
-
-【素材（必ず踏まえること）】
-フレーズ: ${entry.expression}
-意味: ${entry.meaning_ja}
-コアイメージ: ${entry.coreImage}
-ニュアンス: ${entry.nuance}
-使用シーン: ${entry.context}
-参考例文（英文）: ${entry.goodExample}
-
-上記のコアイメージとニュアンスを最大限活かし、ライブラリの趣旨と矛盾しないように要約・再構成してよいですが、X用の短い本文ではその「骨格」と「ハッとする点」が伝わるようにしてください。
-
-【出力構成（厳守）】
-🔹 ${entry.expression}
-意味: ${entry.meaning_ja}
-
-🧠 コアイメージ
-（※素材のコアイメージ・ニュアンスを反映し、直訳ではなく本質を簡潔に）
-
-💡 例文
-（英文のみ。和訳は不要）
-
-#LinguistLens
-※全角140文字以内に必ず収めること。`;
+  const userContent = buildPrompt(source, format, ctaUrl);
 
   const res = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
     method: "POST",
@@ -219,14 +427,11 @@ async function generateParentTweetGroq(entry: LibraryEntry): Promise<string> {
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages: [
-        {
-          role: "system",
-          content: systemContent,
-        },
+        { role: "system", content: systemContent },
         { role: "user", content: userContent },
       ],
-      temperature: 0.7,
-      max_tokens: 300,
+      temperature: 0.85,
+      max_tokens: 500,
     }),
   });
 
@@ -246,14 +451,20 @@ async function generateParentTweetGroq(entry: LibraryEntry): Promise<string> {
     );
   }
 
-  let text = extractGroqAssistantText(parsed).trim();
+  const text = extractGroqAssistantText(parsed).trim();
   if (!text) {
     throw new Error("Groq から空の応答が返りました");
   }
-  if (text.length > PARENT_TWEET_MAX) {
-    text = text.substring(0, PARENT_TWEET_MAX);
-  }
-  return text;
+
+  const parts = text.split("---REPLY---");
+  const parent = (parts[0] ?? text).trim().slice(0, PARENT_TWEET_MAX);
+  const replyPart = (parts[1] ?? "").trim();
+  const reply =
+    replyPart.length > 0
+      ? replyPart.slice(0, REPLY_TWEET_MAX)
+      : fallbackReplyText(ctaUrl);
+
+  return { parent, reply };
 }
 
 function ensureMaxLength(text: string, max: number): string {
@@ -262,11 +473,6 @@ function ensureMaxLength(text: string, max: number): string {
     `警告: 本文が${text.length}文字のため、${max}文字に切り詰めます`
   );
   return text.slice(0, max - 1) + "…";
-}
-
-/** 2枚目: 固定の誘導文（URL含む） */
-function buildReplyText(): string {
-  return `この表現が使われている動画をAIで探すなら 💡 ${SITE_URL}`;
 }
 
 function createTwitterRw() {
@@ -294,8 +500,9 @@ export async function postThreadToX(
     throw new Error("X API が親ツイートのIDを返しませんでした");
   }
 
+  const replySafe = ensureMaxLength(replyText, REPLY_TWEET_MAX);
   const replyPosted = await rwUser.v2.tweet({
-    text: replyText,
+    text: replySafe,
     reply: { in_reply_to_tweet_id: parentId },
   });
   const replyId = replyPosted.data.id;
@@ -308,21 +515,29 @@ export async function postThreadToX(
 
 async function main(): Promise<void> {
   const library = loadLibrary();
-  const item = pickLibraryItemAvoidingRecent(library);
-  console.log(`Picked: [${item.level}] ${item.expression} / ${item.meaning_ja}`);
+  const grammarLessons = await loadGrammarLessonSummaries();
+  const historyArr = readPostedHistory();
+  const historySet = new Set(historyArr);
 
-  const parentBody = await generateParentTweetGroq(item);
-  console.log("--- Parent (Groq) ---\n", parentBody, "\n---");
+  const source = pickContentSource(library, grammarLessons, historySet);
+  const format = pickTweetFormat(source);
 
-  const replyBody = buildReplyText();
-  console.log("--- Reply ---\n", replyBody, "\n---");
+  const label =
+    source.type === "grammar_lesson"
+      ? `grammar:${source.slug}`
+      : `[${source.entry.level}] ${source.entry.expression}`;
+  console.log(`Picked: ${label} | Format: ${format}`);
 
-  const { parentId, replyId } = await postThreadToX(parentBody, replyBody);
-  recordPostedPhrase(item.expression);
+  const { parent, reply } = await generateParentTweetGroq(source, format);
+  console.log("--- Parent ---\n", parent, "\n---");
+  console.log("--- Reply ---\n", reply, "\n---");
+
+  const { parentId, replyId } = await postThreadToX(parent, reply);
+  recordPostedPhrase(resolveHistoryKey(source));
   console.log(
     `[post-to-x] 履歴を更新しました（直近最大${POSTED_HISTORY_MAX}件）`
   );
-  console.log(`Posted thread. Parent id: ${parentId} | Reply id: ${replyId}`);
+  console.log(`Posted thread. Parent: ${parentId} | Reply: ${replyId}`);
 }
 
 main().catch((err: unknown) => {

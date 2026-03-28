@@ -5,7 +5,7 @@ export interface GrammarConceptCardProps {
   coreImage: string;
   metaphor: string;
   keyWords: string[];
-  colorScheme: "indigo" | "violet";
+  colorScheme: "indigo" | "violet" | "emerald" | "amber";
 }
 
 const schemeClass: Record<
@@ -23,6 +23,18 @@ const schemeClass: Record<
     bg: "bg-gradient-to-br from-violet-50/90 to-white",
     accent: "text-violet-700",
     tag: "bg-violet-100/80 text-violet-800 border-violet-200/60",
+  },
+  emerald: {
+    border: "border-emerald-100",
+    bg: "bg-gradient-to-br from-emerald-50/90 to-white",
+    accent: "text-emerald-800",
+    tag: "bg-emerald-100/80 text-emerald-900 border-emerald-200/60",
+  },
+  amber: {
+    border: "border-amber-100",
+    bg: "bg-gradient-to-br from-amber-50/90 to-white",
+    accent: "text-amber-900",
+    tag: "bg-amber-100/80 text-amber-900 border-amber-200/60",
   },
 };
 

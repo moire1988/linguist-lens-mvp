@@ -165,22 +165,37 @@ export default function GrammarLessonPage({
 
         <section className="mb-10">
           <h2 className="sr-only">コアイメージの比較</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            <GrammarConceptCard
-              label={lesson.coreConceptA.label}
-              coreImage={lesson.coreConceptA.coreImage}
-              metaphor={lesson.coreConceptA.metaphor}
-              keyWords={lesson.coreConceptA.keyWords}
-              colorScheme="indigo"
-            />
-            <GrammarConceptCard
-              label={lesson.coreConceptB.label}
-              coreImage={lesson.coreConceptB.coreImage}
-              metaphor={lesson.coreConceptB.metaphor}
-              keyWords={lesson.coreConceptB.keyWords}
-              colorScheme="violet"
-            />
-          </div>
+          {lesson.coreConcepts && lesson.coreConcepts.length > 0 ? (
+            <div className="grid sm:grid-cols-2 gap-4">
+              {lesson.coreConcepts.map((concept) => (
+                <GrammarConceptCard
+                  key={concept.label}
+                  label={concept.label}
+                  coreImage={concept.coreImage}
+                  metaphor={concept.metaphor}
+                  keyWords={concept.keyWords}
+                  colorScheme={concept.colorScheme ?? "indigo"}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-4">
+              <GrammarConceptCard
+                label={lesson.coreConceptA.label}
+                coreImage={lesson.coreConceptA.coreImage}
+                metaphor={lesson.coreConceptA.metaphor}
+                keyWords={lesson.coreConceptA.keyWords}
+                colorScheme="indigo"
+              />
+              <GrammarConceptCard
+                label={lesson.coreConceptB.label}
+                coreImage={lesson.coreConceptB.coreImage}
+                metaphor={lesson.coreConceptB.metaphor}
+                keyWords={lesson.coreConceptB.keyWords}
+                colorScheme="violet"
+              />
+            </div>
+          )}
         </section>
 
         <section className="mb-4">

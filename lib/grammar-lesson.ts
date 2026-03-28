@@ -1,4 +1,5 @@
 import type {
+  CoreConcept,
   VerbPairExample,
   VerbPair,
   GrammarSection,
@@ -8,6 +9,7 @@ import type {
 import { GRAMMAR_LESSONS } from "@/data/grammar-lessons";
 
 export type {
+  CoreConcept,
   VerbPairExample,
   VerbPair,
   GrammarSection,

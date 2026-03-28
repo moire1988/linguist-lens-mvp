@@ -23,6 +23,7 @@ import {
   BookMarked,
   Wand2,
   GraduationCap,
+  BarChart3,
 } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { useEffectiveAuth } from "@/lib/dev-auth";
@@ -962,80 +963,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* CEFR Level Selector */}
-            <div className="mb-5">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">
-                あなたの英語レベル（CEFR）
-              </label>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-                {CEFR_LEVELS.map((level) => {
-                  const isSelected = selectedLevel === level.value;
-                  return (
-                    <button
-                      key={level.value}
-                      onClick={() => setSelectedLevel(level.value)}
-                      className={cn(
-                        "relative p-2.5 rounded-xl border text-left transition-all",
-                        isSelected
-                          ? "border-indigo-500 bg-indigo-50 shadow-sm"
-                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                      )}
-                    >
-                      {isSelected && (
-                        <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                      )}
-                      <div
-                        className={cn(
-                          "text-sm font-bold font-mono leading-none mb-1",
-                          isSelected ? "text-indigo-600" : "text-slate-700"
-                        )}
-                      >
-                        {level.label}
-                      </div>
-                      <div
-                        className={cn(
-                          "text-[10px] font-medium leading-tight",
-                          isSelected ? "text-indigo-500" : "text-slate-400"
-                        )}
-                      >
-                        {level.description}
-                      </div>
-                      {level.toeic && (
-                        <div className="text-[9px] text-slate-400 mt-1 leading-tight">
-                          {level.toeic}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Selected level detail */}
-              {(() => {
-                const level = CEFR_LEVELS.find((l) => l.value === selectedLevel)!;
-                return (
-                  <div className="mt-2.5 flex flex-wrap gap-2 text-xs text-slate-400">
-                    {level.toeic && (
-                      <span className="bg-slate-100 px-2 py-0.5 rounded-md">
-                        TOEIC: {level.toeic}
-                      </span>
-                    )}
-                    {level.toefl && (
-                      <span className="bg-slate-100 px-2 py-0.5 rounded-md">
-                        TOEFL iBT: {level.toefl}
-                      </span>
-                    )}
-                    {!level.toeic && !level.toefl && (
-                      <span className="bg-slate-100 px-2 py-0.5 rounded-md">
-                        ネイティブ近傍レベル
-                      </span>
-                    )}
-                    <span>以上の表現を抽出します</span>
-                  </div>
-                );
-              })()}
-            </div>
-
             {/* Submit button（ローディングはボタン内で完結） */}
             <button
               type="button"
@@ -1081,6 +1008,112 @@ export default function HomePage() {
                 </span>
               )}
             </button>
+
+            {/* CEFR Level Selector（送信の下・デフォルト折りたたみ） */}
+            <details className="group mt-4">
+              <summary
+                className={cn(
+                  "flex cursor-pointer list-none items-center justify-between select-none rounded-lg py-1 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700",
+                  "[&::-webkit-details-marker]:hidden"
+                )}
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <BarChart3
+                    className="h-3.5 w-3.5 shrink-0 text-slate-400"
+                    aria-hidden
+                  />
+                  <span>
+                    あなたのレベル:{" "}
+                    <strong className="font-mono text-indigo-600">
+                      {selectedLevel}
+                    </strong>
+                    <span className="ml-1.5 text-slate-400">（変更する）</span>
+                  </span>
+                </span>
+                <ChevronRight
+                  className="h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform duration-200 group-open:rotate-90"
+                  aria-hidden
+                />
+              </summary>
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <label className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                  英語レベル（CEFR）
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+                  {CEFR_LEVELS.map((level) => {
+                    const isSelected = selectedLevel === level.value;
+                    return (
+                      <button
+                        key={level.value}
+                        type="button"
+                        onClick={() => setSelectedLevel(level.value)}
+                        className={cn(
+                          "relative rounded-xl border p-2.5 text-left transition-all",
+                          isSelected
+                            ? "border-indigo-500 bg-indigo-50 shadow-sm"
+                            : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                        )}
+                      >
+                        {isSelected && (
+                          <div className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                        )}
+                        <div
+                          className={cn(
+                            "mb-1 font-mono text-sm font-bold leading-none",
+                            isSelected ? "text-indigo-600" : "text-slate-700"
+                          )}
+                        >
+                          {level.label}
+                        </div>
+                        <div
+                          className={cn(
+                            "text-[10px] font-medium leading-tight",
+                            isSelected ? "text-indigo-500" : "text-slate-400"
+                          )}
+                        >
+                          {level.description}
+                        </div>
+                        {level.toeic && (
+                          <div className="mt-1 text-[9px] leading-tight text-slate-400">
+                            {level.toeic}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {(() => {
+                  const level = CEFR_LEVELS.find((l) => l.value === selectedLevel)!;
+                  return (
+                    <div className="mt-2.5 flex flex-wrap gap-2 text-xs text-slate-400">
+                      {level.toeic && (
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5">
+                          TOEIC: {level.toeic}
+                        </span>
+                      )}
+                      {level.toefl && (
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5">
+                          TOEFL iBT: {level.toefl}
+                        </span>
+                      )}
+                      {!level.toeic && !level.toefl && (
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5">
+                          ネイティブ近傍レベル
+                        </span>
+                      )}
+                      <span>以上の表現を抽出します</span>
+                    </div>
+                  );
+                })()}
+                <p className="mt-2 text-[10px] text-slate-400">
+                  ※ わからない場合は{" "}
+                  <span className="font-mono font-semibold text-indigo-500">
+                    B2（中上級）
+                  </span>{" "}
+                  がおすすめです
+                </p>
+              </div>
+            </details>
 
             {/* 解析残り回数インジケーター（Free会員のみ） */}
             {isSignedIn && analysisQuota && !analysisQuota.isUnlimited && (
