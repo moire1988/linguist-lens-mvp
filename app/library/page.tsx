@@ -1,6 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  useLayoutEffect,
+  useSyncExternalStore,
+} from "react";
+import { useWindowVirtualizer, measureElement } from "@tanstack/react-virtual";
 import { createPortal } from "react-dom";
 import {
   ChevronDown,
@@ -39,6 +48,7 @@ import {
 } from "@/lib/library-premium";
 import { useEffectiveAuth } from "@/lib/dev-auth";
 import { WaitlistCta } from "@/components/waitlist-cta";
+import { trackPhraseSaved, trackAccordionOpened } from "@/lib/analytics";
 
 import type { LibraryEntry } from "@/lib/library";
 import libraryData from "@/data/library.json";
@@ -199,6 +209,12 @@ function ExpressionCard({
             setFlash("saved");
             toast.success("保存しました");
             setTimeout(() => setFlash(null), 2000);
+            trackPhraseSaved({
+              expression: entry.expression,
+              type: entry.type,
+              cefr_level: entry.level,
+              source: "library",
+            });
           } else if (result.reason === "duplicate") {
             setSaved(true);
             onSaved(exprKey);
@@ -229,6 +245,12 @@ function ExpressionCard({
       onSaved(exprKey);
       setFlash("saved");
       setTimeout(() => setFlash(null), 2000);
+      trackPhraseSaved({
+        expression: entry.expression,
+        type: entry.type,
+        cefr_level: entry.level,
+        source: "library",
+      });
     } else {
       setFlash(result.reason === "duplicate" ? "dup" : "limit");
       setTimeout(() => setFlash(null), 2500);
@@ -323,7 +345,20 @@ function ExpressionCard({
 
       {/* ── Accordion ── */}
       <button
-        onClick={() => setOpen((v) => !v)}
+        type="button"
+        onClick={() => {
+          setOpen((v) => {
+            const opening = !v;
+            if (opening) {
+              trackAccordionOpened({
+                expression: entry.expression,
+                cefr_level: entry.level,
+                source: "library",
+              });
+            }
+            return opening;
+          });
+        }}
         className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/40 transition-colors rounded-b-none"
       >
         <span>{open ? "閉じる" : "詳しいニュアンスを見る"}</span>
@@ -391,6 +426,123 @@ function ExpressionCard({
             </>
           )}
         </button>
+      </div>
+    </div>
+  );
+}
+
+const SM_BREAKPOINT_PX = 640;
+
+function useIsSmGridUp(): boolean {
+  const subscribe = useCallback((onStoreChange: () => void) => {
+    if (typeof window === "undefined") return () => {};
+    const mq = window.matchMedia(`(min-width: ${SM_BREAKPOINT_PX}px)`);
+    mq.addEventListener("change", onStoreChange);
+    return () => mq.removeEventListener("change", onStoreChange);
+  }, []);
+
+  const getSnapshot = useCallback(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(`(min-width: ${SM_BREAKPOINT_PX}px)`).matches;
+  }, []);
+
+  const getServerSnapshot = useCallback(() => false, []);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+/** Window スクロール + 行単位（1列 / 2列）で ExpressionCard を仮想化 */
+function VirtualizedExpressionRows({
+  entries,
+  columns,
+  savedExpressions,
+  isSignedIn,
+  onSaved,
+}: {
+  entries: LibraryEntry[];
+  columns: 1 | 2;
+  savedExpressions: Set<string>;
+  isSignedIn: boolean;
+  onSaved: (expressionLower: string) => void;
+}) {
+  const listAnchorRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  const rowCount = Math.ceil(entries.length / columns);
+
+  useLayoutEffect(() => {
+    const el = listAnchorRef.current;
+    if (!el) return;
+    const update = () => {
+      setScrollMargin(Math.round(el.getBoundingClientRect().top + window.scrollY));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [entries.length, columns]);
+
+  const virtualizer = useWindowVirtualizer({
+    count: rowCount,
+    estimateSize: () => (columns === 2 ? 400 : 440),
+    overscan: 6,
+    gap: 16,
+    scrollMargin,
+    enabled: entries.length > 0,
+    measureElement,
+    getItemKey: (rowIndex) => {
+      const start = rowIndex * columns;
+      return entries
+        .slice(start, start + columns)
+        .map((e) => e.id)
+        .join("|");
+    },
+  });
+
+  return (
+    <div ref={listAnchorRef} className="relative w-full">
+      <div
+        className="relative w-full"
+        style={{ height: virtualizer.getTotalSize() }}
+      >
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const start = virtualRow.index * columns;
+          const rowEntries = entries.slice(start, start + columns);
+          // start は文書座標に scrollMargin が含まれる。リスト用ラッパー内ではローカル座標に直す
+          const offsetY = virtualRow.start - scrollMargin;
+          return (
+            <div
+              key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              className="absolute left-0 top-0 w-full"
+              style={{ transform: `translateY(${offsetY}px)` }}
+            >
+              <div
+                className={cn(
+                  "grid gap-4",
+                  columns === 2 ? "grid-cols-2" : "grid-cols-1"
+                )}
+              >
+                {rowEntries.map((entry) => (
+                  <ExpressionCard
+                    key={entry.id}
+                    entry={entry}
+                    isSavedInitially={savedExpressions.has(
+                      entry.expression.toLowerCase()
+                    )}
+                    isSignedIn={isSignedIn}
+                    onSaved={onSaved}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -507,7 +659,8 @@ export default function LibraryPage() {
   const scoreDetailLevel: CefrKey | null =
     selectedLevels.size === 1 ? (Array.from(selectedLevels)[0] ?? null) : null;
 
-  const visibleCards = displayList;
+  const isSmGridUp = useIsSmGridUp();
+  const gridColumns: 1 | 2 = isSmGridUp ? 2 : 1;
 
   return (
     <div className="min-h-screen">
@@ -649,21 +802,17 @@ export default function LibraryPage() {
           </p>
         </div>
 
-        {/* ── Card Grid ── */}
+        {/* ── Card Grid（window 仮想スクロール） ── */}
         <div className="relative">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {visibleCards.map((entry) => (
-              <ExpressionCard
-                key={entry.id}
-                entry={entry}
-                isSavedInitially={savedExpressions.has(
-                  entry.expression.toLowerCase()
-                )}
-                isSignedIn={Boolean(isSignedIn)}
-                onSaved={handleVocabSaved}
-              />
-            ))}
-          </div>
+          {displayList.length > 0 && (
+            <VirtualizedExpressionRows
+              entries={displayList}
+              columns={gridColumns}
+              savedExpressions={savedExpressions}
+              isSignedIn={Boolean(isSignedIn)}
+              onSaved={handleVocabSaved}
+            />
+          )}
 
           {/* 検索ゼロヒット */}
           {displayList.length === 0 && (

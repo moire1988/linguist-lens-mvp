@@ -19,6 +19,7 @@ import type { PhraseResult } from "@/lib/types";
 import { TranslationAccordion } from "@/components/translation-accordion";
 import { useAppAuth } from "@/hooks/useAppAuth";
 import { openLoginPrompt } from "@/lib/login-prompt-store";
+import { trackPhraseSaved, trackAccordionOpened } from "@/lib/analytics";
 
 // ─── Web Speech API types ────────────────────────────────────────────────────
 
@@ -157,7 +158,8 @@ interface PhraseCardProps {
   phrase: PhraseResult;
   savedExpressions: Set<string>;
   dailyRemaining: number;
-  onSave: (phrase: PhraseResult) => void | Promise<void>;
+  /** 保存が新規成功したときは true（重複・上限・エラーは false） */
+  onSave: (phrase: PhraseResult) => boolean | Promise<boolean>;
   /** 保存リクエスト中の表現キー（小文字） */
   savingExpressionKey?: string | null;
 }
@@ -277,7 +279,15 @@ export function PhraseCard({
       openLoginPrompt("save");
       return;
     }
-    await Promise.resolve(onSave(phrase));
+    const ok = await Promise.resolve(onSave(phrase));
+    if (ok) {
+      trackPhraseSaved({
+        expression: phrase.expression,
+        type: phrase.type,
+        cefr_level: phrase.cefr_level,
+        source: "analysis",
+      });
+    }
   }, [saved, isSavingThis, isSignedIn, phrase, onSave]);
 
   // ─── Render ───────────────────────────────────────────────────────────
@@ -407,7 +417,18 @@ export function PhraseCard({
       {/* ── 学習のポイント（展開） ── */}
       <div className="border-t border-slate-100">
         <button
-          onClick={() => setShowDetail(!showDetail)}
+          type="button"
+          onClick={() => {
+            const opening = !showDetail;
+            setShowDetail(opening);
+            if (opening) {
+              trackAccordionOpened({
+                expression: phrase.expression,
+                cefr_level: phrase.cefr_level,
+                source: "analysis",
+              });
+            }
+          }}
           className="w-full px-5 py-2.5 flex items-center justify-between hover:bg-slate-50 transition-colors"
         >
           <span className="text-xs font-medium text-slate-400">学習のポイント</span>
@@ -423,7 +444,8 @@ export function PhraseCard({
       {/* ── マイページに保存 ── */}
       <div className="px-5 pb-4 pt-1 border-t border-slate-100 bg-slate-50/50">
         <button
-          onClick={handleSave}
+          type="button"
+          onClick={() => void handleSave()}
           disabled={saved || isSavingThis}
           className={cn(
             "w-full flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-medium transition-all",
