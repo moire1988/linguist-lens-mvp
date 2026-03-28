@@ -32,8 +32,11 @@ yarn-error.log*
 # vercel
 .vercel
 
-# claude code
-.claude/
+# claude code — personal/local files ignored, shared config committed
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/*.sh
 
 # typescript
 *.tsbuildinfo
