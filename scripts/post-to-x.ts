@@ -15,7 +15,8 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { config } from "dotenv";
-import { TwitterApi } from "twitter-api-v2";
+import { ApiResponseError, TwitterApi } from "twitter-api-v2";
+import type { SendTweetV2Params } from "twitter-api-v2";
 import type { LibraryEntry } from "../lib/library";
 
 config({ path: resolve(process.cwd(), ".env.local") });
@@ -135,11 +136,100 @@ function resolveCtaUrl(source: ContentSource): string {
   return LIBRARY_PAGE;
 }
 
+/** 本文中の http(s) URL（t.co 含む）をマッチ */
+const URL_IN_TEXT_RE = /https?:\/\/[^\s]+/g;
+
 function fallbackReplyText(ctaUrl: string): string {
   const line = `コアイメージで解説中 → ${ctaUrl}`;
   return line.length <= REPLY_TWEET_MAX
     ? line
     : line.slice(0, REPLY_TWEET_MAX - 1) + "…";
+}
+
+/** 比較用: URL除去＋空白正規化 */
+function collapseComparableText(s: string): string {
+  return s.replace(URL_IN_TEXT_RE, "").replace(/\s+/g, " ").trim();
+}
+
+/** 本文から URL をすべて除去し整形 */
+function stripAllUrls(s: string): string {
+  return s.replace(URL_IN_TEXT_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/**
+ * リプライ末尾に ctaUrl を1回だけ付与し、親ツイートと同一本文にならないよう調整する。
+ * （X が重複・スパム扱いで 403 になりやすいため）
+ */
+function truncateCoreKeepingCtaSuffix(
+  bodyCore: string,
+  ctaUrl: string,
+  maxTotal: number
+): string {
+  const suffix = `\n\n${ctaUrl}`;
+  const maxCore = Math.max(0, maxTotal - suffix.length);
+  if (maxCore === 0) {
+    return ctaUrl.length <= maxTotal
+      ? ctaUrl
+      : `${ctaUrl.slice(0, Math.max(0, maxTotal - 1))}…`;
+  }
+  let core = bodyCore;
+  if (core.length > maxCore) {
+    core = `${core.slice(0, maxCore - 1)}…`;
+  }
+  return `${core}${suffix}`;
+}
+
+function normalizeReplyForThread(
+  parentText: string,
+  replyText: string,
+  ctaUrl: string
+): string {
+  let core = stripAllUrls(replyText);
+  if (core === "") {
+    core =
+      "日本語話者向けに、なぜそうなるかをコアイメージで整理しています。";
+  }
+
+  const parentComp = collapseComparableText(parentText);
+  let coreComp = collapseComparableText(core);
+
+  if (coreComp === parentComp) {
+    core =
+      "【リプライ｜正解・解説】詳細は次の1リンクのみから。日本語話者の誤解ポイントを短くまとめています。";
+    coreComp = collapseComparableText(core);
+  }
+
+  if (coreComp === parentComp) {
+    core =
+      "正解と補足はリンク先のページで。親ツイートとは別内容のみここに記載しています。";
+  }
+
+  return truncateCoreKeepingCtaSuffix(core, ctaUrl, REPLY_TWEET_MAX);
+}
+
+function logTwitterApiError(context: string, err: unknown): void {
+  console.error(`[post-to-x] ${context}`);
+  if (err instanceof ApiResponseError) {
+    console.error(`[post-to-x] HTTP status: ${String(err.code)}`);
+    console.error(
+      `[post-to-x] API error data (JSON): ${JSON.stringify(err.data, null, 2)}`
+    );
+    if (err.errors) {
+      console.error(
+        `[post-to-x] errors[]: ${JSON.stringify(err.errors, null, 2)}`
+      );
+    }
+    if (err.rateLimit) {
+      console.error(
+        `[post-to-x] rateLimit: ${JSON.stringify(err.rateLimit, null, 2)}`
+      );
+    }
+  } else if (err && typeof err === "object" && "message" in err) {
+    console.error(
+      `[post-to-x] Error message: ${String((err as Error).message)}`
+    );
+  }
+  console.error("[post-to-x] Full error:", err);
 }
 
 /** X 投稿は中級〜上級帯（アプリのターゲット層に合わせる） */
@@ -414,7 +504,7 @@ async function generateParentTweetGroq(
   console.log(`[post-to-x] Groq model: ${GROQ_MODEL}`);
 
   const systemContent =
-    "あなたはCTR最大化のプロのSNSコピーライターであり、認知言語学に基づく英語教育の専門家です。X（Twitter）で英語学習者のエンゲージメントを最大化するツイートを書いてください。";
+    "あなたはCTR最大化のプロのSNSコピーライターであり、認知言語学に基づく英語教育の専門家です。X（Twitter）で英語学習者のエンゲージメントを最大化するツイートを書いてください。リプライでは親ツイートの本文を繰り返さないこと。リプライ内のURLは指示どおり1回だけ（重複リンク禁止）。";
 
   const userContent = buildPrompt(source, format, ctaUrl);
 
@@ -486,27 +576,82 @@ function createTwitterRw() {
 
 /**
  * 親ツイートを投稿し、そのツイートIDにリプライする。
+ * `ctaUrl` でリプライ末尾のリンクを1つに正規化し、親と同一本文を避ける。
  */
 export async function postThreadToX(
   parentText: string,
-  replyText: string
+  replyText: string,
+  ctaUrl: string
 ): Promise<{ parentId: string; replyId: string }> {
   const rwUser = createTwitterRw();
 
   const parentSafe = ensureMaxLength(parentText, PARENT_TWEET_MAX);
-  const parentPosted = await rwUser.v2.tweet(parentSafe);
-  const parentId = parentPosted.data.id;
-  if (!parentId) {
-    throw new Error("X API が親ツイートのIDを返しませんでした");
+
+  let parentPosted: Awaited<ReturnType<typeof rwUser.v2.tweet>>;
+  try {
+    parentPosted = await rwUser.v2.tweet(parentSafe);
+  } catch (err: unknown) {
+    logTwitterApiError("親ツイート POST /2/tweets でエラー", err);
+    throw err;
   }
 
-  const replySafe = ensureMaxLength(replyText, REPLY_TWEET_MAX);
-  const replyPosted = await rwUser.v2.tweet({
+  const parentIdRaw = parentPosted.data?.id;
+  const parentId =
+    typeof parentIdRaw === "string" ? parentIdRaw.trim() : undefined;
+  if (!parentId) {
+    console.error(
+      "[post-to-x] 親ツイート応答:",
+      JSON.stringify(parentPosted, null, 2)
+    );
+    throw new Error("X API が親ツイートのIDを返しませんでした");
+  }
+  console.log(
+    `[post-to-x] 親ツイート成功 data.id=${parentId}（リプライの in_reply_to_tweet_id に使用）`
+  );
+
+  const replyNormalized = normalizeReplyForThread(
+    parentSafe,
+    replyText,
+    ctaUrl
+  );
+  const replySafe = ensureMaxLength(replyNormalized, REPLY_TWEET_MAX);
+
+  const replyUrlMatches = replySafe.match(URL_IN_TEXT_RE);
+  const replyUrlCount = replyUrlMatches ? replyUrlMatches.length : 0;
+  if (replyUrlCount !== 1) {
+    console.warn(
+      `[post-to-x] リプライ内の http(s) URL 数が ${String(replyUrlCount)}（期待: 1）。本文: ${replySafe}`
+    );
+  }
+
+  const replyPayload: SendTweetV2Params = {
     text: replySafe,
     reply: { in_reply_to_tweet_id: parentId },
-  });
-  const replyId = replyPosted.data.id;
+  };
+  console.log(
+    "[post-to-x] リプライ送信ペイロード（確認用）:",
+    JSON.stringify(replyPayload, null, 2)
+  );
+
+  let replyPosted: Awaited<ReturnType<typeof rwUser.v2.reply>>;
+  try {
+    replyPosted = await rwUser.v2.reply(replySafe, parentId);
+  } catch (err: unknown) {
+    logTwitterApiError(
+      `リプライ POST /2/tweets（in_reply_to_tweet_id=${parentId}）でエラー`,
+      err
+    );
+    throw err;
+  }
+
+  const replyIdRaw = replyPosted.data?.id;
+  const replyId =
+    typeof replyIdRaw === "string" ? replyIdRaw.trim() : undefined;
   if (!replyId) {
+    console.error(
+      "[post-to-x] リプライ応答:",
+      JSON.stringify(replyPosted, null, 2)
+    );
     throw new Error("X API がリプライのIDを返しませんでした");
   }
 
@@ -532,7 +677,8 @@ async function main(): Promise<void> {
   console.log("--- Parent ---\n", parent, "\n---");
   console.log("--- Reply ---\n", reply, "\n---");
 
-  const { parentId, replyId } = await postThreadToX(parent, reply);
+  const ctaUrl = resolveCtaUrl(source);
+  const { parentId, replyId } = await postThreadToX(parent, reply, ctaUrl);
   recordPostedPhrase(resolveHistoryKey(source));
   console.log(
     `[post-to-x] 履歴を更新しました（直近最大${POSTED_HISTORY_MAX}件）`
@@ -541,6 +687,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : err);
+  logTwitterApiError("post-to-x 実行失敗", err);
   process.exit(1);
 });
