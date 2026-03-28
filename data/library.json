@@ -1001,20 +1001,6 @@
     "why_hard_for_japanese": "「動かない」を直訳しがちだが、英語では get the engine / car started の型を覚えると一気に自然になる。"
   },
   {
-    "id": "b2-13",
-    "expression": "Fall off of",
-    "type": "phrasal_verb",
-    "level": "B2",
-    "meaning_ja": "〜から落ちる・（塗装などが）剥がれ落ちる",
-    "coreImage": "表面や縁から外へ（off）向かって落下（fall）する",
-    "nuance": "米語で of が付くことが多い（fall off the desk も可）。「剥がれる」比喻にも使う。",
-    "badExample": "The paint fell down from the wall.（不自然な直訳）",
-    "goodExample": "Be careful — that trim is loose and could fall off of the cabinet.",
-    "goodExampleJa": "気をつけて。その縁取りが緩んでて、キャビネットから落ちるかも。",
-    "context": "DIY・安全注意・比喩で習慣や関心が薄れる",
-    "why_hard_for_japanese": "fall from に寄せがちだが、口語では fall off (of) が物体の「外れる・落ちる」に直感的。"
-  },
-  {
     "id": "b2-14",
     "expression": "Talk someone out of",
     "type": "phrasal_verb",
