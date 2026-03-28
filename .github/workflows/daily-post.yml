@@ -13,6 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # 直近投稿フレーズ履歴を実行間で引き継ぐ（毎回新しい key で保存し、restore-keys で最新を復元）
+      - uses: actions/cache@v4
+        with:
+          path: scripts/posted_history.json
+          key: posted-history-${{ github.run_id }}
+          restore-keys: |
+            posted-history-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
