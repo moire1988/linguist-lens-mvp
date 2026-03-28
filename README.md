@@ -1,5 +1,7 @@
 # LinguistLens MVP
 
+🌐 **Production URL:** [https://linguistlens.app/](https://linguistlens.app/)
+
 Next.js 14（App Router）+ Clerk + Supabase の英語学習 SaaS。  
 **この README は私用メモ**（よく使うコマンドの置き場）です。
 
