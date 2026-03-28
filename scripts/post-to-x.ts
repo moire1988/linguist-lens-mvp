@@ -1,5 +1,8 @@
 /**
- * X（Twitter）自動投稿: library.json から1件選び、親ツイート（Groq / Llama）＋リプライ（誘導文）の2段で投稿する。
+ * X（Twitter）自動投稿: data/library.json（LibraryEntry）から B1–C1 を1件選び、親ツイート（Groq）＋リプライの2段で投稿する。
+ *
+ * 直近の重複回避: 投稿成功後に scripts/posted_history.json にフレーズ文字列を最大5件保持する。
+ * GitHub Actions ではワークフローでこのファイルをキャッシュし、実行間で引き継ぐ。
  *
  * 環境変数（.env.local 推奨）:
  * - GEMINI_API_KEY … Groq API キー（GitHub Secrets 名を据え置くためこの名前のまま）
@@ -7,10 +10,11 @@
  *
  * 実行: npm run post-to-x
  */
-import { readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { config } from "dotenv";
 import { TwitterApi } from "twitter-api-v2";
+import type { LibraryEntry } from "../lib/library";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 config({ path: resolve(process.cwd(), ".env") });
@@ -19,94 +23,134 @@ const GROQ_CHAT_COMPLETIONS_URL =
   "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
-interface LibraryItem {
-  phrase: string;
-  meaning: string;
-  /** data/library.json の cefr / level / difficulty のいずれか（読み込み時に正規化） */
-  level?: string;
+/** 直近 N 件の投稿フレーズを除外する（scripts/posted_history.json） */
+const POSTED_HISTORY_MAX = 5;
+
+function resolvePostedHistoryPath(): string {
+  return resolve(process.cwd(), "scripts/posted_history.json");
 }
 
-function getLevelFromRow(row: Record<string, unknown>): string | undefined {
-  for (const key of ["cefr", "level", "difficulty"] as const) {
-    const v = row[key];
-    if (typeof v === "string" && v.trim() !== "") {
-      return v.trim();
+function isPostedHistoryPayload(data: unknown): data is { phrases: unknown[] } {
+  return (
+    data !== null &&
+    typeof data === "object" &&
+    "phrases" in data &&
+    Array.isArray((data as { phrases: unknown }).phrases)
+  );
+}
+
+/** 履歴を読み込み、直近 POSTED_HISTORY_MAX 件に正規化する */
+function readPostedHistory(): string[] {
+  const path = resolvePostedHistoryPath();
+  if (!existsSync(path)) {
+    return [];
+  }
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf-8");
+  } catch {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return [];
+  }
+  if (!isPostedHistoryPayload(parsed)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const p of parsed.phrases) {
+    if (typeof p === "string") {
+      const t = p.trim();
+      if (t !== "") {
+        out.push(t);
+      }
     }
   }
-  return undefined;
+  return out.slice(-POSTED_HISTORY_MAX);
 }
 
-/** B1・B2・C1、または中級・上級ラベル（初級は除外） */
-function isIntermediateAdvancedCefrOrLabel(raw: string): boolean {
-  const s = raw.trim();
-  if (/初級/.test(s)) {
+function writePostedHistory(phrases: readonly string[]): void {
+  const path = resolvePostedHistoryPath();
+  const body = `${JSON.stringify({ phrases: [...phrases] }, null, 2)}\n`;
+  writeFileSync(path, body, "utf-8");
+}
+
+/** 投稿成功後に呼ぶ。直近 POSTED_HISTORY_MAX 件だけ残す */
+function recordPostedPhrase(expression: string): void {
+  const trimmed = expression.trim();
+  if (trimmed === "") {
+    return;
+  }
+  const prev = readPostedHistory();
+  const next = [...prev, trimmed].slice(-POSTED_HISTORY_MAX);
+  writePostedHistory(next);
+}
+
+/** X 投稿は中級〜上級帯（アプリのターゲット層に合わせる） */
+const BOT_LEVELS = new Set<LibraryEntry["level"]>(["B1", "B2", "C1"]);
+
+function isLibraryEntry(row: unknown): row is LibraryEntry {
+  if (row === null || typeof row !== "object") {
     return false;
   }
-  if (/中級|上級/.test(s)) {
-    return true;
-  }
-  const upper = s.toUpperCase();
-  return /\b(B1|B2|C1)\b/.test(upper);
-}
-
-/**
- * いずれかの行に cefr / level / difficulty がある場合は、
- * B1–C1（または中級・上級）の行だけを対象にする。メタデータが一行も無い場合は従来どおり全件。
- */
-function filterLibraryForTargetAudience(items: LibraryItem[]): LibraryItem[] {
-  const anyHasLevel = items.some((i) => i.level !== undefined);
-  if (!anyHasLevel) {
-    return items;
-  }
-  const eligible = items.filter(
-    (i) => i.level !== undefined && isIntermediateAdvancedCefrOrLabel(i.level)
+  const o = row as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.expression === "string" &&
+    typeof o.type === "string" &&
+    typeof o.level === "string" &&
+    typeof o.meaning_ja === "string" &&
+    typeof o.coreImage === "string" &&
+    typeof o.nuance === "string" &&
+    typeof o.goodExample === "string" &&
+    typeof o.goodExampleJa === "string" &&
+    typeof o.context === "string" &&
+    typeof o.why_hard_for_japanese === "string"
   );
-  if (eligible.length === 0) {
-    throw new Error(
-      "data/library.json に CEFR B1–C1（または中級・上級）の表現がありません。cefr / level / difficulty を確認してください。"
-    );
-  }
-  return eligible;
 }
 
-function loadLibrary(): LibraryItem[] {
+function loadLibrary(): LibraryEntry[] {
   const path = resolve(process.cwd(), "data/library.json");
   const raw = readFileSync(path, "utf-8");
   const data = JSON.parse(raw) as unknown;
   if (!Array.isArray(data)) {
     throw new Error("data/library.json は配列である必要があります");
   }
-  const items: LibraryItem[] = [];
+  const items: LibraryEntry[] = [];
   for (const row of data) {
-    if (
-      row &&
-      typeof row === "object" &&
-      "phrase" in row &&
-      "meaning" in row &&
-      typeof (row as { phrase: unknown }).phrase === "string" &&
-      typeof (row as { meaning: unknown }).meaning === "string"
-    ) {
-      const rec = row as Record<string, unknown>;
-      const level = getLevelFromRow(rec);
-      const entry: LibraryItem = {
-        phrase: (rec.phrase as string).trim(),
-        meaning: (rec.meaning as string).trim(),
-      };
-      if (level !== undefined) {
-        entry.level = level;
-      }
-      items.push(entry);
+    if (isLibraryEntry(row) && BOT_LEVELS.has(row.level)) {
+      items.push(row);
     }
   }
   if (items.length === 0) {
-    throw new Error("data/library.json に有効な表現がありません");
+    throw new Error(
+      "data/library.json に B1・B2・C1 の有効なエントリがありません"
+    );
   }
-  return filterLibraryForTargetAudience(items);
+  return items;
 }
 
 function pickRandom<T>(arr: readonly T[]): T {
   const i = Math.floor(Math.random() * arr.length);
   return arr[i] as T;
+}
+
+function pickLibraryItemAvoidingRecent(
+  library: readonly LibraryEntry[]
+): LibraryEntry {
+  const history = readPostedHistory();
+  const historySet = new Set(history);
+  const candidates = library.filter((i) => !historySet.has(i.expression));
+  const pool = candidates.length > 0 ? candidates : library;
+  if (candidates.length === 0) {
+    console.warn(
+      "[post-to-x] 履歴と重複しない候補がありません。全件から選びます。"
+    );
+  }
+  return pickRandom(pool);
 }
 
 const SITE_URL = "https://linguistlens.app";
@@ -134,10 +178,7 @@ function extractGroqAssistantText(data: unknown): string {
   return typeof content === "string" ? content : "";
 }
 
-async function generateParentTweetGroq(
-  phrase: string,
-  meaning: string
-): Promise<string> {
+async function generateParentTweetGroq(entry: LibraryEntry): Promise<string> {
   const apiKey = requireEnv("GEMINI_API_KEY");
   console.log(`[post-to-x] Groq model: ${GROQ_MODEL}`);
 
@@ -146,22 +187,28 @@ async function generateParentTweetGroq(
 
   const userContent = `以下の英語フレーズの解説をX（Twitter）用に作成してください。
 
-フレーズ: ${phrase}
-意味: ${meaning}
+【素材（必ず踏まえること）】
+フレーズ: ${entry.expression}
+意味: ${entry.meaning_ja}
+コアイメージ: ${entry.coreImage}
+ニュアンス: ${entry.nuance}
+使用シーン: ${entry.context}
+参考例文（英文）: ${entry.goodExample}
+
+上記のコアイメージとニュアンスを最大限活かし、ライブラリの趣旨と矛盾しないように要約・再構成してよいですが、X用の短い本文ではその「骨格」と「ハッとする点」が伝わるようにしてください。
 
 【出力構成（厳守）】
-🔹 ${phrase}
-意味: ${meaning}
+🔹 ${entry.expression}
+意味: ${entry.meaning_ja}
 
 🧠 コアイメージ
-（※ここが最重要。直訳ではなく、ネイティブが持つイメージや語源、ニュアンスの本質を簡潔に1〜2文で）
+（※素材のコアイメージ・ニュアンスを反映し、直訳ではなく本質を簡潔に）
 
 💡 例文
-英文 (和訳)
+（英文のみ。和訳は不要）
 
-#LinguistLens #英語学習
-
-※改行を綺麗に入れ、スマホで読みやすいフォーマットにすること。`;
+#LinguistLens
+※全角140文字以内に必ず収めること。`;
 
   const res = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
     method: "POST",
@@ -261,17 +308,20 @@ export async function postThreadToX(
 
 async function main(): Promise<void> {
   const library = loadLibrary();
-  const item = pickRandom(library);
-  const levelNote = item.level !== undefined ? ` [${item.level}]` : "";
-  console.log(`Picked:${levelNote} ${item.phrase} / ${item.meaning}`);
+  const item = pickLibraryItemAvoidingRecent(library);
+  console.log(`Picked: [${item.level}] ${item.expression} / ${item.meaning_ja}`);
 
-  const parentBody = await generateParentTweetGroq(item.phrase, item.meaning);
+  const parentBody = await generateParentTweetGroq(item);
   console.log("--- Parent (Groq) ---\n", parentBody, "\n---");
 
   const replyBody = buildReplyText();
   console.log("--- Reply ---\n", replyBody, "\n---");
 
   const { parentId, replyId } = await postThreadToX(parentBody, replyBody);
+  recordPostedPhrase(item.expression);
+  console.log(
+    `[post-to-x] 履歴を更新しました（直近最大${POSTED_HISTORY_MAX}件）`
+  );
   console.log(`Posted thread. Parent id: ${parentId} | Reply id: ${replyId}`);
 }
 
