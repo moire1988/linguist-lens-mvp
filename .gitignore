@@ -38,3 +38,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# X post bot — local / Actions cache state (regenerated at runtime)
+scripts/posted_history.json
