@@ -72,6 +72,7 @@ import {
   RECOMMENDED_VIDEOS,
   getRecommendedVideoTargetPathByUrl,
 } from "@/lib/recommended-videos-data";
+import { PhraseOfTheDay } from "@/components/phrase-of-the-day";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -831,10 +832,14 @@ export default function HomePage() {
                     className={cn(
                       "w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all duration-300 outline-none",
                       "placeholder:text-slate-400 text-slate-800",
-                      "focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50",
+                      /* 視線誘導: 非フォーカスでもうっすら紫〜青の発光 */
+                      "shadow-[0_0_15px_rgba(165,180,252,0.3)] ring-2 ring-indigo-50/50",
+                      /* フォーカス時はリングとシャドウを一段強く（shadow-indigo-200 は任意値で近似） */
+                      "focus:border-indigo-400 focus:ring-indigo-200 focus:ring-2",
+                      "focus:shadow-[0_0_22px_rgba(199,210,254,0.55)]",
                       isUrlTyping && "cursor-wait bg-slate-50/80",
                       urlInputGlow &&
-                        "ring-2 ring-indigo-300/50 shadow-[0_0_0_1px_rgba(129,140,248,0.25)] border-indigo-200/80",
+                        "ring-indigo-300/60 ring-2 shadow-[0_0_20px_rgba(165,180,252,0.45)] border-indigo-200/80",
                       urlType === "youtube"
                         ? "border-red-200 bg-red-50/40"
                         : urlType === "web"
@@ -879,7 +884,13 @@ export default function HomePage() {
                   onChange={(e) => setTextInput(e.target.value)}
                   placeholder={"例：\n\"I just wanted to reach out and say that what you've been pulling off these past few months is nothing short of remarkable...\"\n\nNetflixのセリフ、書籍の一節、英語記事など何でも対応"}
                   rows={6}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 bg-slate-50/50 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 outline-none resize-none leading-relaxed"
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 bg-slate-50/50 outline-none resize-none leading-relaxed",
+                    "transition-all duration-300",
+                    "shadow-[0_0_15px_rgba(165,180,252,0.3)] ring-2 ring-indigo-50/50",
+                    "focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200",
+                    "focus:shadow-[0_0_22px_rgba(199,210,254,0.55)]"
+                  )}
                 />
                 <p className="mt-1.5 text-xs text-slate-400 text-right">
                   {textInput.length} 文字
@@ -1165,6 +1176,10 @@ export default function HomePage() {
           );
         })()}
 
+        {/* ── 今日のフレーズ（URL入力セクション直下・人気動画カルーセル直前） ── */}
+        <div className="mt-10 mb-2 max-w-2xl mx-auto">
+          <PhraseOfTheDay />
+        </div>
       </main>
 
       {/* ── Recommended Carousel（コンテンツなし時のみ） ── */}
