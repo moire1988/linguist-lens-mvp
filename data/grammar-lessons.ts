@@ -1,0 +1,545 @@
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export interface VerbPairExample {
+  form: "ing" | "to";
+  sentence: string;
+  translation: string;
+  nuanceNote: string;
+  scene: "daily" | "business" | "academic";
+  isCorrect: boolean;
+  warningNote?: string;
+}
+
+export interface VerbPair {
+  verb: string;
+  coreInsight: string;
+  ingImage: string;
+  toImage: string;
+  examples: VerbPairExample[];
+}
+
+export interface GrammarSection {
+  id: string;
+  heading: string;
+  body: string;
+  callout?: string;
+}
+
+export interface PracticeItem {
+  id: string;
+  prompt: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}
+
+export interface GrammarLesson {
+  slug: string;
+  seoTitle: string;
+  seoDescription: string;
+  h1: string;
+  subtitle: string;
+  targetLevels: ("B1" | "B2" | "C1")[];
+  category: string;
+  publishedAt: string;
+  readingMinutes: number;
+  intro: string;
+  coreConceptA: {
+    label: string;
+    coreImage: string;
+    metaphor: string;
+    keyWords: string[];
+  };
+  coreConceptB: {
+    label: string;
+    coreImage: string;
+    metaphor: string;
+    keyWords: string[];
+  };
+  verbPairs: VerbPair[];
+  sections: GrammarSection[];
+  practiceItems: PracticeItem[];
+  proTip: string;
+  relatedSlugs: string[];
+}
+
+// ─── Data ────────────────────────────────────────────────────────────────────
+
+export const GRAMMAR_LESSONS: GrammarLesson[] = [
+  {
+    slug: "ing-vs-to",
+    seoTitle: "ing と to の使い分け｜コアな感覚の違いを徹底解説",
+    seoDescription:
+      "stop smoking と stop to smoke の違い、わかりますか？動名詞（-ing）と to 不定詞のコアイメージを「実体」vs「矢印」の感覚で掴み、英語ネイティブの直感を身につけましょう。",
+    h1: "ing と to の使い分け：コアな感覚の違い",
+    subtitle:
+      "Why do natives say 'stop smoking' but 'stop to smoke'? — Core Image Approach",
+    targetLevels: ["B1", "B2", "C1"],
+    category: "動詞パターン",
+    publishedAt: "2026-03-28T00:00:00+09:00",
+    readingMinutes: 12,
+    intro:
+      'あなたは "I stopped to smoke" と "I stopped smoking" の違いを、自信を持って説明できますか？どちらも文法的に正しい英語ですが、意味はまったく逆です。日本語ではどちらも「タバコを吸うのをやめた」と訳してしまいがちですが、ネイティブの耳には全然違う風景が浮かびます。この記事では、文法規則の暗記ではなく「-ing は実体、to は矢印」というコアイメージを使って、なぜ同じ動詞でも形によって意味が変わるのかを感覚的に理解していきます。',
+
+    coreConceptA: {
+      label: "動名詞（-ing）",
+      coreImage:
+        "行為をひとつの「実体・映像」として頭の中に掴む感覚。すでに起きた、あるいは現在進行中のリアルな行為を対象として扱う。",
+      metaphor:
+        "手のひらにのせた「ボール」のように。行為が物体として目の前にある感覚で、過去の出来事や繰り返しの習慣を語るときにしっくりくる。",
+      keyWords: ["実体", "映像", "現実", "過去・現在の行為", "習慣"],
+    },
+
+    coreConceptB: {
+      label: "to 不定詞",
+      coreImage:
+        "行為を「矢印（→）」で指し示す感覚。まだ実現していない、これからの方向性・可能性・目的を示す。",
+      metaphor:
+        "「→」の記号のように。矢印の先にある未来の行為を指差しているイメージで、これからやること・やりたいこと・目指していることを語るときに自然に使われる。",
+      keyWords: ["方向性", "未来", "目的", "可能性", "未実現"],
+    },
+
+    verbPairs: [
+      // ────────────────────────────────────────────────
+      // 1. STOP
+      // ────────────────────────────────────────────────
+      {
+        verb: "stop",
+        coreInsight:
+          "stop は「ing と to で意味が真逆になる」最もわかりやすい動詞です。stop -ing は「それまでやっていた行為（実体）を止める」、stop to do は「〜するために立ち止まる」つまり stop は「移動や活動を中断する」意味で、to 以下は目的を示す副詞的用法です。日本人は両方「やめた」と訳してしまいがちですが、後者には「やめた」の意味はまったく含まれません。",
+        ingImage:
+          "それまで手のひらに持っていたボール（行為）を、そっと地面に置くイメージ。行為が実体として存在していたからこそ、止めることができる。",
+        toImage:
+          "歩いている最中に「→あれをしよう」と矢印が生まれ、足を止めるイメージ。stop 自体が「立ち止まる」動作で、to 以下はその目的を示す別の動作。",
+        examples: [
+          {
+            form: "ing",
+            sentence: "She finally stopped checking her phone during dinner.",
+            translation: "彼女はついに夕食中にスマホを見るのをやめた。",
+            nuanceNote:
+              "「夕食中ずっとスマホを見ていた」という実体のある行為が存在し、それを止めた。習慣的な行為を止めるニュアンスが ing の「実体感」によく合う。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "ing",
+            sentence:
+              "The company stopped offering free trials after the policy change.",
+            translation: "方針変更後、同社は無料トライアルの提供をやめた。",
+            nuanceNote:
+              "「無料トライアルを提供していた」という継続的な行為（実体）が存在し、それが止まった。ビジネス文脈でよく使われる表現。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence:
+              "He stopped to grab a coffee before heading into the meeting.",
+            translation: "彼は会議室に入る前にコーヒーを取りに立ち寄った。",
+            nuanceNote:
+              "「歩いていた・向かっていた」という動作を一旦中断し、コーヒーを取るという目的（矢印）のために立ち止まった。「やめた」ではなく「寄り道した」に近い。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence:
+              "I stopped to look at the view when I reached the top of the hill.",
+            translation: "丘の頂上に着いたとき、景色を眺めるために立ち止まった。",
+            nuanceNote:
+              "歩くことを一時中断して「眺める→」という新しい目的が生まれた。to 以下は stop の目的を指す副詞的不定詞。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "ing",
+            sentence: "I stopped to smoke.",
+            translation: "（誤）タバコを吸うのをやめた。",
+            nuanceNote:
+              "この文は「タバコを吸うために立ち止まった」という意味になってしまう。「吸うのをやめた」と言いたければ stopped smoking が正しい。",
+            scene: "daily",
+            isCorrect: false,
+            warningNote:
+              "日本語の「〜するのをやめた」に引きずられて to を使ってしまう典型的なミス。stop の後に来る to 不定詞は「目的」であり「やめた対象」ではない。",
+          },
+        ],
+      },
+
+      // ────────────────────────────────────────────────
+      // 2. REMEMBER
+      // ────────────────────────────────────────────────
+      {
+        verb: "remember",
+        coreInsight:
+          "remember -ing は「過去に実際にやった記憶（実体）が今も頭の中にある」感覚、remember to do は「これからやるべきことを（忘れずに）記憶しておく」感覚です。過去への言及か未来への備えかで完全に形が決まります。日本語ではどちらも「覚えている」と訳せるため混乱しがちですが、時間軸が逆だと覚えましょう。",
+        ingImage:
+          "過去の行為がビデオクリップのように頭の中に再生される感覚。「あのとき確かにやった」という実体のある記憶を掴んでいる。",
+        toImage:
+          "カレンダーに「→〜すること」という矢印メモを貼っておくイメージ。まだ起きていない未来の行為に向けて、記憶を張り巡らせている。",
+        examples: [
+          {
+            form: "ing",
+            sentence:
+              "I remember meeting her at a conference in Kyoto back in 2019.",
+            translation: "2019年に京都の会議で彼女と会ったことを覚えている。",
+            nuanceNote:
+              "「2019年に会った」という過去の出来事（実体）が記憶として存在している。実際に起きたことを思い出しているので ing がしっくりくる。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "ing",
+            sentence:
+              "Researchers remember reading a similar finding in an earlier study.",
+            translation: "研究者たちは以前の研究で類似の知見を読んだことを覚えている。",
+            nuanceNote:
+              "過去に実際に読んだ（実体のある行為）記憶が今も存在している。アカデミックな文脈でも ing で過去の経験を参照することがある。",
+            scene: "academic",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence: "Remember to submit your expense report by Friday.",
+            translation: "金曜までに経費精算書を提出するのを忘れないでください。",
+            nuanceNote:
+              "まだ提出していない（未実現）。「金曜に提出する→」という未来の行為を指差しながら、忘れないようにリマインドしている。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence: "Did you remember to turn off the gas before leaving?",
+            translation: "出かける前にガスを消すの、ちゃんと覚えてた？",
+            nuanceNote:
+              "「ガスを消す→」という未来（出発前）の行為を念頭に置いていたか、という問いかけ。実際にやったかどうかではなく、意識していたかを聞いている。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence: "I remember to lock the door last night.",
+            translation: "（誤）昨夜ドアに鍵をかけたことを覚えている。",
+            nuanceNote:
+              "「昨夜かけた」は過去の実体ある行為なので remember locking が正しい。to は未来・目的の矢印なので、過去の出来事には使えない。",
+            scene: "daily",
+            isCorrect: false,
+            warningNote:
+              "「覚えている」という日本語に引きずられて to を使ってしまう誤り。時間軸が過去なら必ず ing。",
+          },
+        ],
+      },
+
+      // ────────────────────────────────────────────────
+      // 3. TRY
+      // ────────────────────────────────────────────────
+      {
+        verb: "try",
+        coreInsight:
+          "try -ing は「試しにやってみる（実験的・探索的）」、try to do は「〜しようと努力する（困難に向かって頑張る）」という違いがあります。ing は「実際に手を動かしてみる」感覚、to は「できるかどうかわからないがトライする」感覚です。「食べてみた」と「食べようとした（食べられなかった可能性あり）」の違いに相当します。",
+        ingImage:
+          "実際に手を動かして「とりあえずやってみる」感覚。試食・試運転のように、行為そのものを実体として体験してみる。",
+        toImage:
+          "ゴールに向かう矢印が「抵抗や困難」にぶつかるイメージ。達成できるかどうかはわからないが、努力・挑戦の方向性がある。",
+        examples: [
+          {
+            form: "ing",
+            sentence:
+              "Have you tried adding a pinch of miso paste to your ramen broth?",
+            translation: "ラーメンのスープに味噌を少し足してみたことある？",
+            nuanceNote:
+              "「実際に足してみる」という試み。料理の実験として行為（実体）を試してみる感覚。「うまくいくかも」という軽い探索的ニュアンスがある。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "ing",
+            sentence:
+              "We tried launching the campaign on TikTok, but the ROI wasn't there.",
+            translation: "TikTok でキャンペーンを試みたが、ROI が見合わなかった。",
+            nuanceNote:
+              "実際に立ち上げてみた（実体として行動した）という経験を報告している。「試してみたが結果がよくなかった」という含みがある。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence: "I tried to open the jar but it was stuck tight.",
+            translation: "瓶を開けようとしたが、きつく閉まっていた。",
+            nuanceNote:
+              "「開ける→」という目標に向かって努力したが、うまくいかなかった。to 不定詞は「達成できなかった可能性」を含むことが多い。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence:
+              "The team tried to meet the deadline, but unforeseen issues delayed the release.",
+            translation:
+              "チームは締め切りに間に合わせようとしたが、予期せぬ問題でリリースが遅れた。",
+            nuanceNote:
+              "「締め切りに間に合う→」という目標に向かって努力したが達成できなかった。困難に向かう努力の矢印感が to のコアと一致する。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "ing",
+            sentence: "I tried to eating sushi for the first time yesterday.",
+            translation: "（誤）昨日初めて寿司を食べようとした。",
+            nuanceNote:
+              "これは文法的に誤り。to の後には原形が来る。「食べようとした（努力）」なら tried to eat、「試しに食べてみた」なら tried eating が正しい。",
+            scene: "daily",
+            isCorrect: false,
+            warningNote:
+              "try に限らず、to の後は必ず動詞の原形。「try to eating」のように ing をつけてしまうのは初中級者に多い文法ミス。",
+          },
+        ],
+      },
+
+      // ────────────────────────────────────────────────
+      // 4. FORGET
+      // ────────────────────────────────────────────────
+      {
+        verb: "forget",
+        coreInsight:
+          "forget -ing は「過去に実際にやったこと（実体）を忘れている」、forget to do は「これからやるべきこと（未来の矢印）を忘れる」という違いです。remember と対称的な関係にあります。I forgot meeting him は「会ったことを忘れた」（記憶喪失的）、I forgot to meet him は「会う約束を忘れた」（すっぽかし）です。日常でよく使う forget to do の方が頻度は高めです。",
+        ingImage:
+          "頭の中に残っているはずの「過去の映像（実体）」が、霞がかかって見えなくなるイメージ。実際に起きたことの記憶が消えている。",
+        toImage:
+          "カレンダーに書いておくべき「→〜すること」というメモが、頭の中から消えてしまったイメージ。やるべきタスクが記憶から抜け落ちた。",
+        examples: [
+          {
+            form: "ing",
+            sentence:
+              "I completely forgot meeting you at the orientation — I'm so sorry!",
+            translation:
+              "オリエンテーションであなたとお会いしたこと、完全に忘れていました。本当に申し訳ありません！",
+            nuanceNote:
+              "「以前実際に会った」という過去の出来事（実体）を忘れている。記憶喪失的なニュアンスで、日常ではやや強い謝罪を伴うことが多い。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "ing",
+            sentence:
+              "The author had forgotten writing that paragraph — it was found in an old draft.",
+            translation:
+              "著者はその段落を書いたこと自体を忘れていた。古い草稿で発見されたのだ。",
+            nuanceNote:
+              "過去に書いたという実体のある行為の記憶が失われている。アカデミック・文芸的文脈でも自然に使われる表現。",
+            scene: "academic",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence: "I forgot to attach the file — can I resend it?",
+            translation: "ファイルを添付し忘れました。再送してもいいですか？",
+            nuanceNote:
+              "「ファイルを添付する→」という未来のタスクを記憶から落としてしまった。メールでの頻出フレーズ。to 不定詞が「やるべきこと」を指す典型例。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence:
+              "Don't forget to back up your data before updating the system.",
+            translation:
+              "システムをアップデートする前に、必ずデータをバックアップしておいてください。",
+            nuanceNote:
+              "「バックアップする→」という未来のタスクを忘れないようにという注意。IT・業務系でよく使われるリマインド表現。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence: "I forgot to sending the report last week.",
+            translation: "（誤）先週レポートを送るのを忘れた。",
+            nuanceNote:
+              "to の後には動詞の原形が必要なので forgot to send が正しい。forgot sending にすると「送ったことを忘れた」という別の意味になる。",
+            scene: "business",
+            isCorrect: false,
+            warningNote:
+              "to の後に ing 形を使う「to sending」は文法的に誤り。また意味の違いも理解しておく必要がある。",
+          },
+        ],
+      },
+
+      // ────────────────────────────────────────────────
+      // 5. REGRET
+      // ────────────────────────────────────────────────
+      {
+        verb: "regret",
+        coreInsight:
+          "regret -ing は「過去に実際にやったこと（実体）を後悔する」日常的な表現、regret to do は「〜しなければならないことを残念に思う」というフォーマルな婉曲表現です。後者は主にビジネス・公式文書で使われ、悪いニュースを丁重に伝える際の定型表現です（I regret to inform you that...）。日本人が英語ビジネス文書を書くときにぜひ使いこなしてほしい表現です。",
+        ingImage:
+          "過去にやった行為（実体）が胸の中で重くなるイメージ。あのとき選んだ道を振り返って「しまった」と感じる感覚。",
+        toImage:
+          "これから伝える・行う「悪いニュース→」に対して、それを指し示しながら「残念です」と言う感覚。フォーマルなビジネスシーンで使われる婉曲表現。",
+        examples: [
+          {
+            form: "ing",
+            sentence:
+              "I regret snapping at him like that — it was totally uncalled for.",
+            translation:
+              "あんな風に彼にキツく当たったことを後悔している。完全に言い過ぎだった。",
+            nuanceNote:
+              "「キツく当たった」という過去の実体ある行為を後悔している。日常会話での率直な後悔表現。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "ing",
+            sentence: "The firm regretted not diversifying its portfolio earlier.",
+            translation:
+              "その会社はもっと早くにポートフォリオを分散しなかったことを後悔した。",
+            nuanceNote:
+              "「分散しなかった」という不作為（実体のある過去の選択）を後悔している。ビジネスの文脈でも ing で過去の決断への後悔を表す。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence:
+              "We regret to inform you that your application was unsuccessful at this time.",
+            translation:
+              "誠に遺憾ながら、今回のご応募は見送りとなりましたことをお知らせします。",
+            nuanceNote:
+              "「お知らせする→」という行為を指差しながら「それが残念だ」と伝える婉曲表現。採用・入学などの不合格通知で頻繁に使われるフォーマルな定型句。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "to",
+            sentence:
+              "I regret to say that the proposed timeline is no longer feasible given the current constraints.",
+            translation:
+              "現在の制約を踏まえると、ご提案のスケジュールはもはや実現困難であることをお伝えしなければなりません。",
+            nuanceNote:
+              "悪いニュース（スケジュール変更）を伝える矢印を指差しながら「残念だが言わなければならない」という敬語的ニュアンス。ビジネス会議やメールでの高度な表現。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "ing",
+            sentence:
+              "I regret telling you that the project has been cancelled.",
+            translation:
+              "（注意）プロジェクトがキャンセルになったことをお伝えするのが残念です。",
+            nuanceNote:
+              "この文は文法的には正しいが、「あなたに伝えたことを後悔している」つまり「言わなければよかった」という意味になる。「残念ながらお伝えする」という意図なら regret to tell を使うべき。",
+            scene: "business",
+            isCorrect: false,
+            warningNote:
+              "regret の ing/to の違いは特にビジネス文書で重要。regret telling は「言ったことへの後悔」、regret to tell は「悲しいニュースを伝える婉曲表現」。意味がまるで違う。",
+          },
+        ],
+      },
+    ],
+
+    sections: [
+      {
+        id: "why-japanese-struggle",
+        heading: "なぜ日本人はここで詰まるのか？",
+        body: "英語の動名詞（-ing）と to 不定詞は、日本語にはほぼ対応する文法概念がありません。日本語では「食べること」「食べるため」「食べるのをやめる」「食べたことを覚えている」のような違いは、助詞や文脈で表現するため、英語で形を変える必要性を感覚的に掴みにくいのです。\n\nまた、学校英語では「動詞によって ing か to が決まる」という暗記型の教え方が主流です。\"enjoy -ing\"、\"want to do\" といったリストを覚えることは出発点として有効ですが、それだけでは stop / remember / try / forget / regret のように**どちらも使えるが意味が変わる動詞**に対応できません。\n\nさらに厄介なのが日本語訳の罠です。「止めた」「覚えている」「後悔した」という日本語は、文の時間軸（過去の行為か未来のタスクか）を明示しないため、形を選ぶ手がかりにならないのです。だからこそ「文法規則の暗記」ではなく「コアイメージ」を使って、行為の時間軸と話し手の意識の向き方を感じ取る力が必要です。",
+        callout:
+          "日本語訳だけを頼りにしている限り、ing と to の選択ミスは永遠になくなりません。コアイメージで考える習慣を作りましょう。",
+      },
+      {
+        id: "ing-core-image",
+        heading: "-ing の根っこ：行為を「実体」として掴む",
+        body: "動名詞（-ing）のコアイメージは「行為をひとつのボールとして手のひらに乗せる」感覚です。行為が映像・物体のように頭の中に存在しているから、それを記憶したり、楽しんだり、やめたりできます。\n\n**過去・現在のリアリティがキーワードです。** 「I enjoy swimming.」（泳ぐことが好き）は、実際に泳いだ経験・繰り返しの習慣という実体があるから enjoy できる。「Stop talking!」は、今まさに話している（実体）から stop できる。\n\ning の動名詞は「過去に起きたこと」「習慣的にやること」「感覚として経験したこと」と親和性が高く、enjoy / finish / avoid / consider / deny / admit / suggest / miss / risk などの動詞が後ろに ing を取るのも、これらの動詞がすべて「実体のある行為・経験」に言及するからです。\n\nまた、\"It's no use trying.\"（やってみても無駄だ）や \"Seeing is believing.\"（百聞は一見に如かず）のように、-ing が主語になる場合も「行為を実体化して語る」というコアイメージがそのまま機能しています。",
+        callout:
+          "ing のシグナルは「すでに起きた・今起きている・経験したリアルな行為」。過去の映像を頭の中に「掴んでいる」感覚です。",
+      },
+      {
+        id: "to-core-image",
+        heading: "to の根っこ：行為を「矢印」で指し示す",
+        body: "to 不定詞のコアイメージは「矢印（→）で未来の行為を指し示す」感覚です。前置詞 to が「〜への方向性」を示すように、to 不定詞も「まだ実現していないこと・これから向かうこと」を指す矢印です。\n\n**未来・可能性・意図がキーワードです。** 「I want to travel abroad.」（海外旅行したい）は、まだ実現していない願望の方向性。「She decided to quit.」（辞めると決めた）は、これからの行動への意志の矢印。「It's important to stay hydrated.」（水分補給が大切だ）は、一般的な行為の必要性を示す矢印。\n\nwant / need / hope / plan / decide / expect / agree / refuse / manage / fail などの動詞が to を取るのは、これらがすべて「これから実現すること・できるかどうかわからないこと・目指していること」に言及するからです。\n\nさらに、to の「矢印感」は程度を示す形容詞（happy to help / afraid to ask）や目的を示す副詞的用法（I went to the store to buy milk）でも同様で、英語全体に一貫して流れるコアイメージです。",
+        callout:
+          "to のシグナルは「まだ起きていない・これから目指す・方向性として示す行為」。矢印の先にある未来を指差している感覚です。",
+      },
+      {
+        id: "meaning-change-verbs",
+        heading: "変化する動詞一覧：使い方次第で意味が変わる",
+        body: "以下の動詞は ing と to の両方を取りますが、形によって意味が大きく変わります。コアイメージで理解すると、なぜ意味が変わるかが直感的にわかります。\n\n| 動詞 | -ing | to do |\n|------|------|-------|\n| **stop** | 〜するのをやめる（行為の中止） | 〜するために立ち止まる（目的） |\n| **remember** | 〜したことを覚えている（過去の記憶） | 〜することを忘れずに（未来のタスク） |\n| **forget** | 〜したことを忘れる（過去の記憶喪失） | 〜するのを忘れる（未来のタスク忘れ） |\n| **try** | 試しに〜してみる（実験的行為） | 〜しようと努力する（困難への挑戦） |\n| **regret** | 〜したことを後悔する（過去への悔恨） | 残念ながら〜する（丁寧な婉曲表現） |\n| **go on** | そのまま〜し続ける（継続） | 続いて〜する（話題転換・次のステップ） |\n| **mean** | 〜することを意味する（含意） | 〜するつもりだ（意図） |\n\nこれらすべてに共通するのは「ing = 過去・現実の行為（実体）」「to = 未来・方向性（矢印）」というコアイメージです。丸暗記ではなく、どちらの感覚に近いかを問いかける習慣をつけましょう。",
+        callout:
+          "表を丸暗記するのではなく、各動詞で「これは過去の実体か、未来の矢印か？」と問いかける習慣が大切です。",
+      },
+      {
+        id: "native-judgment",
+        heading: "ネイティブはどちらを選ぶ？自然な判断基準",
+        body: "ネイティブスピーカーは ing と to を明示的なルールとして選んでいるわけではありません。幼少期から「行為の感触」として身体に刷り込まれているのです。ではどうすれば同じ感覚に近づけるでしょうか？\n\n**実践的な判断フロー：**\n\n1. **その行為は「すでに起きたこと」か「これから起きること」か？**\n   → 過去・経験・習慣 → ing を疑う\n   → 未来・目的・意図 → to を疑う\n\n2. **その動詞が表す感情・認知は「経験への言及」か「これからへの期待」か？**\n   → enjoy / miss / avoid / regret（過去経験型）→ ing\n   → want / hope / decide / plan（未来志向型）→ to\n\n3. **文脈の時間軸を確認する。**\n   → \"I remember...\" の後に続く内容が過去の話か未来のタスクかで形が決まる。\n\n**上級テクニック：** C1 レベルを目指すなら、どちらでも文法的に使える場面でコアイメージを使って意味を微妙にコントロールする力を磨きましょう。例えば「I like swimming.」（実体としての経験が好き）と「I like to swim.」（一般的にそうしたい傾向）では、前者の方が「実際に泳いでいる時の感覚」に近い温度感があります。この使い分けは日本語には存在しないが、ネイティブは自然に使い分けています。",
+        callout:
+          "「この行為は手のひらのボールか（ing）、矢印の先か（to）」という問いかけを習慣化することが、ネイティブ感覚への近道です。",
+      },
+    ],
+
+    practiceItems: [
+      {
+        id: "practice-01",
+        prompt:
+          "The doctor advised him _____ immediately after the results came back.\n(Context: He hadn't quit yet — the doctor gave new advice.)",
+        options: [
+          "stopping smoking",
+          "to stop smoking",
+          "stop smoking",
+          "stopped smoking",
+        ],
+        correctIndex: 1,
+        explanation:
+          "医師が「これからやめるように」と助言した（未来への矢印）ので to stop が正しい。さらに stop の後ろには、やめる対象として smoking（ing 形・実体）が続く。advise は to 不定詞を目的語にとる動詞。",
+      },
+      {
+        id: "practice-02",
+        prompt:
+          "Oh no — I can't believe I forgot _____ the client about the change in schedule.",
+        options: ["informing", "having informed", "to inform", "inform"],
+        correctIndex: 2,
+        explanation:
+          "「クライアントに連絡するタスク（未来の矢印）」を忘れた、という意味なので forget to do の形が正しい。もし forgot informing にすると「連絡したこと自体を忘れた（記憶喪失）」という意味になってしまう。ビジネスでは forgot to inform の方が圧倒的に一般的。",
+      },
+      {
+        id: "practice-03",
+        prompt:
+          "We tried _____ the budget proposal with a different format, and the board responded much more positively.",
+        options: ["to present", "presenting", "have presented", "presented"],
+        correctIndex: 1,
+        explanation:
+          "「別のフォーマットで試しにやってみた→結果が出た」という文脈なので tried presenting（試験的実行）が正しい。tried to present だと「提示しようとしたが（うまくいかなかった可能性）」という別のニュアンスになり、「結果が出た」という後半の文脈と矛盾する。",
+      },
+      {
+        id: "practice-04",
+        prompt:
+          "I remember _____ about this theory in my first year, but I couldn't recall the author's name.",
+        options: ["to learn", "to have learned", "learning", "learned"],
+        correctIndex: 2,
+        explanation:
+          "「1年次に実際に学んだ」という過去の経験（実体）を覚えているので remember learning が正しい。過去の記憶を参照しているため、未来の矢印を表す to learn は使えない。アカデミックな文脈でも remember -ing で過去の学習経験を参照することは自然。",
+      },
+      {
+        id: "practice-05",
+        prompt:
+          "We regret _____ you that the position has already been filled.",
+        options: [
+          "informing",
+          "to inform",
+          "having informed",
+          "to have informed",
+        ],
+        correctIndex: 1,
+        explanation:
+          "「悲しいニュースをこれからお伝えする」という婉曲的フォーマル表現なので regret to inform が正しい。regret informing だと「お伝えしたことを後悔している（言わなければよかった）」という意味になってしまう。採用不合格通知や契約拒否など、ビジネス文書で頻出の定型表現。",
+      },
+    ],
+
+    proTip:
+      "C1 レベルを目指すなら、\"I like swimming\" と \"I like to swim\" のように「どちらも正しいが温度感が違う」微妙なニュアンスを使い分ける練習をしましょう。前者は実際に泳ぐ経験そのものの感触を語り、後者は習慣・傾向としての好みを示します。また、try -ing と try to do の違いをビジネス報告書で意図的に使い分けると、「実際に試みた（結果あり）」vs「試みたが困難だった」という情報を形だけで伝えられる、高度な表現力の証明になります。",
+
+    relatedSlugs: [
+      "gerund-as-subject",
+      "infinitive-of-purpose",
+      "aspect-perfect-vs-simple",
+      "modal-verbs-core-image",
+      "prepositions-core-image",
+    ],
+  },
+];

@@ -28,6 +28,7 @@ const isPublicRoute = createRouteMatcher([
   "/articles",
   "/articles/(.*)",
   "/library",
+  "/library/(.*)",
   "/upgrade",
   // トップの解析は fetch(/api/analyze) 経由（Server Action スタブによる Webpack 不整合を避ける）
   "/api/analyze",

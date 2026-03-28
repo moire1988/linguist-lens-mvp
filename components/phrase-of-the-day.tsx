@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@clerk/nextjs";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { getTodaysPhrase } from "@/lib/daily-phrase";
 import { savePhrase } from "@/lib/vocabulary";
@@ -262,10 +263,29 @@ export function PhraseOfTheDay() {
         </button>
       </div>
 
-      <div className="border-t border-indigo-100/60 px-5 py-3 flex justify-center items-center bg-white/30">
-        <p className="text-[10px] text-slate-400 text-center">
-          明日は新しいフレーズをお届けします
-        </p>
+      <div className="border-t border-indigo-100/60 px-5 py-3 bg-white/30">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] text-slate-400">
+            明日は新しいフレーズをお届けします
+          </p>
+          <Link
+            href="/library"
+            className="text-[10px] font-mono text-indigo-500 hover:text-indigo-600 font-medium transition-colors shrink-0"
+          >
+            150件を全部見る →
+          </Link>
+        </div>
+        <div className="mt-2 pt-2 border-t border-indigo-50/80 flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] text-slate-400">
+            文法の感覚も身につけたい？
+          </span>
+          <Link
+            href="/library/grammar"
+            className="text-[10px] font-mono font-semibold text-violet-600/90 hover:text-violet-500 transition-colors"
+          >
+            文法コアイメージ特集（無料）→
+          </Link>
+        </div>
       </div>
     </div>
   );

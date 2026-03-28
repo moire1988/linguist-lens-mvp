@@ -40,3 +40,29 @@ export function trackAccordionOpened(payload: AccordionOpenedPayload): void {
     source: payload.source,
   });
 }
+
+/** 文法特集ページの CTA クリック */
+export interface GrammarCtaClickPayload {
+  slug: string;
+}
+
+export function trackGrammarCtaClick(payload: GrammarCtaClickPayload): void {
+  track("grammar_cta_click", { slug: payload.slug });
+}
+
+/** 文法特集のミニクイズ完了（全問正解時） */
+export interface GrammarPracticeCompletedPayload {
+  slug: string;
+  score: number;
+  total: number;
+}
+
+export function trackGrammarPracticeCompleted(
+  payload: GrammarPracticeCompletedPayload
+): void {
+  track("grammar_practice_completed", {
+    slug: payload.slug,
+    score: payload.score,
+    total: payload.total,
+  });
+}

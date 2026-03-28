@@ -22,6 +22,7 @@ import {
   Tv,
   BookMarked,
   Wand2,
+  GraduationCap,
 } from "lucide-react";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { useEffectiveAuth } from "@/lib/dev-auth";
@@ -87,6 +88,40 @@ const CEFR_LEVELS = [
 
 /** 送信ボタン内プログレス：約60秒で99%まで（完了時はリセット） */
 const SUBMIT_PROGRESS_MS = 60_000;
+
+/** トップ：文法特集（無料）へのミニマル導線 */
+function GrammarFeatureBanner() {
+  return (
+    <div className="mt-4 mb-2 max-w-2xl mx-auto px-0">
+      <Link
+        href="/library/grammar"
+        className={cn(
+          "group flex items-center gap-4 rounded-2xl border border-slate-200/90 bg-white/60 backdrop-blur-sm",
+          "px-4 py-3.5 sm:px-5 sm:py-4 hover:border-violet-200/90 hover:shadow-sm transition-all",
+          "border-l-[3px] border-l-violet-500/60"
+        )}
+      >
+        <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl border border-slate-200/80 bg-slate-50/80 text-violet-600 group-hover:border-violet-200 group-hover:bg-violet-50/50 transition-colors">
+          <GraduationCap className="w-5 h-5" aria-hidden />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+            <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">
+              文法コアイメージ特集
+            </p>
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full border border-emerald-200/80 bg-emerald-50/80 text-emerald-700">
+              無料
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 leading-snug">
+            「ing と to」「前置詞」など、コアイメージで徹底解説
+          </p>
+        </div>
+        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-violet-500 transition-colors shrink-0" aria-hidden />
+      </Link>
+    </div>
+  );
+}
 
 const SUBMIT_LOAD_LABELS_URL = [
   "動画を取得中...",
@@ -1179,6 +1214,7 @@ export default function HomePage() {
         {/* ── 今日のフレーズ（URL入力セクション直下・人気動画カルーセル直前） ── */}
         <div className="mt-10 mb-2 max-w-2xl mx-auto">
           <PhraseOfTheDay />
+          <GrammarFeatureBanner />
         </div>
       </main>
 
