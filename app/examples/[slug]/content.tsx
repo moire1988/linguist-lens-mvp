@@ -75,9 +75,9 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
   }, [isSignedIn]);
 
   const handleSave = useCallback(
-    async (phrase: PhraseResult) => {
+    async (phrase: PhraseResult): Promise<boolean> => {
       const key = phrase.expression.toLowerCase();
-      if (savedExpressions.has(key)) return;
+      if (savedExpressions.has(key)) return false;
 
       if (!isSignedIn) {
         const result = savePhrase({
@@ -103,10 +103,12 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
           toast.success("保存しました", {
             description: `「${phrase.expression}」をマイページに追加しました`,
           });
-        } else if (result.reason === "limit_reached") {
+          return true;
+        }
+        if (result.reason === "limit_reached") {
           setShowPremium(true);
         }
-        return;
+        return false;
       }
 
       setSavingKey(key);
@@ -134,7 +136,9 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
           toast.success("保存しました", {
             description: `「${phrase.expression}」をマイページに追加しました`,
           });
-        } else if (result.reason === "duplicate") {
+          return true;
+        }
+        if (result.reason === "duplicate") {
           setSavedExpressions((s) => {
             const n = new Set(Array.from(s));
             n.add(key);
@@ -142,9 +146,10 @@ export function ExamplePageContent({ example }: { example: ExampleVideo }) {
           });
           void getVocabularyCountAction().then(setVocabCount);
           toast.info("この表現はすでに保存されています");
-        } else {
-          toast.error(result.error);
+          return false;
         }
+        toast.error(result.error);
+        return false;
       } finally {
         setSavingKey(null);
       }

@@ -26,7 +26,7 @@ interface ScriptViewerProps {
   /** AI-generated HTML with <b data-expr="..."> markup */
   highlightedHtml?: string;
   savedExpressions: Set<string>;
-  onSave: (phrase: PhraseResult) => void | Promise<void>;
+  onSave: (phrase: PhraseResult) => boolean | Promise<boolean>;
   /** 保存リクエスト中の表現キー（小文字）— スピナー表示用 */
   savingExpressionKey?: string | null;
   /** Show "日本語に翻訳" button at the bottom of the transcript */
@@ -295,9 +295,9 @@ export function ScriptViewer({
   // ─── Save from popup ───────────────────────────────────────────────────
 
   const handleSave = useCallback(
-    async (phrase: PhraseResult) => {
-      if (savedExpressions.has(phrase.expression.toLowerCase())) return;
-      await Promise.resolve(onSave(phrase));
+    async (phrase: PhraseResult): Promise<boolean> => {
+      if (savedExpressions.has(phrase.expression.toLowerCase())) return false;
+      return await Promise.resolve(onSave(phrase));
     },
     [savedExpressions, onSave]
   );
