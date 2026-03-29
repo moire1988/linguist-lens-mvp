@@ -49,6 +49,7 @@ import { getVocabularyCountAction } from "@/app/actions/vocabulary";
 import { getCachedEntry, setCachedResult } from "@/lib/cache";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import { NewsletterBanner } from "@/components/newsletter-banner";
+import ChromeExtensionTeaser from "@/components/chrome-extension-teaser";
 import { RecommendedCarousel } from "@/components/recommended-carousel";
 import { LatestArticlesCarousel } from "@/components/latest-articles-carousel";
 import { CommunityAnalysesCarousel } from "@/components/community-analyses-carousel";
@@ -1270,6 +1271,13 @@ export default function HomePage() {
           );
         })()}
 
+        {/* ── Chrome拡張ティザー（コンテンツなし時のみ） ── */}
+        {!hasContent && (
+          <div className="mt-6 max-w-2xl mx-auto">
+            <ChromeExtensionTeaser />
+          </div>
+        )}
+
         {/* ── 今日のフレーズ（URL入力セクション直下・人気動画カルーセル直前） ── */}
         <div className="mt-10 mb-2 max-w-2xl mx-auto">
           <PhraseOfTheDay />
@@ -1299,7 +1307,10 @@ export default function HomePage() {
 
       {/* ── Newsletter（コンテンツなし時のみ） ── */}
       {!hasContent && (
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10">
+        <div
+          id="extension-waitlist-section"
+          className="max-w-5xl mx-auto px-4 sm:px-6 pb-10"
+        >
           <NewsletterBanner />
         </div>
       )}

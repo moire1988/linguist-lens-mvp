@@ -11,6 +11,11 @@
  * ※ X API Free tier では Poll は使用不可（Basic $100/月 以上が必要）。
  *   スレッド形式のみで運用する。リプライ誘導はアルゴリズム的にも Poll より上位シグナル。
  *
+ * 【Phase 1 モード（POST_TO_X_PHASE1=1）】
+ * アカウント育成初期（最初の30日）向け。URL/サイトリンクを一切含まず、
+ * 純粋な教育コンテンツのみを投稿する。Bot判定・凍結リスクを下げるための運用モード。
+ * Phase 2 以降は POST_TO_X_PHASE1 を削除または 0 にする。
+ *
  * 直近の重複回避: 投稿成功後に scripts/posted_history.json にキーを最大5件保持する。
  * - ライブラリ: 表現文字列（expression）
  * - 文法特集: "grammar:{slug}"
@@ -18,10 +23,13 @@
  * 環境変数（.env.local 推奨）:
  * - GEMINI_API_KEY … Groq API キー（GitHub Secrets 名を据え置くためこの名前のまま）
  * - TWITTER_API_KEY / TWITTER_API_SECRET / TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_SECRET
+ * - POST_TO_X_PHASE1      … 1 / true / yes で有効。URLなし純粋教育コンテンツモード（初期グロース用）
  * - POST_TO_X_DEBUG_DEDUP … 1 / true / yes で有効。テスト時に親ツイート末尾へタイムスタンプ＋乱数を付与し
  *   Duplicate Tweet（403）を避けやすくする（本番では未設定推奨）。
  *
  * 実行: npm run post-to-x
+ * Phase 1: POST_TO_X_PHASE1=1 npm run post-to-x
+ * （@cgo-growth-hacker 想定の初期30日・リンクなし運用）
  */
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
@@ -32,6 +40,17 @@ import type { LibraryEntry } from "../lib/library";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 config({ path: resolve(process.cwd(), ".env") });
+
+/**
+ * Phase 1 モード（X運用・初期グロース）: CTA の URL を投稿から完全に除外し、純粋な教育コンテンツのみにする。
+ * 有効化: POST_TO_X_PHASE1=1（または true / yes）
+ */
+function isPostToXPhase1Enabled(): boolean {
+  const v = process.env.POST_TO_X_PHASE1?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+const PHASE1_MODE: boolean = isPostToXPhase1Enabled();
 
 const GROQ_CHAT_COMPLETIONS_URL =
   "https://api.groq.com/openai/v1/chat/completions";
@@ -191,6 +210,10 @@ function resolveCtaUrl(source: ContentSource): string {
 const URL_IN_TEXT_RE = /https?:\/\/[^\s]+/g;
 
 function fallbackReplyText(ctaUrl: string): string {
+  // Phase 1: URL なし → 学習を促す締め文で代替
+  if (ctaUrl === "") {
+    return "コアイメージを意識すると、英語の感覚が少しずつ変わってきます。ぜひ次の会話で1度使ってみてください！";
+  }
   const line = `コアイメージで解説中 → ${ctaUrl}`;
   return line.length <= REPLY_TWEET_MAX
     ? line
@@ -205,6 +228,16 @@ function collapseComparableText(s: string): string {
 /** 本文から URL をすべて除去し整形 */
 function stripAllUrls(s: string): string {
   return s.replace(URL_IN_TEXT_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Phase 1: LLM が誤って出した http(s) リンクを除去（CTA 完全除外の保険） */
+function stripHttpUrlsForPhase1(text: string): string {
+  return text
+    .replace(URL_IN_TEXT_RE, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
 }
 
 /**
@@ -238,6 +271,17 @@ function normalizeReplyForThread(
   if (core === "") {
     core =
       "日本語話者向けに、なぜそうなるかをコアイメージで整理しています。";
+  }
+
+  // Phase 1: URL なし → コアテキストをそのまま返す（URL 付与・重複チェック不要）
+  if (ctaUrl === "") {
+    const parentComp = collapseComparableText(parentText);
+    const coreComp = collapseComparableText(core);
+    if (coreComp === parentComp) {
+      core =
+        "コアイメージで考えると直感が変わります。ぜひ使ってみてください！";
+    }
+    return ensureMaxLength(core, REPLY_TWEET_MAX);
   }
 
   const parentComp = collapseComparableText(parentText);
@@ -463,7 +507,10 @@ function buildQuizPrompt(entry: LibraryEntry, ctaUrl: string): string {
 1. 「✅ 正解: B」を明記
 2. なぜ A が不自然か（要点: ${entry.why_hard_for_japanese}）を1〜2文
 3. コアイメージ1文（素材: ${entry.coreImage}）
-4. CTA: 「他にも同系統の表現まとめてます → ${ctaUrl}」
+${ctaUrl
+  ? `4. CTA: 「他にも同系統の表現まとめてます → ${ctaUrl}」`
+  : `4. 締め: 「ぜひ今日の英会話で1度試してみてください 💪」などの前向きな一文（URLなし）`
+}
 
 親ツイートとリプライを次の区切り文字のみで分ける（前後に余計な文字なし）:
 ---REPLY---`;
@@ -498,7 +545,10 @@ function buildNgContrastPrompt(entry: LibraryEntry, ctaUrl: string): string {
 ▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
 1. nuance を1〜2文（素材: ${entry.nuance}）
 2. 使用シーン1文（素材: ${entry.context}）
-3. CTA: 「同じ落とし穴がある関連表現はこちら → ${ctaUrl}」
+${ctaUrl
+  ? `3. CTA: 「同じ落とし穴がある関連表現はこちら → ${ctaUrl}」`
+  : `3. 締め: 「この感覚を意識するだけで、英語の印象がガラッと変わります」などの学びを促す一文（URLなし）`
+}
 
 親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
 }
@@ -528,7 +578,10 @@ function buildCuriosityGapPrompt(entry: LibraryEntry, ctaUrl: string): string {
 ▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
 1. 例文: "${entry.goodExample}"（和訳: ${entry.goodExampleJa}）
 2. なぜ日本人には難しいか1文: ${entry.why_hard_for_japanese}
-3. CTA: 「同じシーンで使える関連表現はこちら → ${ctaUrl}」
+${ctaUrl
+  ? `3. CTA: 「同じシーンで使える関連表現はこちら → ${ctaUrl}」`
+  : `3. 締め: 「このコアイメージを持つと、次の表現も自然に使えるようになります」など（URLなし）`
+}
 
 親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
 }
@@ -559,14 +612,17 @@ function buildGrammarLessonPrompt(
    ・「英文法の『なんとなく』を終わらせる特集ページを公開しました」
 2. intro の要点を1〜2文: ${introSnippet}
 3. 「ミニクイズ5問つき・無料」を明示
-4. CTA: 「→ ${ctaUrl}」
+${ctaUrl ? `4. CTA: 「→ ${ctaUrl}」` : "4. URLなし — 「ミニクイズに挑戦してみてください」などに留める"}
 5. ハッシュタグ: #英語文法 #英語 #LinguistLens
 
 ▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
 1. ミニクイズ1問:
    "${quiz?.prompt ?? "コアイメージを問うクイズ"}"
    ${optionLines.join(" / ")}
-2. 「👇 答えをコメントで！全5問のクイズはこちら → ${ctaUrl}」
+${ctaUrl
+  ? `2. 「👇 答えをコメントで！全5問のクイズはこちら → ${ctaUrl}」`
+  : `2. 「👇 答えをコメントで！正解は次のリプライで発表します」（URLなし）`
+}
 
 親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
 }
@@ -602,15 +658,19 @@ async function generateTweetThread(
   format: TweetFormat
 ): Promise<GeneratedTweetThread> {
   const apiKey = requireEnv("GEMINI_API_KEY");
-  const ctaUrl = resolveCtaUrl(source);
-  console.log(`[post-to-x] Groq model: ${GROQ_MODEL}`);
+  // Phase 1: URL を一切含まない純粋な教育コンテンツ投稿。ctaUrl を空にすることで
+  // 各プロンプトビルダーが自動的に URL なしの締め文に切り替わる。
+  const ctaUrl = PHASE1_MODE ? "" : resolveCtaUrl(source);
+  console.log(`[post-to-x] Groq model: ${GROQ_MODEL}${PHASE1_MODE ? " [Phase 1: URL なし]" : ""}`);
 
   const systemContent =
     "あなたはCTR最大化のプロのSNSコピーライターであり、認知言語学に基づく英語教育の専門家です。" +
     "X（Twitter）で英語学習者（主に日本人・TOEIC受験者）のエンゲージメントを最大化するツイートを書いてください。" +
     "【鉄則】① 1ツイート目の冒頭フックが全て。指定されたフック公式を必ず使うこと。" +
     "② リプライでは親ツイートの本文を繰り返さない。" +
-    "③ リプライ内のURLは指示どおり1回だけ（重複リンク禁止）。" +
+    (PHASE1_MODE
+      ? "③ URLは一切出力しない（Phase 1: 純粋な教育コンテンツのみ）。"
+      : "③ リプライ内のURLは指示どおり1回だけ（重複リンク禁止）。") +
     "④ 区切りは ---REPLY--- のみ、前後に余計な文字・説明・markdown は一切出力しない。";
 
   const userContent = buildPrompt(source, format, ctaUrl);
@@ -680,15 +740,25 @@ B: ${entry.goodExample}
         })()
       : undefined;
 
-  const parent =
+  let parent =
     parentRaw !== ""
       ? parentRaw.slice(0, PARENT_TWEET_MAX)
       : (defaultParent ?? text.slice(0, PARENT_TWEET_MAX));
 
-  const reply =
+  let reply =
     replyPart.length > 0
       ? replyPart.slice(0, REPLY_TWEET_MAX)
       : fallbackReplyText(ctaUrl);
+
+  if (PHASE1_MODE) {
+    const parentSan = stripHttpUrlsForPhase1(parent);
+    const replySan = stripHttpUrlsForPhase1(reply);
+    parent = ensureMaxLength(parentSan, PARENT_TWEET_MAX);
+    reply = ensureMaxLength(replySan, REPLY_TWEET_MAX);
+    console.log(
+      "[post-to-x] [Phase 1] 生成済みツイートをサニタイズしました（http(s) URL・余分な空白を除去）。CTA は投稿に含めません。"
+    );
+  }
 
   return { parent, reply };
 }
@@ -766,7 +836,8 @@ export async function postThreadToX(
 
   const replyUrlMatches = replySafe.match(URL_IN_TEXT_RE);
   const replyUrlCount = replyUrlMatches ? replyUrlMatches.length : 0;
-  if (replyUrlCount !== 1) {
+  // Phase 1 は URL なしが正常。Phase 2 以降のみ URL 数を検証する。
+  if (!PHASE1_MODE && replyUrlCount !== 1) {
     console.warn(
       `[post-to-x] リプライ内の http(s) URL 数が ${String(replyUrlCount)}（期待: 1）。本文: ${replySafe}`
     );
@@ -807,6 +878,16 @@ export async function postThreadToX(
 }
 
 async function main(): Promise<void> {
+  if (PHASE1_MODE) {
+    console.log(
+      "\n[post-to-x] ═══════════════════════════════════════════════════" +
+      "\n[post-to-x]  X運用 Phase 1（初期グロース）— 有効" +
+      "\n[post-to-x]  CTA（URL）は生成・投稿ともに含めません（純粋な教育コンテンツのみ）。" +
+      "\n[post-to-x]  無効化: POST_TO_X_PHASE1 を未設定・0・false・no に" +
+      "\n[post-to-x] ═══════════════════════════════════════════════════\n"
+    );
+  }
+
   const library = loadLibrary();
   const grammarLessons = await loadGrammarLessonSummaries();
   const historyArr = readPostedHistory();
@@ -825,7 +906,8 @@ async function main(): Promise<void> {
   console.log("--- Parent ---\n", parent, "\n---");
   console.log("--- Reply ---\n", reply, "\n---");
 
-  const ctaUrl = resolveCtaUrl(source);
+  // Phase 1 は postThreadToX にも空文字を渡してリプライの URL 正規化をスキップ
+  const ctaUrl = PHASE1_MODE ? "" : resolveCtaUrl(source);
   const { parentId, replyId } = await postThreadToX(parent, reply, ctaUrl);
   recordPostedPhrase(resolveHistoryKey(source));
   console.log(
