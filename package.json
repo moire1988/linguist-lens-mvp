@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "post-to-x": "tsx scripts/post-to-x.ts",
-    "reply-assist": "npx tsx scripts/reply-assist.ts"
+    "reply-assist": "npx tsx scripts/reply-assist.ts",
+    "task": "tsx scripts/show-tasks.ts",
+    "status": "tsx scripts/show-tasks.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
@@ -42,7 +44,8 @@
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
     "dotenv": "^16.6.1",
-    "eslint": "^10.1.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.19.2",
