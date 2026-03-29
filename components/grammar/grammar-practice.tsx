@@ -46,7 +46,7 @@ export function GrammarPractice({ items, slug }: GrammarPracticeProps) {
   }
 
   return (
-    <section className="mb-10 rounded-2xl border border-slate-100 bg-slate-50/50 p-5 sm:p-6">
+    <section className="mb-10 rounded-2xl border border-slate-100 bg-white p-5 sm:p-6">
       <h2 className="text-lg font-bold text-slate-800 mb-1">ミニクイズ</h2>
       <p className="text-xs text-slate-500 mb-6">
         各問の正しい選択肢を選び、解説でイメージを固めましょう。

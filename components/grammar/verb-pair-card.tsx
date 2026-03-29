@@ -18,6 +18,12 @@ function sceneLabel(scene: VerbPairExample["scene"]): string {
   }
 }
 
+function formBadgeTextClass(form: VerbPairExample["form"]): string {
+  if (form === "ing" || form === "in") return "text-indigo-600";
+  if (form === "on") return "text-emerald-600";
+  return "text-violet-600";
+}
+
 function ExampleRow({ ex }: { ex: VerbPairExample }) {
   const isWrong = ex.isCorrect === false;
   const hasWarning = Boolean(ex.warningNote);
@@ -48,7 +54,7 @@ function ExampleRow({ ex }: { ex: VerbPairExample }) {
         <span
           className={cn(
             "text-[10px] font-bold font-mono uppercase",
-            ex.form === "ing" ? "text-indigo-600" : "text-violet-600"
+            formBadgeTextClass(ex.form)
           )}
         >
           {ex.form}
@@ -92,13 +98,13 @@ export function VerbPairCard({ pair }: VerbPairCardProps) {
       <div className="p-5 grid md:grid-cols-2 gap-4 text-sm">
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
           <p className="text-[10px] font-bold text-indigo-600 uppercase mb-2">
-            -ing のイメージ
+            {pair.ingLabel ?? "-ing のイメージ"}
           </p>
           <p className="text-slate-700 leading-relaxed">{pair.ingImage}</p>
         </div>
         <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4">
           <p className="text-[10px] font-bold text-violet-600 uppercase mb-2">
-            to のイメージ
+            {pair.toLabel ?? "to のイメージ"}
           </p>
           <p className="text-slate-700 leading-relaxed">{pair.toImage}</p>
         </div>
