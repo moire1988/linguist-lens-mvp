@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { Mail, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAppAuth } from "@/hooks/useAppAuth";
+import { useNewsletterWantsEmail } from "@/hooks/use-newsletter-wants-email";
 import { openLoginPrompt } from "@/lib/login-prompt-store";
 import { subscribeNewsletter } from "@/app/actions/newsletter";
-import {
-  getDbPreferences,
-  USER_PREFERENCES_CHANGED_EVENT,
-} from "@/lib/db/preferences";
+import { USER_PREFERENCES_CHANGED_EVENT } from "@/lib/db/preferences";
 
 // ─── Subscribe button ─────────────────────────────────────────────────────────
 
@@ -62,40 +60,9 @@ function SubscribeButton({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function NewsletterBanner({ variant = "default" }: { variant?: "default" | "compact" }) {
-  const { isSignedIn, userId, getToken, isMocked } = useAppAuth();
+  const { isSignedIn } = useAppAuth();
+  const { loaded: wantsEmailLoaded, wantsEmail } = useNewsletterWantsEmail();
   const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
-  /** ログイン済みでメルマガONのときはバナー自体を出さない（未確定は null） */
-  const [wantsEmailLoaded, setWantsEmailLoaded] = useState(false);
-  const [wantsEmail, setWantsEmail] = useState(false);
-
-  const refreshWantsEmail = useCallback(async () => {
-    if (!isSignedIn || !userId || isMocked) {
-      setWantsEmailLoaded(true);
-      setWantsEmail(false);
-      return;
-    }
-    const token = await getToken({ template: "supabase" });
-    if (!token) {
-      setWantsEmailLoaded(true);
-      setWantsEmail(false);
-      return;
-    }
-    const prefs = await getDbPreferences(token, userId);
-    setWantsEmail(prefs?.wantsEmail ?? false);
-    setWantsEmailLoaded(true);
-  }, [isSignedIn, userId, getToken, isMocked]);
-
-  useEffect(() => {
-    void refreshWantsEmail();
-  }, [refreshWantsEmail]);
-
-  useEffect(() => {
-    const handler = () => {
-      void refreshWantsEmail();
-    };
-    window.addEventListener(USER_PREFERENCES_CHANGED_EVENT, handler);
-    return () => window.removeEventListener(USER_PREFERENCES_CHANGED_EVENT, handler);
-  }, [refreshWantsEmail]);
 
   const handleSubscribe = async () => {
     if (!isSignedIn) {
@@ -106,7 +73,6 @@ export function NewsletterBanner({ variant = "default" }: { variant?: "default" 
     const result = await subscribeNewsletter();
     if (result.success) {
       setStatus("done");
-      setWantsEmail(true);
       window.dispatchEvent(new CustomEvent(USER_PREFERENCES_CHANGED_EVENT));
       toast.success("メルマガ登録が完了しました！");
     } else {
