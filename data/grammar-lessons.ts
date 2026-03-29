@@ -9,7 +9,7 @@ export interface CoreConcept {
 }
 
 export interface VerbPairExample {
-  form: "ing" | "to";
+  form: "ing" | "to" | "in" | "on" | "at";
   sentence: string;
   translation: string;
   nuanceNote: string;
@@ -23,6 +23,10 @@ export interface VerbPair {
   coreInsight: string;
   ingImage: string;
   toImage: string;
+  /** 前置詞レッスン等でデフォルトの "-ing のイメージ" を上書きするラベル */
+  ingLabel?: string;
+  /** 前置詞レッスン等でデフォルトの "to のイメージ" を上書きするラベル */
+  toLabel?: string;
   examples: VerbPairExample[];
 }
 
@@ -550,7 +554,7 @@ export const GRAMMAR_LESSONS: GrammarLesson[] = [
       "infinitive-of-purpose",
       "aspect-perfect-vs-simple",
       "modal-verbs-core-image",
-      "prepositions-core-image",
+      "prepositions-in-on-at",
     ],
   },
 
@@ -930,7 +934,488 @@ export const GRAMMAR_LESSONS: GrammarLesson[] = [
       "ing-vs-to",
       "modal-verbs-core-image",
       "passive-voice-core-image",
-      "prepositions-core-image",
+      "prepositions-in-on-at",
+    ],
+  },
+
+  {
+    slug: "prepositions-in-on-at",
+    seoTitle: "前置詞 in / on / at の使い分け｜コアイメージで完全理解（B1-C1）",
+    seoDescription:
+      "「in Monday」はなぜ間違い？ in・on・at の3つを「囲み・面・点」のコアイメージで整理。時間・場所・乗り物・状態の全パターンを例文・ミニクイズ付きで解説します。",
+    h1: "前置詞 in / on / at の使い分け：コアイメージで完全理解",
+    subtitle:
+      'Why does "at home" feel different from "in the house"? — The Core Image of Prepositions',
+    targetLevels: ["B1", "B2", "C1"],
+    category: "前置詞",
+    publishedAt: "2026-03-29T00:00:00+09:00",
+    readingMinutes: 11,
+    intro:
+      "「on Monday なのに in the morning? at 3 o'clock なのに in 2024?」前置詞は暗記しかないと思っていませんか？実は in・on・at には一貫したコアイメージがあります。in は「三次元の内側・囲み」、on は「面との接触」、at は「点・瞬間・地点」。この3つのイメージを掴めば、時間・場所・状態のどの文脈でも、丸暗記ゼロで自然な前置詞が選べるようになります。",
+
+    coreConceptA: {
+      label: "in",
+      coreImage:
+        "三次元の「内側・囲み」。境界線に取り囲まれた内部の空間。液体に沈む・容器の中にある・期間の「中に入っている」感覚。",
+      metaphor:
+        "水槽の中の魚のように、四方八方を囲まれた「中」にいるイメージ。立体的な空間・期間・状態の「内側」に包まれている感覚。",
+      keyWords: ["内側", "囲み", "立体空間", "期間・幅のある時間", "状態の中"],
+    },
+
+    coreConceptB: {
+      label: "at",
+      coreImage:
+        "地図上の「一点」・時間軸上の「瞬間」。活動・焦点が集中する「地点」。広がりや囲みのない、ピンポイントの位置。",
+      metaphor:
+        "地図にピンを刺すような感覚。「今ここにいる」「今この瞬間」という焦点が定まった一点。活動の焦点が集まる場所（at work, at school）にも使われる。",
+      keyWords: ["点", "瞬間", "地点・ピンポイント", "活動の焦点", "時刻"],
+    },
+
+    coreConcepts: [
+      {
+        label: "in",
+        coreImage:
+          "三次元の内側・囲み。境界に包まれた「中」にある感覚。",
+        metaphor:
+          "水槽の中の魚。四方を囲まれた立体空間や期間の「内側」。",
+        keyWords: ["内側", "囲み", "期間", "立体空間"],
+        colorScheme: "indigo",
+      },
+      {
+        label: "on",
+        coreImage:
+          "面・表面との「接触」。何かの上・面に触れている感覚。",
+        metaphor:
+          "テーブルの上のカップ。面に乗っている・触れている・接続されている感覚。デジタル媒体への「接続」にも。",
+        keyWords: ["面・表面", "接触", "特定の日", "媒体・接続"],
+        colorScheme: "emerald",
+      },
+      {
+        label: "at",
+        coreImage:
+          "点・瞬間・地点。地図上のピン。活動の焦点が集まる一点。",
+        metaphor:
+          "地図にピンを刺すイメージ。ピンポイントの時刻・場所・活動地点。",
+        keyWords: ["点", "瞬間", "時刻", "活動地点"],
+        colorScheme: "violet",
+      },
+    ],
+
+    verbPairs: [
+      {
+        verb: "時間表現",
+        ingLabel: "in のイメージ（期間・幅）",
+        toLabel: "on / at のイメージ（面・点）",
+        coreInsight:
+          "時間の前置詞は「幅の長さ」で決まります。in は「期間の内側」（in 2024 / in January / in the morning）、on は「特定の曜日・日付という面」（on Monday / on March 15）、at は「時刻・瞬間というピンポイント」（at 3 PM / at midnight）。最もよくある誤りは「in Monday」「at the morning」です。",
+        ingImage:
+          "in：長い時間の「内側」にいる感覚。年・月・季節・午前/午後などの幅のある期間の「中に入っている」。例: in 2024 / in March / in the morning / in the 20th century。",
+        toImage:
+          "on：曜日や日付という「面・ページ」の上にいる感覚。on Monday / on March 15。　at：時刻という「一点・瞬間」を指す。at 3 PM / at midnight / at noon / at dawn。",
+        examples: [
+          {
+            form: "in",
+            sentence: "The annual report will be published in Q3.",
+            translation: "年次報告書は第3四半期に発行されます。",
+            nuanceNote:
+              "Q3（第3四半期）という幅のある期間の「内側」に発行される。月・四半期・年などの幅のある時間はすべて in。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "in",
+            sentence: "I usually go for a run in the morning before work.",
+            translation: "仕事前に朝ランニングをするのが習慣です。",
+            nuanceNote:
+              "「午前という時間帯の内側」。in the morning / in the afternoon / in the evening が自然（夜は at night が一般的な例外）。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "on",
+            sentence:
+              "Let's reschedule the kickoff meeting to Monday at 10 AM.",
+            translation:
+              "キックオフ会議を月曜日の午前10時に変更しましょう。",
+            nuanceNote:
+              "on Monday（曜日という「面」）と at 10 AM（時刻という「点」）が自然に組み合わさる。英語ではこの2つを並べて使うのが頻出パターン。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "at",
+            sentence:
+              "The store closes at midnight on New Year's Eve.",
+            translation: "大晦日の真夜中に店は閉まります。",
+            nuanceNote:
+              "at midnight（真夜中という時刻の「点」）と on New Year's Eve（特定の日という「面」）。どちらも「定点」を示す典型例。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "in",
+            sentence: "The meeting is in Monday.",
+            translation: "（誤）会議は月曜日にあります。",
+            nuanceNote:
+              "曜日・日付には on が正しい。on Monday / on a Monday morning。日本語の「〜に」が「in」に聞こえてしまうため、in を使う日本人学習者が多い。",
+            scene: "business",
+            isCorrect: false,
+            warningNote:
+              "「月曜日に」= on Monday（面）。「3月に」= in March（期間の内側）。「3時に」= at 3（点）。この3パターンがセットで最重要。",
+          },
+        ],
+      },
+
+      {
+        verb: "場所・スケール感",
+        ingLabel: "in のイメージ（囲み・内部）",
+        toLabel: "on / at のイメージ（面・点）",
+        coreInsight:
+          "場所の前置詞は「どのスケール・どの捉え方か」で決まります。国・都市のような「立体的な内側・囲み」は in（in Japan / in Tokyo）、通り・道路などの「線・面の上」は on（on Fifth Avenue）、駅・空港・特定の建物入口など「活動地点・ピンポイント」は at（at the station / at the airport）です。",
+        ingImage:
+          "in：国・市・地域のような「広い立体空間の内側」。建物の「物理的な内部」にいることを強調するときも in（in the office building）。",
+        toImage:
+          "on：道路・通り・橋などの「線・面の上」。on Main Street / on the highway。　at：駅・空港・交差点などの「地点・ポイント」。スケールより「そこに立っている焦点」感。",
+        examples: [
+          {
+            form: "in",
+            sentence:
+              "She's been living in Osaka for the past three years.",
+            translation: "彼女はここ3年間大阪に住んでいます。",
+            nuanceNote:
+              "大阪という都市の「立体的な内側」に含まれている。国・都市・地域など広い空間の内側には in。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "in",
+            sentence:
+              "The head office is in the building on the left.",
+            translation: "本社は左の建物の中にあります。",
+            nuanceNote:
+              "「建物の内側（in）」にある。「通り沿いの（on）」建物。2つの前置詞が自然に共存する例。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "on",
+            sentence:
+              "The café is on the corner of Oak Street and 5th Avenue.",
+            translation:
+              "そのカフェはオーク通りと5番街の角にあります。",
+            nuanceNote:
+              "通り（線・面）の上に位置する。on the corner / on the street / on the highway など、道路・通り系は on。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "at",
+            sentence:
+              "I'll meet you at the main entrance of Tokyo Station at noon.",
+            translation:
+              "正午に東京駅の正面玄関で会いましょう。",
+            nuanceNote:
+              "「東京駅の正面玄関という地点（at）」で会う。at the station / at the airport / at the entrance は活動の焦点となる地点。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "at",
+            sentence: "She's in the hospital.",
+            translation: "（注意）彼女は入院中です。",
+            nuanceNote:
+              "in the hospital（US英語）＝「入院中・病院の建物の中」という意味になる。「病院にお見舞いに行く」なら at the hospital が自然（活動地点として）。British English では in hospital（無冠詞）で入院を表すことが多い。",
+            scene: "daily",
+            isCorrect: true,
+            warningNote:
+              "in the hospital（病院の建物の中 = 入院中）と at the hospital（病院という場所に来ている = お見舞い・外来）は含意が異なる。同様に in the office（オフィスの建物内）と at the office（職場にいる）も使い分けるとニュアンスが正確になる。",
+          },
+        ],
+      },
+
+      {
+        verb: "交通手段・乗り物",
+        ingLabel: "in のイメージ（囲まれる乗り物）",
+        toLabel: "on のイメージ（面に乗る乗り物）",
+        coreInsight:
+          "乗り物の前置詞は「囲まれ感」で決まります。タクシー・車・エレベーターなど体が「囲まれる」乗り物は in（in a taxi / in the car）、バス・電車・飛行機・船など「面の上・大きな乗り物」は on（on the bus / on a plane）。自転車・バイク・馬など「またがる」ものも on。徒歩（on foot）も「地面という面」のイメージ。",
+        ingImage:
+          "in：体を囲む狭い乗り物（car, taxi, elevator, canoe）。「内側に入る」感覚の強い乗り物。in a car / in a cab / in an Uber。",
+        toImage:
+          "on：大きな乗り物の「面・甲板・床」の上。on the bus / on the train / on a plane / on a ship。またがるもの（bike, horse）や地面（foot）も on。",
+        examples: [
+          {
+            form: "in",
+            sentence:
+              "We spent almost two hours stuck in a cab because of the traffic.",
+            translation:
+              "渋滞でタクシーの中に2時間近も閉じ込められた。",
+            nuanceNote:
+              "タクシーは体を囲む狭い空間。「内側に閉じ込められている」感覚が in と一致する。in a car / in a taxi / in an Uber はすべて自然。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "on",
+            sentence:
+              "I was reading a report on the train when my phone died.",
+            translation:
+              "電車の中でレポートを読んでいたら携帯が切れた。",
+            nuanceNote:
+              "電車は「面・床の上に乗っている」感覚。on the train / on the bus / on the subway（米）は自然。「電車の中で」という感覚だが英語では on を使う点に注意。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "on",
+            sentence:
+              "She commutes to work on her bicycle every day regardless of the weather.",
+            translation:
+              "天気に関わらず毎日自転車で通勤している。",
+            nuanceNote:
+              "自転車は「またがる」もの。表面・面に乗っている on のイメージ。on a bike / on horseback / on foot（徒歩）もすべて on。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "in",
+            sentence:
+              "I'll send you the document in the plane — I have Wi-Fi.",
+            translation:
+              "（誤）機内でWi-Fiがあるので、飛行機の中でドキュメントを送ります。",
+            nuanceNote:
+              "飛行機は on a plane が正しい（大きな乗り物の面）。in the plane は「機体の物理的な内側」という直接的すぎるニュアンスで不自然。",
+            scene: "business",
+            isCorrect: false,
+            warningNote:
+              "「飛行機の中で」= on the plane（大きな乗り物の面）。on the bus / on the train と同じ。car / taxi のような「囲む感覚」の強い小型乗り物だけ in。",
+          },
+        ],
+      },
+
+      {
+        verb: "状態・状況表現",
+        ingLabel: "in のイメージ（状況の囲みの中）",
+        toLabel: "on / at のイメージ（面・地点）",
+        coreInsight:
+          "前置詞を使った状態表現もコアイメージで理解できます。in は「状態という囲みの内側」（in love / in trouble / in danger）、on は「ある活動・役割の面に乗っている」（on duty / on strike / on sale）、at は「ある状態の地点にある」（at risk / at peace / at war）。コアイメージで解釈すると丸暗記が不要になります。",
+        ingImage:
+          "in：感情・困難・状況という「囲み」の中にいるイメージ。in love（恋愛という状況の内側）、in trouble（問題という囲みの中）、in a meeting（会議という囲まれた状況）。",
+        toImage:
+          "on：活動・役割の「面」に乗っている。on duty（勤務の面）、on sale（販売の面）、on strike（ストの面）。　at：ある状態の「地点」にいる。at risk（リスクの地点）、at peace（平和の地点）、at war。",
+        examples: [
+          {
+            form: "in",
+            sentence:
+              "The entire team is in a panic after the system went down.",
+            translation:
+              "システムが落ちてチーム全体がパニックになっている。",
+            nuanceNote:
+              "「パニックという状況の内側」に包まれている。in a panic / in a hurry / in shock / in a meeting はすべて「状況の囲みの中にいる」感覚。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "on",
+            sentence:
+              "The item is currently on sale at 30% off for the holiday season.",
+            translation:
+              "その商品は現在ホリデーシーズン限定で30%オフのセール中です。",
+            nuanceNote:
+              "「セール（という活動・状態の面）に乗っている」。on sale / on offer / on display / on duty などは「その状態の面に乗っている」感覚。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "at",
+            sentence:
+              "Patients with underlying conditions are considered at higher risk.",
+            translation:
+              "基礎疾患のある患者はより高いリスクの地点にあると考えられます。",
+            nuanceNote:
+              "「リスクという地点・状態」にある。at risk / at war / at peace / at ease はどれも「その地点にいる状態」を表す。",
+            scene: "academic",
+            isCorrect: true,
+          },
+          {
+            form: "on",
+            sentence: "The city has been on war since last year.",
+            translation: "（誤）その都市は昨年から戦争状態にある。",
+            nuanceNote:
+              "「戦争状態の地点」= at war が正しい。at war / at peace / at odds などは「対立・状態の地点」を表し、on は使わない。",
+            scene: "academic",
+            isCorrect: false,
+            warningNote:
+              "状態系慣用句は「点（at）・面（on）・囲み（in）」のどれに近い状態かを考えると覚えやすい。at war / at peace（地点）、on duty / on strike（面）、in trouble / in love（囲み）。",
+          },
+        ],
+      },
+
+      {
+        verb: "コミュニケーション・メディア",
+        ingLabel: "in のイメージ（文書の内容・状況の囲み）",
+        toLabel: "on のイメージ（媒体・チャンネルの面）",
+        coreInsight:
+          "通信・メディアに関する前置詞も重要です。電話・テレビ・インターネット・SNSなどのデジタル媒体は on（on the phone / on TV / on Zoom / on Instagram）。一方、文書・書籍・メールの「内容の内側」を指すときは in（in the email / in the report）。会議・通話という「囲まれた状況の中」も in（in a meeting / in a call）。",
+        ingImage:
+          "in：文書・書籍・メールの「内容の内側」。in the email / in the report / in the article。または会議・通話という「囲まれた状況の中」（in a meeting）。",
+        toImage:
+          "on：電話・テレビ・インターネットという「電気的な面・チャンネル」に乗っている感覚。on the phone / on TV / on YouTube / on Zoom / on Instagram。",
+        examples: [
+          {
+            form: "in",
+            sentence:
+              "I noticed a typo in the email you sent this morning.",
+            translation:
+              "今朝あなたが送ったメールに誤字を見つけました。",
+            nuanceNote:
+              "「メールの内容の内側」にある誤字。in the email / in the report / in the document は「内容・中身の内側」。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "in",
+            sentence:
+              "Sorry, I can't talk right now — I'm in a meeting.",
+            translation:
+              "すみません、今会議中で話せません。",
+            nuanceNote:
+              "会議という「囲まれた状況の中にいる」感覚。in a meeting / in a conference / in a call はすべて「状況の囲みの中」。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "on",
+            sentence:
+              "I saw an interview with the CEO on TV last night.",
+            translation:
+              "昨晩テレビでCEOのインタビューを見ました。",
+            nuanceNote:
+              "テレビというメディア（面・チャンネル）の上で放映されている。on TV / on YouTube / on Instagram はすべて「メディアの面の上」。",
+            scene: "daily",
+            isCorrect: true,
+          },
+          {
+            form: "on",
+            sentence:
+              "She presented her findings at the conference on Zoom.",
+            translation:
+              "彼女はZoomで学会にて調査結果を発表した。",
+            nuanceNote:
+              "on Zoom（Zoomというデジタル媒体の面）と at the conference（会議という地点・活動）の組み合わせ。on Teams / on Slack / on Zoom は全てオンラインプラットフォームなので on。",
+            scene: "business",
+            isCorrect: true,
+          },
+          {
+            form: "in",
+            sentence: "I found the solution in Google.",
+            translation: "（誤）Googleで解決策を見つけました。",
+            nuanceNote:
+              "Googleというプラットフォーム（の面）で調べる場合は on Google が自然（または \"by Googling\"）。in Google は「Google社の中で」という全く別の意味になる。",
+            scene: "daily",
+            isCorrect: false,
+            warningNote:
+              "デジタルプラットフォーム・SNS・検索エンジンはすべて「面・チャンネル」の on。on Google / on YouTube / on X（Twitter）/ on LinkedIn。",
+          },
+        ],
+      },
+    ],
+
+    sections: [
+      {
+        id: "why-japanese-struggle",
+        heading: "なぜ日本人は前置詞で詰まるのか？",
+        body: "英語の in / on / at は、日本語では基本的に「に」「で」という助詞に対応します。「月曜日に」も「3時に」も「駅に」も「テーブルに」も、すべて「に」か「で」の一語で済んでしまうため、英語の3つの前置詞が存在する理由を感覚的につかみにくいのです。\n\n学校英語では「at は時刻・on は曜日・in は月や年に使う」という暗記ルールが教えられます。これは出発点として正しいのですが、このルールだけでは「at home / in the house の違いは？」「on the bus なのに in a car なのはなぜ？」「in trouble と at risk はどう違う？」といった疑問には答えられません。\n\n暗記ルールが崩れる原因は、「場所・時間・状態」という3つの用法を別々に覚えようとするからです。コアイメージ（in = 囲み、on = 面、at = 点）を使えば、どの文脈でも同じ感覚で判断できます。",
+        callout:
+          "「に」「で」という一語で済む日本語に引きずられず、「囲み（in）・面（on）・点（at）」という3次元のイメージで判断する習慣をつけましょう。",
+      },
+      {
+        id: "in-core-image",
+        heading: "in のコア：「三次元の内側・囲み」",
+        body: "in のコアイメージは「三次元の空間・境界線に囲まれた内側」です。\n\n**空間的な in:**\n- in a room（部屋の立体的な内側）\n- in Japan（国という大きな境界の内側）\n- in a cup（カップという容器の内側）\n\n**時間的な in:**\n時間にも「囲まれた期間」という感覚があります。in 2024（2024年という時間の囲みの内側）、in January（1月という時間帯の内側）、in the morning（午前という時間帯の内側）。\n\n**状態的な in:**\nin love（恋愛という状況に包まれている）、in trouble（問題という囲みの中）。感情・状態という「境界のある囲み」の中にいる感覚です。\n\n| 用法 | 例 | 感覚 |\n|------|----|------|\n| 空間 | in the room / in Japan | 立体的な囲み |\n| 時間 | in 2024 / in March / in the morning | 幅のある期間の内側 |\n| 状態 | in trouble / in love / in pain | 状況という囲みの中 |\n| 文書 | in the email / in the article | 内容の内側 |",
+        callout:
+          "in のシグナルは「立体的に囲まれた内側」。空間でも時間でも状態でも「その境界の中に入っている」感覚です。",
+      },
+      {
+        id: "on-core-image",
+        heading: "on のコア：「面との接触・接続」",
+        body: "on のコアイメージは「面・表面との接触」です。物理的な接触だけでなく、デジタル媒体への「接続」、特定の日付という「ページ・面」、役割・状態の「上に乗っている」感覚まで、「面との関係」という核が一貫しています。\n\n**物理的な on:**\n- on the table（テーブルの面に接触している）\n- on the wall（壁の面に接触している）\n\n**時間的な on:**\non Monday（月曜という「ページ・面」の上）、on March 15（特定の「日付ページ」の上）。日付・曜日をカレンダーの「1ページ」として捉えるイメージです。\n\n**媒体・接続の on:**\non TV / on the phone / on Zoom / on the internet。電気的・デジタルな媒体は「チャンネルという面に乗っている」感覚です。\n\n| 用法 | 例 | 感覚 |\n|------|----|------|\n| 空間 | on the table / on the wall | 面への接触 |\n| 時間 | on Monday / on June 1st | 日・日付のページ |\n| 交通 | on the bus / on the train | 大きな乗り物の面 |\n| 媒体 | on TV / on Zoom | デジタル媒体への接続 |\n| 状態 | on duty / on sale / on fire | 役割・活動の面 |",
+        callout:
+          "on のシグナルは「何かの表面・面との接触・接続」。物理的な面から時間の「ページ」、デジタル媒体の「チャンネル」まで、面との関係が核です。",
+      },
+      {
+        id: "at-core-image",
+        heading: "at のコア：「点・瞬間・活動地点」",
+        body: "at のコアイメージは「地図上の一点・時間軸上の瞬間」です。広がりも囲みもなく、焦点がピンポイントに集まる「点」です。\n\n**空間的な at:**\n- at the station（駅という地点）\n- at the corner（角という一点）\n- at the entrance（入り口という地点）\n\n国や都市のような「広い囲み（in）」でも、道路の「面（on）」でもなく、地図のピンのような「点・焦点」が at のシグナルです。\n\n**時間的な at:**\nat 3 PM（午後3時という時刻の一点）、at midnight（真夜中という瞬間）、at dawn（夜明けという瞬間）。時計で指せる「特定の時刻」はすべて at。\n\n**活動地点の at:**\nat work / at school / at home / at the gym。これらは「物理的な内側（in）」ではなく「その場所で活動中」という意味を持ちます。\n- \"I'm in the office.\"（オフィスの建物の中にいる。位置の情報）\n- \"I'm at the office.\"（オフィスで仕事中・働いている。活動の情報）\n\n| 用法 | 例 | 感覚 |\n|------|----|------|\n| 空間 | at the station / at the corner | 地点・ピンポイント |\n| 時間 | at 3 PM / at midnight | 時刻・瞬間 |\n| 活動 | at work / at school / at home | 活動地点・焦点 |\n| 状態 | at risk / at peace / at war | 状態の地点 |",
+        callout:
+          "at のシグナルは「ピンポイントの一点・瞬間・活動地点」。地図のピンを刺すように、広さや囲みのない「焦点が定まった点」がコアです。",
+      },
+      {
+        id: "scale-and-size",
+        heading: "場所のスケール感：どの広さなら in / on / at？",
+        body: "場所の前置詞選びで最も役立つのは「スケール感」の考え方です。\n\n| スケール・性質 | 前置詞 | 例 |\n| --- | --- | --- |\n| 国・地域・都市 | in | in Japan / in Tokyo |\n| 通り・道路・橋 | on | on Main Street / on the highway |\n| 駅・空港・建物のポイント | at | at Shinjuku Station / at the airport |\n| 建物の内部（物理的） | in | in the office / in the library |\n| 建物の場所（活動地点） | at | at the office / at the library |\n\n**in と at の微妙な違い（建物・施設）:**\n同じ場所でも in と at では含意が変わります：\n- \"She's in the hospital.\"（病院の建物の中 = 入院中）\n- \"She's at the hospital.\"（病院にいる = 見舞い・外来などで訪問中）\n\nこの使い分けを習得すると、英語のニュアンスが格段に精密になります。",
+        callout:
+          "「大きな広がり = in」「面・通り = on」「ピンポイントな地点 = at」。スケール感で判断し、活動を表すときは at を疑いましょう。",
+      },
+    ],
+
+    practiceItems: [
+      {
+        id: "prep-practice-01",
+        prompt:
+          "The annual conference will be held ___ the first Monday ___ November.\n（2つの空欄 — 両方に適切な前置詞を選んでください）",
+        options: ["in / in", "on / in", "at / on", "on / at"],
+        correctIndex: 1,
+        explanation:
+          "「11月の第1月曜日」→ on（曜日という面）+ in（11月という月の期間の内側）。on the first Monday in November が正しい。「曜日・日付（on）」と「月・年（in）」の組み合わせは英語で最もよく使われる時間表現のパターン。at は時刻（at 3 PM）に使うため、曜日や月には使えない。",
+      },
+      {
+        id: "prep-practice-02",
+        prompt:
+          "She's not available right now — she's ___ a conference call with the Tokyo team.\n（Context: She's currently participating in the call.）",
+        options: ["on", "in", "at", "for"],
+        correctIndex: 1,
+        explanation:
+          "会議・通話という「囲まれた状況の中」にいる = in が正しい。in a meeting / in a call / in a conference call はすべて「その状況の内側にいる」という in の用法。on a call も口語では使われるが、\"in a conference call\" が最も自然。at は活動地点のため in よりも物理的な場所感が出てしまう。",
+      },
+      {
+        id: "prep-practice-03",
+        prompt:
+          "I read about the merger ___ this morning's Financial Times.\n（Context: You read a physical or digital newspaper article.）",
+        options: ["in", "on", "at", "from"],
+        correctIndex: 0,
+        explanation:
+          "「フィナンシャル・タイムズの内容の内側に記事があった」= in が正しい。in the newspaper / in the magazine / in the article / in the report はすべて「文書・出版物の内容の内側」。on the Financial Times だと「FT のウェブサイト（デジタル媒体の面）で」という意味に近くなる。紙・デジタルどちらも記事の「内容」に言及する場合は in。",
+      },
+      {
+        id: "prep-practice-04",
+        prompt:
+          "I've been waiting for you ___ the entrance. Where are you?\n（Context: You're standing at a specific point outside the building.）",
+        options: ["in", "on", "at", "inside"],
+        correctIndex: 2,
+        explanation:
+          "「入り口という地点に立っている」= at が正しい。at the entrance / at the gate / at the front desk はすべて「特定の地点・ポイント」を示す at の典型。in the entrance だと「入り口の内側（入り口を入った場所）」という意味になり不自然。on も道路・面のニュアンスになるため不適切。",
+      },
+      {
+        id: "prep-practice-05",
+        prompt:
+          "The project team is currently ___ a tight deadline, so please avoid interruptions.\n（Context: The team is under pressure from the deadline.）",
+        options: ["at", "on", "in", "under"],
+        correctIndex: 3,
+        explanation:
+          "「締め切りというプレッシャーの下」= under a tight deadline が最も自然な慣用表現。under pressure / under deadline / under stress はすべて「上からの圧力・その影響下にある」という感覚。in a deadline も理解はできるが不自然。at a deadline は「締め切りの地点にいる」で意味は通るが under が正しいコロケーション。これは in/on/at の問題と見せかけて、慣用句（under）を問う上級問題。",
+      },
+    ],
+
+    proTip:
+      "C1 レベルを目指すなら、in / on / at の使い分けを「活動の焦点」として意識しましょう。\"I'm in the office\" と \"I'm at the office\" のように、同じ場所でも in は物理的位置、at は活動地点を示します。ビジネスメールで \"available at the office\" と書けば「オフィスで仕事中・対応可能」というニュアンスが伝わり、in the office より能動的な印象になります。また on は「接続・関係」という感覚を掴むと、on the team / on the project / on the committee のような「〜に関わっている」用法も自然に使いこなせます。さらに「in time（間に合って）vs on time（定刻通りに）」という有名な対比も、in（余裕という幅の中）と on（定刻という面・ルール）のコアイメージで直感的に区別できます。",
+
+    relatedSlugs: [
+      "ing-vs-to",
+      "causative-verbs-make-let-have-get",
+      "modal-verbs-core-image",
+      "articles-core-image",
+      "phrasal-verbs-in-on-out",
     ],
   },
 ];

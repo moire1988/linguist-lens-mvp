@@ -242,7 +242,7 @@ export default function GrammarLessonPage({
                 <Link
                   key={rel.slug}
                   href={`/library/grammar/${rel.slug}`}
-                  className="rounded-xl border border-slate-100 bg-slate-50/80 p-4 hover:border-indigo-200 hover:bg-white transition-colors"
+                  className="rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-indigo-200"
                 >
                   <p className="text-sm font-semibold text-slate-900">
                     {rel.h1}
