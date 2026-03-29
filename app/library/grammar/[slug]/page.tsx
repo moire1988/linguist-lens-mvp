@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Script from "next/script";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { GlobalNav } from "@/components/global-nav";
@@ -14,6 +15,10 @@ import {
   getGrammarLesson,
   getAllGrammarSlugs,
 } from "@/lib/grammar-lesson";
+import {
+  buildGrammarLessonMetadataKeywords,
+  buildGrammarLessonSchemaGraph,
+} from "@/lib/grammar-lesson-structured-data";
 import { getPublicSiteUrl } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 
@@ -34,17 +39,13 @@ export async function generateMetadata({
   const canonical = `${getPublicSiteUrl()}/library/grammar/${lesson.slug}`;
   const title = lesson.seoTitle;
   const description = lesson.seoDescription;
+  /** GEO: コアイメージ・セクション見出しを反映（本文由来の JSON-LD はページ側で注入） */
+  const keywords = buildGrammarLessonMetadataKeywords(lesson);
 
   return {
     title,
     description,
-    keywords: [
-      lesson.h1,
-      `英語 ${lesson.category}`,
-      "英語 コアイメージ",
-      `CEFR ${lesson.targetLevels.join(" ")}`,
-      "linguistlens",
-    ],
+    keywords,
     openGraph: {
       type: "article",
       url: canonical,
@@ -75,31 +76,13 @@ export default function GrammarLessonPage({
   if (!lesson) notFound();
 
   const siteUrl = getPublicSiteUrl();
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: lesson.h1,
-    description: lesson.seoDescription,
-    datePublished: lesson.publishedAt,
-    dateModified: lesson.publishedAt,
-    author: {
-      "@type": "Organization",
-      name: "LinguistLens",
-      url: siteUrl,
-    },
-    publisher: {
-      "@type": "Organization",
-      name: "LinguistLens",
-      logo: {
-        "@type": "ImageObject",
-        url: `${siteUrl}/logo-sphere.svg`,
-      },
-    },
-    mainEntityOfPage: {
-      "@type": "WebPage",
-      "@id": `${siteUrl}/library/grammar/${lesson.slug}`,
-    },
-  };
+  const pageUrl = `${siteUrl}/library/grammar/${lesson.slug}`;
+  const schemaGraph = buildGrammarLessonSchemaGraph({
+    lesson,
+    pageUrl,
+    siteUrl,
+  });
+  const schemaJson = JSON.stringify(schemaGraph).replace(/</g, "\\u003c");
 
   const relatedLessons = lesson.relatedSlugs
     .map((s) => getGrammarLesson(s))
@@ -110,9 +93,11 @@ export default function GrammarLessonPage({
 
   return (
     <div className="min-h-screen relative">
-      <script
+      <Script
+        id={`ll-grammar-schema-${lesson.slug}`}
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{ __html: schemaJson }}
       />
       <SiteHeader maxWidth="5xl" right={<GlobalNav showVocabularyLink />} />
 
