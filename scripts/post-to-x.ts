@@ -1,7 +1,7 @@
 /**
  * X（Twitter）自動投稿: data/library.json（LibraryEntry）と data/grammar-lessons.ts から
  * 1件選び、親ツイート＋リプライの2段で投稿する（本文は Groq がフォーマット別に生成）。
- * ライブラリのクイズ型のみ親ツイートに X API v2 の Poll（2択・duration_minutes 既定 1440）を付与。
+ * ライブラリのクイズ型のみ親ツイートに X API v2 の Poll（2択・duration 1440 分・選択肢は固定短文）。
  *
  * 直近の重複回避: 投稿成功後に scripts/posted_history.json にキーを最大5件保持する。
  * - ライブラリ: 表現文字列（expression）
@@ -396,68 +396,15 @@ function extractGroqAssistantText(data: unknown): string {
   return typeof content === "string" ? content : "";
 }
 
-// ─── Poll helpers（クイズ型・親ツイート用）──────────────────────────────────
+// ─── クイズ型 Poll: X API は選択肢が極短い前提のためラベルは固定（25文字以内） ──
 
-function clampPollOption(raw: string, maxChars: number): string {
-  const t = raw.replace(/\s+/g, " ").trim();
-  if (t === "") {
-    return "?";
-  }
-  if (t.length <= maxChars) {
-    return t;
-  }
-  if (maxChars <= 1) {
-    return "…";
-  }
-  return `${t.slice(0, maxChars - 1)}…`;
-}
+const QUIZ_POLL_OPTION_A = "Aの方が自然！";
+const QUIZ_POLL_OPTION_B = "Bの方が自然！";
 
-function ensureDistinctPollOptions(
-  a: string,
-  b: string,
-  maxChars: number
-): [string, string] {
-  if (a !== b) {
-    return [a, b];
-  }
-  return [
-    clampPollOption(`${a} (1)`, maxChars),
-    clampPollOption(`${b} (2)`, maxChars),
-  ];
-}
-
-const MARK_POLL_A = "---POLL_A---";
-const MARK_POLL_B = "---POLL_B---";
-const MARK_REPLY = "---REPLY---";
-
-function parseQuizPollGroqOutput(raw: string): {
-  parent: string;
-  pollA: string;
-  pollB: string;
-  reply: string;
-} | null {
-  const pollAIdx = raw.indexOf(MARK_POLL_A);
-  const pollBIdx = raw.indexOf(MARK_POLL_B);
-  const replyIdx = raw.indexOf(MARK_REPLY);
-  if (pollAIdx === -1 || pollBIdx === -1 || replyIdx === -1) {
-    return null;
-  }
-  if (!(pollAIdx < pollBIdx && pollBIdx < replyIdx)) {
-    return null;
-  }
-  const parent = raw.slice(0, pollAIdx).trim();
-  const pollA = raw
-    .slice(pollAIdx + MARK_POLL_A.length, pollBIdx)
-    .trim();
-  const pollB = raw
-    .slice(pollBIdx + MARK_POLL_B.length, replyIdx)
-    .trim();
-  const reply = raw.slice(replyIdx + MARK_REPLY.length).trim();
-  if (parent === "" || pollA === "" || pollB === "") {
-    return null;
-  }
-  return { parent, pollA, pollB, reply };
-}
+const QUIZ_FIXED_POLL_PAYLOAD: PostThreadPollPayload = {
+  duration_minutes: POLL_DURATION_MINUTES,
+  options: [QUIZ_POLL_OPTION_A, QUIZ_POLL_OPTION_B],
+};
 
 // ─── Prompt builders ────────────────────────────────────────────────────────
 
@@ -466,28 +413,26 @@ function buildQuizPrompt(entry: LibraryEntry, ctaUrl: string): string {
     entry.badExample ?? entry.warnExample ?? "(不自然な例をモデルが簡潔に作る)";
   return `次の英語フレーズ「${entry.expression}」（意味: ${entry.meaning_ja}）を使ったX（Twitter）投稿を作成してください。
 
-【フォーマット: クイズ型・親は Poll（投票）2択】
-親ツイートの本文（${PARENT_TWEET_MAX}文字以内）:
-- X の投票で A/B を選ばせる。本文に 2 つの英文を列挙しない（投票欄にだけ出る）
-- 冒頭「【英語クイズ】どちらが自然？」系のフック、フレーズ名か意味のヒント、投票を促す一文、「正解はこのポストのリプライで」
-- ハッシュタグ: #英語 #LinguistLens
+【フォーマット: クイズ型・親ツイートに Poll（投票）あり】
+親ツイートの本文（合計 ${PARENT_TWEET_MAX} 文字以内。超えないよう英文は必要なら短く整えてよい）:
+1. 冒頭に「【英語クイズ】どちらが自然？」などのフック、フレーズや意味のヒント
+2. 次の2つの英文を必ず本文に含める（見出し付きで）:
+   A（不自然・誤用寄り）: ${wrong}
+   B（自然）: ${entry.goodExample}
+3. 「↓の投票で選んでね」「正解はこのポストのリプライで」など一言
+4. ハッシュタグ: #英語 #LinguistLens
 
-投票・選択肢（英語のみ、各 ${POLL_OPTION_MAX_CHARS} 文字以内・改行なし）:
-- 選択肢A: 不自然・誤用寄り。参考: ${wrong}
-- 選択肢B: 自然な文。参考: ${entry.goodExample}
+重要（API仕様）:
+- 投票ボタンに表示される文言はシステム側で固定「${QUIZ_POLL_OPTION_A}」「${QUIZ_POLL_OPTION_B}」（各 ${POLL_OPTION_MAX_CHARS} 文字以内）にする。
+- あなたは Poll 用の選択肢テキストを出力しない。比較する英文はすべて親ツイートの本文（text）にのみ書くこと。
 
 リプライ（${REPLY_TWEET_MAX}文字以内）:
 1. 正解が B であることを明かす（例: 「正解: B」）
 2. なぜ A が不自然か 1〜2 文（要点: ${entry.why_hard_for_japanese}）
 3. CTA 1 行: コアイメージで解説 → ${ctaUrl}
 
-出力形式（区切りはこの文字列をそのまま使うこと）:
-<親ツイート本文のみ>
-${MARK_POLL_A}
-<選択肢A ${POLL_OPTION_MAX_CHARS}文字以内>
-${MARK_POLL_B}
-<選択肢B ${POLL_OPTION_MAX_CHARS}文字以内>
-${MARK_REPLY}
+親ツイートとリプライを次の1行だけで区切る（この文字列をそのまま使うこと）:
+---REPLY---
 <リプライ本文>`;
 }
 
@@ -588,19 +533,6 @@ type GeneratedTweetThread = {
   poll?: PostThreadPollPayload;
 };
 
-function buildQuizPollFromLibraryEntry(entry: LibraryEntry): PostThreadPollPayload {
-  const wrong =
-    entry.badExample ?? entry.warnExample ?? "Unnatural example";
-  const good = entry.goodExample;
-  let a = clampPollOption(wrong, POLL_OPTION_MAX_CHARS);
-  let b = clampPollOption(good, POLL_OPTION_MAX_CHARS);
-  [a, b] = ensureDistinctPollOptions(a, b, POLL_OPTION_MAX_CHARS);
-  return {
-    duration_minutes: POLL_DURATION_MINUTES,
-    options: [a, b],
-  };
-}
-
 async function generateParentTweetGroq(
   source: ContentSource,
   format: TweetFormat
@@ -610,7 +542,7 @@ async function generateParentTweetGroq(
   console.log(`[post-to-x] Groq model: ${GROQ_MODEL}`);
 
   const systemContent =
-    "あなたはCTR最大化のプロのSNSコピーライターであり、認知言語学に基づく英語教育の専門家です。X（Twitter）で英語学習者のエンゲージメントを最大化するツイートを書いてください。リプライでは親ツイートの本文を繰り返さないこと。リプライ内のURLは指示どおり1回だけ（重複リンク禁止）。クイズ型では親に A/B の英文全文を書かず、指定の区切りで Poll 用の短文だけを出すこと。";
+    "あなたはCTR最大化のプロのSNSコピーライターであり、認知言語学に基づく英語教育の専門家です。X（Twitter）で英語学習者のエンゲージメントを最大化するツイートを書いてください。リプライでは親ツイートの本文を繰り返さないこと。リプライ内のURLは指示どおり1回だけ（重複リンク禁止）。クイズ型では比較する2つの英文は必ず親ツイート本文に含め、投票ラベル用の長文は出力しない（区切りは ---REPLY--- のみ）。";
 
   const userContent = buildPrompt(source, format, ctaUrl);
 
@@ -654,60 +586,43 @@ async function generateParentTweetGroq(
 
   if (format === "quiz" && source.type === "library") {
     const entry = source.entry;
-    const parsedPoll = parseQuizPollGroqOutput(text);
-    const fallbackPoll = buildQuizPollFromLibraryEntry(entry);
+    const wrong =
+      entry.badExample ?? entry.warnExample ?? "（誤用例を1文で）";
+    const parts = text.split("---REPLY---");
+    const parentRaw = (parts[0] ?? text).trim();
+    const replyPart = (parts[1] ?? "").trim();
 
-    if (parsedPoll) {
-      let optA = clampPollOption(parsedPoll.pollA, POLL_OPTION_MAX_CHARS);
-      let optB = clampPollOption(parsedPoll.pollB, POLL_OPTION_MAX_CHARS);
-      [optA, optB] = ensureDistinctPollOptions(optA, optB, POLL_OPTION_MAX_CHARS);
-      const replyBody =
-        parsedPoll.reply.length > 0
-          ? parsedPoll.reply.slice(0, REPLY_TWEET_MAX)
-          : fallbackReplyText(ctaUrl);
-      return {
-        parent: parsedPoll.parent.slice(0, PARENT_TWEET_MAX),
-        reply: replyBody,
-        poll: {
-          duration_minutes: POLL_DURATION_MINUTES,
-          options: [optA, optB],
-        },
-      };
-    }
+    const defaultParent = `【英語クイズ】どちらが自然？「${entry.expression}」
 
-    console.warn(
-      "[post-to-x] クイズ応答の Poll 区切り解析に失敗。フォールバックの本文と entry 由来の選択肢を使用します。"
-    );
-    const replyPart = (() => {
-      if (text.includes(MARK_REPLY)) {
-        const after = text.split(MARK_REPLY)[1]?.trim() ?? "";
-        if (after !== "") return after;
+A: ${wrong}
+B: ${entry.goodExample}
+
+↓投票で回答 / 正解はリプライで
+#英語 #LinguistLens`;
+
+    let parent =
+      parentRaw !== ""
+        ? parentRaw.slice(0, PARENT_TWEET_MAX)
+        : defaultParent.slice(0, PARENT_TWEET_MAX);
+
+    if (parentRaw === "" || replyPart === "") {
+      console.warn(
+        "[post-to-x] クイズ応答の ---REPLY--- 区切りが不完全。親またはリプライをフォールバックします。"
+      );
+      if (parentRaw === "") {
+        parent = defaultParent.slice(0, PARENT_TWEET_MAX);
       }
-      return text.split("---REPLY---")[1]?.trim() ?? "";
-    })();
-
-    const headBeforeReply = text.includes(MARK_REPLY)
-      ? (text.split(MARK_REPLY)[0]?.trim() ?? "")
-      : (text.split("---REPLY---")[0]?.trim() ?? "");
-
-    const defaultParent = `【英語クイズ】どちらが自然？「${entry.expression}」\n投票で選んでね ↓\n正解はリプライで\n#英語 #LinguistLens`;
-    let parentHook = headBeforeReply.slice(0, PARENT_TWEET_MAX);
-    if (
-      headBeforeReply.includes(MARK_POLL_A) ||
-      headBeforeReply.includes(MARK_POLL_B) ||
-      parentHook === ""
-    ) {
-      parentHook = defaultParent.slice(0, PARENT_TWEET_MAX);
     }
 
     const reply =
       replyPart.length > 0
         ? replyPart.slice(0, REPLY_TWEET_MAX)
         : fallbackReplyText(ctaUrl);
+
     return {
-      parent: parentHook,
+      parent,
       reply,
-      poll: fallbackPoll,
+      poll: QUIZ_FIXED_POLL_PAYLOAD,
     };
   }
 

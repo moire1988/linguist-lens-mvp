@@ -53,6 +53,34 @@ npm run post-to-x
 
 ---
 
+## 新規文法特集ページの作成手順（Claude Code × Cursor）
+
+`/library/grammar/[slug]` 向けの SEO 記事を量産するときのメモ。  
+Claude Code で企画〜指示書までまとめ、Cursor で実装する想定。
+
+### 1. Claude Code（企画・データ・tasks 生成）
+
+ターミナルで Claude Code を起動し、次のような `/plan` プロンプトで構成・コンテンツデータ・実装用 Markdown（`tasks/*.md`）まで一気に出させる。
+
+```text
+/plan 次のSEO集客用コンテンツとして「[テーマ（例：makeとdoの違い）]のコアイメージ特集ページ」を作成します。
+以下のステップで計画を立て、順に実行してください：
+1. @cgo-growth-hacker が狙うべきSEOキーワードと構成案を策定
+2. @content-creator がB1-C1向けに、コアイメージとミニクイズを含んだ良質なコンテンツデータ（JSON/TS）を作成
+3. @product-director が、既存の /library/grammar/[slug] に追加するための実装要件（Cursor向け指示書：tasks/[テーマ名]-implementation.md）を作成
+```
+
+- エージェント名（`@...`）はリポジトリ内の `.claude/agents/` やプロジェクトルールに合わせて読み替えてよい。
+- 出力された `tasks/[テーマ名]-implementation.md` が、次の Cursor 側の「仕様書」になる。
+
+### 2. Cursor（実装）
+
+1. 生成された `tasks/*.md` を Cursor で開き、指示どおり `data/grammar-lessons.ts` にレッスンを追加（型は既存の `GrammarLesson` に合わせる）。
+2. 必要なら `lib/routes-config.ts` やメタデータ周り（`lib/grammar-lesson-structured-data.ts` など）への影響を確認。
+3. `npm run build` または該当ページをブラウザで確認してからコミット。
+
+---
+
 ## 補足
 
 - `scripts/posted_history.json` は `.gitignore` 対象（ローカル・CI で生成）。
