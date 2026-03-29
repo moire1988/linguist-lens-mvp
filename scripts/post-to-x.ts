@@ -1,7 +1,15 @@
 /**
  * X（Twitter）自動投稿: data/library.json（LibraryEntry）と data/grammar-lessons.ts から
- * 1件選び、親ツイート＋リプライの2段で投稿する（本文は Groq がフォーマット別に生成）。
- * ライブラリのクイズ型のみ親ツイートに X API v2 の Poll（2択・duration 1440 分・選択肢は固定短文）。
+ * 1件選び、親ツイート＋リプライの2段スレッドで投稿する（本文は Groq がフォーマット別に生成）。
+ *
+ * 【フォーマット戦略】
+ * - quiz         : A/B テキストクイズ（「リプライで答えてみて」→ リプライ数でアルゴリズム評価↑）
+ * - ng_contrast  : NG対比型（日本人がやりがちなミスを突く）
+ * - curiosity_gap: 好奇心ギャップ型（「言えますか？」系）
+ * - grammar_page : 文法特集告知型
+ *
+ * ※ X API Free tier では Poll は使用不可（Basic $100/月 以上が必要）。
+ *   スレッド形式のみで運用する。リプライ誘導はアルゴリズム的にも Poll より上位シグナル。
  *
  * 直近の重複回避: 投稿成功後に scripts/posted_history.json にキーを最大5件保持する。
  * - ライブラリ: 表現文字列（expression）
@@ -39,40 +47,6 @@ const LIBRARY_PAGE = `${SITE_URL}/library`;
 /** 親ツイート・リプライの上限（X 280 から余白） */
 const PARENT_TWEET_MAX = 270;
 const REPLY_TWEET_MAX = 270;
-
-/** X API v2 Poll: 5〜10080 分。24 時間 = 1440（整数 number で API に送る） */
-const POLL_DURATION_MINUTES: number = 1440;
-
-/**
- * 投票の各選択肢の最大文字数（X の Poll は短いラベル前提。超過分は切り詰め）
- * https://docs.x.com/x-api/posts/manage-tweets/create-tweet
- */
-const POLL_OPTION_MAX_CHARS = 25;
-
-export type PostThreadPollPayload = {
-  duration_minutes: number;
-  options: [string, string];
-};
-
-/**
- * X API に渡す前に duration を必ず有限の整数 number に正規化する
- */
-function normalizePollDurationMinutes(raw: unknown): number {
-  const n =
-    typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
-  if (!Number.isFinite(n)) {
-    throw new Error(
-      `poll.duration_minutes が数値として解釈できません: ${String(raw)}`
-    );
-  }
-  const truncated: number = Math.trunc(n);
-  if (truncated < 5 || truncated > 10080) {
-    throw new Error(
-      `Poll の duration_minutes は 5〜10080 の整数である必要があります（正規化後: ${String(truncated)}）`
-    );
-  }
-  return truncated;
-}
 
 /**
  * テスト実行時、親ツイート本文の重複による Duplicate Tweet（403）を避けやすくする。
@@ -235,7 +209,6 @@ function stripAllUrls(s: string): string {
 
 /**
  * リプライ末尾に ctaUrl を1回だけ付与し、親ツイートと同一本文にならないよう調整する。
- * （X が重複・スパム扱いで 403 になりやすいため）
  */
 function truncateCoreKeepingCtaSuffix(
   bodyCore: string,
@@ -384,7 +357,6 @@ function pickRandom<T>(arr: readonly T[]): T {
 
 /**
  * コンテンツソースを選択（library 80% / grammar_lesson 20% の比率目安）
- * grammar は posted_history に grammar:slug で記録
  */
 function pickContentSource(
   library: LibraryEntry[],
@@ -418,9 +390,9 @@ function pickTweetFormat(source: ContentSource): TweetFormat {
   if (source.type === "grammar_lesson") return "grammar_page";
 
   const weights: [TweetFormat, number][] = [
-    ["quiz", 35],
-    ["ng_contrast", 30],
-    ["curiosity_gap", 20],
+    ["quiz", 40],
+    ["ng_contrast", 35],
+    ["curiosity_gap", 25],
   ];
 
   const entry = source.entry;
@@ -458,85 +430,112 @@ function extractGroqAssistantText(data: unknown): string {
   return typeof content === "string" ? content : "";
 }
 
-// ─── クイズ型 Poll: X API は選択肢が極短い前提のためラベルは固定（25文字以内） ──
-
-const QUIZ_POLL_OPTION_A = "Aの方が自然！";
-const QUIZ_POLL_OPTION_B = "Bの方が自然！";
-
-const QUIZ_FIXED_POLL_PAYLOAD: PostThreadPollPayload = {
-  duration_minutes: normalizePollDurationMinutes(POLL_DURATION_MINUTES),
-  options: [QUIZ_POLL_OPTION_A, QUIZ_POLL_OPTION_B],
-};
-
 // ─── Prompt builders ────────────────────────────────────────────────────────
 
+/**
+ * 【クイズ型】テキストのみの A/B クイズ。Poll は使わない。
+ * 「リプライで答えてみて」CTA により、アルゴリズム評価の高いリプライ数を稼ぐ。
+ *
+ * フック公式（いずれかを冒頭に使う）:
+ *   ① 「【英語クイズ】TOEIC 800点でも間違えやすい表現」
+ *   ② 「ネイティブには通じない日本人英語、どちらか分かりますか？」
+ *   ③ 「この2つ、どちらが自然か即答できますか？」
+ */
 function buildQuizPrompt(entry: LibraryEntry, ctaUrl: string): string {
   const wrong =
     entry.badExample ?? entry.warnExample ?? "(不自然な例をモデルが簡潔に作る)";
-  return `次の英語フレーズ「${entry.expression}」（意味: ${entry.meaning_ja}）を使ったX（Twitter）投稿を作成してください。
+  return `次の英語フレーズ「${entry.expression}」（意味: ${entry.meaning_ja}）を使ったX投稿を作成してください。
 
-【フォーマット: クイズ型・親ツイートに Poll（投票）あり】
-親ツイートの本文（合計 ${PARENT_TWEET_MAX} 文字以内。超えないよう英文は必要なら短く整えてよい）:
-1. 冒頭に「【英語クイズ】どちらが自然？」などのフック、フレーズや意味のヒント
-2. 次の2つの英文を必ず本文に含める（見出し付きで）:
-   A（不自然・誤用寄り）: ${wrong}
-   B（自然）: ${entry.goodExample}
-3. 「↓の投票で選んでね」「正解はこのポストのリプライで」など一言
-4. ハッシュタグ: #英語 #LinguistLens
+【フォーマット: テキストクイズ型（Poll なし・リプライ誘導型）】
 
-重要（API仕様）:
-- 投票ボタンに表示される文言はシステム側で固定「${QUIZ_POLL_OPTION_A}」「${QUIZ_POLL_OPTION_B}」（各 ${POLL_OPTION_MAX_CHARS} 文字以内）にする。
-- あなたは Poll 用の選択肢テキストを出力しない。比較する英文はすべて親ツイートの本文（text）にのみ書くこと。
+▼ 親ツイート（${PARENT_TWEET_MAX}文字以内）:
+1. 冒頭フック（必ずいずれか1つ使う）:
+   ・「【英語クイズ】TOEIC 800点でも間違えやすい表現」
+   ・「ネイティブに一瞬「え？」と思われる日本人英語、分かりますか？」
+   ・「この2つ、どちらが自然か即答できますか？」
+2. A/B 比較（必ず含める）:
+   A: ${wrong}
+   B: ${entry.goodExample}
+3. 末尾に「👇 コメントで答えてみて！正解はリプライで」
+4. ハッシュタグ: #英語 #TOEIC #英語学習
 
-リプライ（${REPLY_TWEET_MAX}文字以内）:
-1. 正解が B であることを明かす（例: 「正解: B」）
-2. なぜ A が不自然か 1〜2 文（要点: ${entry.why_hard_for_japanese}）
-3. CTA 1 行: コアイメージで解説 → ${ctaUrl}
+▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
+1. 「✅ 正解: B」を明記
+2. なぜ A が不自然か（要点: ${entry.why_hard_for_japanese}）を1〜2文
+3. コアイメージ1文（素材: ${entry.coreImage}）
+4. CTA: 「他にも同系統の表現まとめてます → ${ctaUrl}」
 
-親ツイートとリプライを次の1行だけで区切る（この文字列をそのまま使うこと）:
----REPLY---
-<リプライ本文>`;
+親ツイートとリプライを次の区切り文字のみで分ける（前後に余計な文字なし）:
+---REPLY---`;
 }
 
+/**
+ * 【NG対比型】日本人の「あるある」ミスを突く構成。
+ *
+ * フック公式:
+ *   ① 「日本人がやりがちな英語 ⚠️」
+ *   ② 「海外で一瞬空気が止まった日本人英語」
+ *   ③ 「ネイティブはそれを聞いてどう感じるか知っていますか？」
+ */
 function buildNgContrastPrompt(entry: LibraryEntry, ctaUrl: string): string {
   const wrong =
     entry.badExample ?? entry.warnExample ?? "(不自然な例をモデルが簡潔に作る)";
   return `次の英語フレーズ「${entry.expression}」（意味: ${entry.meaning_ja}）を使ったX投稿を作成してください。
 
 【フォーマット: NG対比型】
-親ツイート（${PARENT_TWEET_MAX}文字以内）:
-1. 冒頭「日本人が使いがちな英語 ⚠️」または「日本人が間違えやすい英語」
-2. × "${wrong}"
-3. ○ "${entry.goodExample}"
-4. コアイメージ1文（素材: ${entry.coreImage}）
-5. #英語学習 #LinguistLens
 
-リプライ（${REPLY_TWEET_MAX}文字以内）:
+▼ 親ツイート（${PARENT_TWEET_MAX}文字以内）:
+1. 冒頭フック（必ずいずれか1つ使う）:
+   ・「日本人がやりがちな英語 ⚠️」
+   ・「これ言ってたら要注意。海外で一瞬空気が止まる日本人英語」
+   ・「ネイティブがこっそり感じている違和感、気づいていましたか？」
+2. 対比:
+   ❌ "${wrong}"
+   ✅ "${entry.goodExample}"
+3. コアイメージを1〜2文で（素材: ${entry.coreImage}）
+4. ハッシュタグ: #英語 #英語学習 #LinguistLens
+
+▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
 1. nuance を1〜2文（素材: ${entry.nuance}）
-2. context（使用シーン: ${entry.context}）
-3. CTA: 「なぜそうなるのかコアイメージで解説 → ${ctaUrl}」
+2. 使用シーン1文（素材: ${entry.context}）
+3. CTA: 「同じ落とし穴がある関連表現はこちら → ${ctaUrl}」
 
 親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
 }
 
+/**
+ * 【好奇心ギャップ型】「言えますか？」系の自己テストフォーマット。
+ *
+ * フック公式:
+ *   ① 「『〇〇』を英語でなんと言いますか？」
+ *   ② 「英語上級者とそうでない人を分ける表現」
+ *   ③ 「これが言えたらネイティブから一目置かれます」
+ */
 function buildCuriosityGapPrompt(entry: LibraryEntry, ctaUrl: string): string {
   return `次の英語フレーズ「${entry.expression}」（意味: ${entry.meaning_ja}）を使ったX投稿を作成してください。
 
 【フォーマット: 好奇心ギャップ型】
-親ツイート（${PARENT_TWEET_MAX}文字以内）:
-1. 「「${entry.meaning_ja}」を英語で言うと？」または「ネイティブはなぜ〜と言うのか」から始める
-2. 答え（フレーズ）を提示
-3. コアイメージを2〜3文で展開（素材: ${entry.coreImage} / ${entry.nuance}）
-4. #英語 #TOEIC #LinguistLens
 
-リプライ（${REPLY_TWEET_MAX}文字以内）:
+▼ 親ツイート（${PARENT_TWEET_MAX}文字以内）:
+1. 冒頭フック（必ずいずれか1つ使う）:
+   ・「『${entry.meaning_ja}』を英語でなんと言いますか？」
+   ・「英語上級者とそうでない人を分ける表現があります」
+   ・「これが自然に言えたら、英語力が一段階上がった証拠です」
+2. 答えを提示（「→ ${entry.expression}」の形で）
+3. コアイメージを2〜3文で展開（素材: ${entry.coreImage} / ${entry.nuance}）
+4. ハッシュタグ: #英語 #TOEIC #LinguistLens
+
+▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
 1. 例文: "${entry.goodExample}"（和訳: ${entry.goodExampleJa}）
-2. why_hard_for_japanese の要点1文: ${entry.why_hard_for_japanese}
-3. CTA: 「同じシーンの関連表現はこちら → ${ctaUrl}」
+2. なぜ日本人には難しいか1文: ${entry.why_hard_for_japanese}
+3. CTA: 「同じシーンで使える関連表現はこちら → ${ctaUrl}」
 
 親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
 }
 
+/**
+ * 【文法特集告知型】無料コンテンツへの誘導。クイズ1問をリプライに入れてエンゲージメントを稼ぐ。
+ */
 function buildGrammarLessonPrompt(
   lesson: GrammarLessonSummary,
   ctaUrl: string
@@ -552,18 +551,22 @@ function buildGrammarLessonPrompt(
   return `文法特集ページ「${lesson.h1}」の告知ツイートを作成してください。
 
 【フォーマット: 文法特集告知型】
-親ツイート（${PARENT_TWEET_MAX}文字以内）:
-1. タイトル「${lesson.h1}」を含める
-2. introの冒頭を引用・要約: ${introSnippet}
-3. 「ミニクイズつき・無料」と価値を伝える
-4. CTA: 「→ ${ctaUrl}」
-5. #英語文法 #英語 #LinguistLens
 
-リプライ（${REPLY_TWEET_MAX}文字以内）:
-1. ミニクイズ1問を抜粋:
+▼ 親ツイート（${PARENT_TWEET_MAX}文字以内）:
+1. 冒頭フック（必ずいずれか1つ使う）:
+   ・「${lesson.h1}の違い、コアイメージで説明できますか？」
+   ・「文法書では教えてくれない、ネイティブ感覚を無料で解説しています」
+   ・「英文法の『なんとなく』を終わらせる特集ページを公開しました」
+2. intro の要点を1〜2文: ${introSnippet}
+3. 「ミニクイズ5問つき・無料」を明示
+4. CTA: 「→ ${ctaUrl}」
+5. ハッシュタグ: #英語文法 #英語 #LinguistLens
+
+▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
+1. ミニクイズ1問:
    "${quiz?.prompt ?? "コアイメージを問うクイズ"}"
    ${optionLines.join(" / ")}
-2. 「全5問のクイズはこちら → ${ctaUrl}」
+2. 「👇 答えをコメントで！全5問のクイズはこちら → ${ctaUrl}」
 
 親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
 }
@@ -592,10 +595,9 @@ function buildPrompt(
 type GeneratedTweetThread = {
   parent: string;
   reply: string;
-  poll?: PostThreadPollPayload;
 };
 
-async function generateParentTweetGroq(
+async function generateTweetThread(
   source: ContentSource,
   format: TweetFormat
 ): Promise<GeneratedTweetThread> {
@@ -604,7 +606,12 @@ async function generateParentTweetGroq(
   console.log(`[post-to-x] Groq model: ${GROQ_MODEL}`);
 
   const systemContent =
-    "あなたはCTR最大化のプロのSNSコピーライターであり、認知言語学に基づく英語教育の専門家です。X（Twitter）で英語学習者のエンゲージメントを最大化するツイートを書いてください。リプライでは親ツイートの本文を繰り返さないこと。リプライ内のURLは指示どおり1回だけ（重複リンク禁止）。クイズ型では比較する2つの英文は必ず親ツイート本文に含め、投票ラベル用の長文は出力しない（区切りは ---REPLY--- のみ）。";
+    "あなたはCTR最大化のプロのSNSコピーライターであり、認知言語学に基づく英語教育の専門家です。" +
+    "X（Twitter）で英語学習者（主に日本人・TOEIC受験者）のエンゲージメントを最大化するツイートを書いてください。" +
+    "【鉄則】① 1ツイート目の冒頭フックが全て。指定されたフック公式を必ず使うこと。" +
+    "② リプライでは親ツイートの本文を繰り返さない。" +
+    "③ リプライ内のURLは指示どおり1回だけ（重複リンク禁止）。" +
+    "④ 区切りは ---REPLY--- のみ、前後に余計な文字・説明・markdown は一切出力しない。";
 
   const userContent = buildPrompt(source, format, ctaUrl);
 
@@ -646,51 +653,38 @@ async function generateParentTweetGroq(
     throw new Error("Groq から空の応答が返りました");
   }
 
-  if (format === "quiz" && source.type === "library") {
-    const entry = source.entry;
-    const wrong =
-      entry.badExample ?? entry.warnExample ?? "（誤用例を1文で）";
-    const parts = text.split("---REPLY---");
-    const parentRaw = (parts[0] ?? text).trim();
-    const replyPart = (parts[1] ?? "").trim();
+  const parts = text.split("---REPLY---");
+  const parentRaw = (parts[0] ?? text).trim();
+  const replyPart = (parts[1] ?? "").trim();
 
-    const defaultParent = `【英語クイズ】どちらが自然？「${entry.expression}」
+  if (parentRaw === "" || replyPart === "") {
+    console.warn(
+      "[post-to-x] ---REPLY--- 区切りが不完全。フォールバックします。"
+    );
+  }
+
+  // クイズ型のフォールバック: Groq が区切りを出力しなかった場合
+  const defaultParent =
+    source.type === "library" && format === "quiz"
+      ? (() => {
+          const entry = source.entry;
+          const wrong =
+            entry.badExample ?? entry.warnExample ?? "（誤用例）";
+          return `【英語クイズ】この2つ、どちらが自然か即答できますか？
 
 A: ${wrong}
 B: ${entry.goodExample}
 
-↓投票で回答 / 正解はリプライで
-#英語 #LinguistLens`;
+👇 コメントで答えてみて！正解はリプライで
+#英語 #TOEIC #英語学習`.slice(0, PARENT_TWEET_MAX);
+        })()
+      : undefined;
 
-    let parent =
-      parentRaw !== ""
-        ? parentRaw.slice(0, PARENT_TWEET_MAX)
-        : defaultParent.slice(0, PARENT_TWEET_MAX);
+  const parent =
+    parentRaw !== ""
+      ? parentRaw.slice(0, PARENT_TWEET_MAX)
+      : (defaultParent ?? text.slice(0, PARENT_TWEET_MAX));
 
-    if (parentRaw === "" || replyPart === "") {
-      console.warn(
-        "[post-to-x] クイズ応答の ---REPLY--- 区切りが不完全。親またはリプライをフォールバックします。"
-      );
-      if (parentRaw === "") {
-        parent = defaultParent.slice(0, PARENT_TWEET_MAX);
-      }
-    }
-
-    const reply =
-      replyPart.length > 0
-        ? replyPart.slice(0, REPLY_TWEET_MAX)
-        : fallbackReplyText(ctaUrl);
-
-    return {
-      parent,
-      reply,
-      poll: QUIZ_FIXED_POLL_PAYLOAD,
-    };
-  }
-
-  const parts = text.split("---REPLY---");
-  const parent = (parts[0] ?? text).trim().slice(0, PARENT_TWEET_MAX);
-  const replyPart = (parts[1] ?? "").trim();
   const reply =
     replyPart.length > 0
       ? replyPart.slice(0, REPLY_TWEET_MAX)
@@ -717,15 +711,13 @@ function createTwitterRw() {
 }
 
 /**
- * 親ツイートを投稿し、そのツイートIDにリプライする。
+ * 親ツイートを投稿し、そのツイートIDにリプライするスレッドを作成する。
  * `ctaUrl` でリプライ末尾のリンクを1つに正規化し、親と同一本文を避ける。
- * `poll` があるときは親を X API v2 の Poll（2択）付きで投稿する。
  */
 export async function postThreadToX(
   parentText: string,
   replyText: string,
-  ctaUrl: string,
-  poll?: PostThreadPollPayload
+  ctaUrl: string
 ): Promise<{ parentId: string; replyId: string }> {
   const rwUser = createTwitterRw();
 
@@ -740,34 +732,12 @@ export async function postThreadToX(
 
   let parentPosted: Awaited<ReturnType<typeof rwUser.v2.tweet>>;
   try {
-    if (poll !== undefined) {
-      if (poll.options.length !== 2) {
-        throw new Error("Poll は options がちょうど2件である必要があります");
-      }
-      const [opt0, opt1] = poll.options;
-      const label0 = String(opt0).trim();
-      const label1 = String(opt1).trim();
-      if (label0 === "" || label1 === "") {
-        throw new Error("Poll の選択肢が空です");
-      }
-      const durationMinutes: number = normalizePollDurationMinutes(
-        poll.duration_minutes
-      );
-      const parentPayload: SendTweetV2Params = {
-        text: parentSafe,
-        poll: {
-          duration_minutes: durationMinutes,
-          options: [label0, label1],
-        },
-      };
-      console.log(
-        "[post-to-x] 親ツイート（Poll 付き）POST ペイロード:",
-        JSON.stringify(parentPayload, null, 2)
-      );
-      parentPosted = await rwUser.v2.tweet(parentPayload);
-    } else {
-      parentPosted = await rwUser.v2.tweet(parentSafe);
-    }
+    const parentPayload: SendTweetV2Params = { text: parentSafe };
+    console.log(
+      "[post-to-x] 親ツイート POST ペイロード:",
+      JSON.stringify(parentPayload, null, 2)
+    );
+    parentPosted = await rwUser.v2.tweet(parentPayload);
   } catch (err: unknown) {
     logTwitterApiError("親ツイート POST /2/tweets でエラー", err);
     throw err;
@@ -851,21 +821,12 @@ async function main(): Promise<void> {
       : `[${source.entry.level}] ${source.entry.expression}`;
   console.log(`Picked: ${label} | Format: ${format}`);
 
-  const { parent, reply, poll } = await generateParentTweetGroq(source, format);
+  const { parent, reply } = await generateTweetThread(source, format);
   console.log("--- Parent ---\n", parent, "\n---");
-  if (poll) {
-    console.log(
-      "--- Poll ---\n",
-      `duration_minutes: ${String(poll.duration_minutes)}`,
-      "\n",
-      poll.options,
-      "\n---"
-    );
-  }
   console.log("--- Reply ---\n", reply, "\n---");
 
   const ctaUrl = resolveCtaUrl(source);
-  const { parentId, replyId } = await postThreadToX(parent, reply, ctaUrl, poll);
+  const { parentId, replyId } = await postThreadToX(parent, reply, ctaUrl);
   recordPostedPhrase(resolveHistoryKey(source));
   console.log(
     `[post-to-x] 履歴を更新しました（直近最大${POSTED_HISTORY_MAX}件）`
