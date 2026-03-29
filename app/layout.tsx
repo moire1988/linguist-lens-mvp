@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { FeedbackModal } from "@/components/feedback-modal";
 import { MeshBackground } from "@/components/mesh-background";
@@ -92,6 +93,7 @@ export default function RootLayout({
           <LoginPromptModal />
           <Toaster richColors position="bottom-right" />
           <Analytics />
+          <SpeedInsights />
         </body>
       </html>
     </ClerkProvider>

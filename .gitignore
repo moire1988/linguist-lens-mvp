@@ -44,3 +44,7 @@ next-env.d.ts
 
 # X post bot — local / Actions cache state (regenerated at runtime)
 scripts/posted_history.json
+
+# AI Generated Task Files
+tasks/*
+!tasks/.gitkeep

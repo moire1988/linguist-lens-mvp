@@ -78,3 +78,12 @@ scripts/            Node.js scripts (post-to-x.ts, etc.)
 - Never log `ANTHROPIC_API_KEY` or any secret to console
 - Sanitize all user input before passing to Claude API
 - Never expose Supabase service role key in client-side code
+
+## Document Generation Rules（ドキュメント生成の厳格なルール）
+AIが実装指示書・要件定義・計画ファイルを生成する際に**必ず**守ること。
+
+1. **保存先は `tasks/` 配下のみ** — 実装指示書・要件定義・`task_plan.md`・`findings.md`・`progress.md` などの中間ファイルはすべて `tasks/` ディレクトリ内に生成する。
+   - ファイル名規則: `tasks/YYYYMMDD-feature-name.md`（例: `tasks/20260329-chrome-extension-teaser.md`）
+2. **プロジェクトルート直下への中間ファイル生成は禁止** — `task_plan.md`・`findings.md` 等をルート直下に置かない。
+3. **出力はファイルとして残す** — 実装指示を標準出力テキストだけで終わらせず、必ず `tasks/` 内にファイルとして書き出してから作業を終えること。
+4. **`tasks/` が存在しない場合は自動作成する。**

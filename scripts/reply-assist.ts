@@ -121,16 +121,27 @@ async function generateReplySuggestions(tweetText: string): Promise<string> {
   return text;
 }
 
-async function main(): Promise<void> {
-  // 引数からツイート文面を取得（なければ標準入力）
-  const argText = process.argv.slice(2).join(" ").trim();
-  const tweetText = argText !== "" ? argText : await readStdin();
+const CLI_HELP_NO_ARG =
+  "❌ エラー: 返信対象のツイート文面を引数として渡してください。\n" +
+  "💡 使い方: npm run reply-assist \"ここにツイートの文章\"";
 
-  if (tweetText === "") {
-    console.error(
-      "使い方: npm run reply-assist \"ツイート文面\"\n" +
-      "     または: echo \"ツイート文面\" | npm run reply-assist"
-    );
+async function main(): Promise<void> {
+  const argv2Empty = (process.argv[2]?.trim() ?? "") === "";
+  const cliJoined = process.argv.slice(2).join(" ").trim();
+
+  let tweetText: string;
+  if (!argv2Empty) {
+    tweetText = cliJoined;
+  } else if (!process.stdin.isTTY) {
+    // パイプで渡す場合は従来どおり標準入力を読む
+    tweetText = await readStdin();
+  } else {
+    console.error(CLI_HELP_NO_ARG);
+    process.exit(1);
+  }
+
+  if (tweetText.trim() === "") {
+    console.error(CLI_HELP_NO_ARG);
     process.exit(1);
   }
 
