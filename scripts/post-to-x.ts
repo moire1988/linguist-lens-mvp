@@ -10,6 +10,8 @@
  * 環境変数（.env.local 推奨）:
  * - GEMINI_API_KEY … Groq API キー（GitHub Secrets 名を据え置くためこの名前のまま）
  * - TWITTER_API_KEY / TWITTER_API_SECRET / TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_SECRET
+ * - POST_TO_X_DEBUG_DEDUP … 1 / true / yes で有効。テスト時に親ツイート末尾へタイムスタンプ＋乱数を付与し
+ *   Duplicate Tweet（403）を避けやすくする（本番では未設定推奨）。
  *
  * 実行: npm run post-to-x
  */
@@ -38,8 +40,8 @@ const LIBRARY_PAGE = `${SITE_URL}/library`;
 const PARENT_TWEET_MAX = 270;
 const REPLY_TWEET_MAX = 270;
 
-/** X API v2 Poll: 5〜10080 分。24 時間 = 1440 */
-const POLL_DURATION_MINUTES = 1440;
+/** X API v2 Poll: 5〜10080 分。24 時間 = 1440（整数 number で API に送る） */
+const POLL_DURATION_MINUTES: number = 1440;
 
 /**
  * 投票の各選択肢の最大文字数（X の Poll は短いラベル前提。超過分は切り詰め）
@@ -51,6 +53,66 @@ export type PostThreadPollPayload = {
   duration_minutes: number;
   options: [string, string];
 };
+
+/**
+ * X API に渡す前に duration を必ず有限の整数 number に正規化する
+ */
+function normalizePollDurationMinutes(raw: unknown): number {
+  const n =
+    typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
+  if (!Number.isFinite(n)) {
+    throw new Error(
+      `poll.duration_minutes が数値として解釈できません: ${String(raw)}`
+    );
+  }
+  const truncated: number = Math.trunc(n);
+  if (truncated < 5 || truncated > 10080) {
+    throw new Error(
+      `Poll の duration_minutes は 5〜10080 の整数である必要があります（正規化後: ${String(truncated)}）`
+    );
+  }
+  return truncated;
+}
+
+/**
+ * テスト実行時、親ツイート本文の重複による Duplicate Tweet（403）を避けやすくする。
+ * POST_TO_X_DEBUG_DEDUP=1 / true / yes
+ */
+function isPostToXDebugDedupEnabled(): boolean {
+  const v = process.env.POST_TO_X_DEBUG_DEDUP?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+/**
+ * 親本文の末尾に付けるユニーク接尾辞（改行＋タイムスタンプ＋短い乱数）
+ */
+function buildDebugParentTweetSuffix(): string {
+  const ts = Date.now();
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `\n·ll-debug·${String(ts)}·${rand}`;
+}
+
+/**
+ * 親ツイート最大長を維持したままデバッグ接尾辞を付与（本文が長い場合は先頭側を短くする）
+ */
+function applyDebugDedupSuffixToParent(
+  parentText: string,
+  maxChars: number
+): string {
+  const suffix = buildDebugParentTweetSuffix();
+  const suffixLen = suffix.length;
+  if (suffixLen >= maxChars) {
+    return ensureMaxLength(suffix.trim(), maxChars);
+  }
+  const budget = maxChars - suffixLen;
+  const head =
+    parentText.length <= budget
+      ? parentText
+      : budget <= 1
+        ? "…"
+        : `${parentText.slice(0, budget - 1)}…`;
+  return `${head}${suffix}`;
+}
 
 // ─── Content source & formats ───────────────────────────────────────────────
 
@@ -402,7 +464,7 @@ const QUIZ_POLL_OPTION_A = "Aの方が自然！";
 const QUIZ_POLL_OPTION_B = "Bの方が自然！";
 
 const QUIZ_FIXED_POLL_PAYLOAD: PostThreadPollPayload = {
-  duration_minutes: POLL_DURATION_MINUTES,
+  duration_minutes: normalizePollDurationMinutes(POLL_DURATION_MINUTES),
   options: [QUIZ_POLL_OPTION_A, QUIZ_POLL_OPTION_B],
 };
 
@@ -667,7 +729,14 @@ export async function postThreadToX(
 ): Promise<{ parentId: string; replyId: string }> {
   const rwUser = createTwitterRw();
 
-  const parentSafe = ensureMaxLength(parentText, PARENT_TWEET_MAX);
+  const parentSafe = isPostToXDebugDedupEnabled()
+    ? (() => {
+        console.log(
+          "[post-to-x] POST_TO_X_DEBUG_DEDUP: 親ツイート末尾にタイムスタンプ＋乱数を付与（Duplicate Tweet / 403 対策）"
+        );
+        return applyDebugDedupSuffixToParent(parentText, PARENT_TWEET_MAX);
+      })()
+    : ensureMaxLength(parentText, PARENT_TWEET_MAX);
 
   let parentPosted: Awaited<ReturnType<typeof rwUser.v2.tweet>>;
   try {
@@ -676,19 +745,19 @@ export async function postThreadToX(
         throw new Error("Poll は options がちょうど2件である必要があります");
       }
       const [opt0, opt1] = poll.options;
-      if (opt0.trim() === "" || opt1.trim() === "") {
+      const label0 = String(opt0).trim();
+      const label1 = String(opt1).trim();
+      if (label0 === "" || label1 === "") {
         throw new Error("Poll の選択肢が空です");
       }
-      if (poll.duration_minutes < 5 || poll.duration_minutes > 10080) {
-        throw new Error(
-          "Poll の duration_minutes は 5〜10080 の範囲である必要があります"
-        );
-      }
+      const durationMinutes: number = normalizePollDurationMinutes(
+        poll.duration_minutes
+      );
       const parentPayload: SendTweetV2Params = {
         text: parentSafe,
         poll: {
-          duration_minutes: poll.duration_minutes,
-          options: [opt0, opt1],
+          duration_minutes: durationMinutes,
+          options: [label0, label1],
         },
       };
       console.log(
