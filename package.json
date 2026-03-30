@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "post-to-x": "tsx scripts/post-to-x.ts",
+    "test:post": "DRY_RUN=true POST_TO_X_PHASE1=1 tsx scripts/post-to-x.ts",
     "reply-assist": "npx tsx scripts/reply-assist.ts",
     "task": "tsx scripts/show-tasks.ts",
     "status": "tsx scripts/show-tasks.ts"
