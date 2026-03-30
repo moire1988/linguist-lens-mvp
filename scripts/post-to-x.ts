@@ -383,13 +383,8 @@ function buildGrammarLessonPrompt(lesson: GrammarLessonSummary): string {
 
 function buildPrompt(source: ContentSource, format: TweetFormat): string {
   if (source.type === "grammar_lesson") return buildGrammarLessonPrompt(source.lesson);
-  const entry = source.entry;
-  switch (format) {
-    case "quiz": return buildQuizPrompt(entry);
-    case "ng_contrast": return buildNgContrastPrompt(entry);
-    case "curiosity_gap": return buildCuriosityGapPrompt(entry);
-    default: return buildCuriosityGapPrompt(entry);
-  }
+  // 💡 formatが何であろうと、最強の「9割が間違える（Quiz）」型を強制適用！
+  return buildQuizPrompt(source.entry);
 }
 
 async function generateTweetThread(source: ContentSource, format: TweetFormat): Promise<{parent: string; reply: string}> {
