@@ -2,7 +2,7 @@
  * X（Twitter）自動投稿: data/library.json（LibraryEntry）と data/grammar-lessons.ts から
  * 1件選び、親ツイート＋リプライの2段スレッドで投稿する（本文は Groq がフォーマット別に生成）。
  *
- * 【フォーマット戦略】Groq プロンプトはインフルエンサー型（空行レイアウト・親は引きのみ・正解はリプライ）
+ * 【フォーマット戦略】Groq はインフルエンサー型。親・リプライ本文は各100字厳守（改行含む）。CTA URL はリプライに後付け可。
  * - quiz         : 伏せクイズ（親は ❌＋共感のみ、正解英語はリプライ）
  * - ng_contrast  : NG対比（同一シチュの ❌→親、✅＋コアイメージ→リプライ）
  * - curiosity_gap: 好奇心ギャップ（親は日本語シチュのみ、英語の答えはリプライ）
@@ -26,9 +26,11 @@
  * - POST_TO_X_PHASE1      … 1 / true / yes で有効。URLなし純粋教育コンテンツモード（初期グロース用）
  * - POST_TO_X_DEBUG_DEDUP … 1 / true / yes で有効。テスト時に親ツイート末尾へタイムスタンプ＋乱数を付与し
  *   Duplicate Tweet（403）を避けやすくする（本番では未設定推奨）。
+ * - DRY_RUN            … 1 / true / yes で有効。Groq で本文だけ生成し、X 投稿・posted_history 更新を行わない。
  *
  * 実行: npm run post-to-x
  * Phase 1: POST_TO_X_PHASE1=1 npm run post-to-x
+ * 生成のみテスト: npm run test:post（DRY_RUN + Phase 1 相当）
  * （@cgo-growth-hacker 想定の初期30日・リンクなし運用）
  */
 import { existsSync, readFileSync, writeFileSync } from "fs";
@@ -52,6 +54,14 @@ function isPostToXPhase1Enabled(): boolean {
 
 const PHASE1_MODE: boolean = isPostToXPhase1Enabled();
 
+/** 真のとき X API を呼ばず、生成テキストのログのみ（ローカル検証用） */
+function isDryRunEnabled(): boolean {
+  const v = process.env.DRY_RUN?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+const DRY_RUN: boolean = isDryRunEnabled();
+
 const GROQ_CHAT_COMPLETIONS_URL =
   "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
@@ -63,33 +73,39 @@ const SITE_URL = "https://linguistlens.app";
 const GRAMMAR_PAGE_BASE = `${SITE_URL}/library/grammar`;
 const LIBRARY_PAGE = `${SITE_URL}/library`;
 
-/** 親ツイート・リプライの上限（X 280 から余白） */
-const PARENT_TWEET_MAX = 270;
-const REPLY_TWEET_MAX = 270;
-
 /**
- * リプライ内「日本語の解説・補足」に対する厳格上限（Groq プロンプトで強制）。
- * 全体の REPLY_TWEET_MAX とは別。長文解説 → サーバー側カット → 不自然末尾 → 403 の連鎖を防ぐ。
+ * Groq 生成テキストの絶対上限（親・リプライとも。改行・英語・記号・絵文字すべて含めて数える）。
+ * 超過は無効。X 投稿前にサーバー側でも同じ上限で切り詰める。
  */
-const REPLY_JA_EXPLANATION_MAX_CHARS = 100;
+const LLM_STRICT_TWEET_MAX = 100;
+
+/** 親ツイートの最大長（厳格100運用） */
+const PARENT_TWEET_MAX = LLM_STRICT_TWEET_MAX;
 
 /**
- * ユーザー prompt 先頭に付与するインフルエンサー型の共通ルール（レイアウト・比較・親/リプライ役割）
+ * リプライ最終稿の上限（本文100＋システム付与の CTA URL 用に X 280 未満の余白を確保）
  */
-const INFLUENCER_GLOBAL_USER_BLOCK = `【インフルエンサー型・厳守】
-・レイアウト: 1文（または短い1行）ごとに必ず直後へ空行1つ。つまり段落と段落のあいだは \\n\\n だけを使い、スマホで縦にスカッと読める密度にする。ハッシュタグ行の直前にも空行。
-・比較の同一性: ❌と✅を対にする場合、日本語で書く「シチュエーション・会話の文脈」は両方で完全に同じにする（片方だけ別トピックにしない）。
-・役割分割【最重要】: 親ツイートに (a) ネイティブの正解英語・good 例 (b) コアイメージや「なぜその英語か」の解説 (c) A/Bの正解明示・「正解はB」等 を一切書かない。それらはリプライでのみ初出。`;
+const REPLY_POST_MAX = 270;
 
 /**
- * 各フォーマットのユーザー prompt 内「リプライ」欄の冒頭
+ * ユーザー prompt 先頭に付与するインフルエンサー型の共通ルール（100字厳守・比較・親/リプライ役割）
+ */
+const INFLUENCER_GLOBAL_USER_BLOCK = `【絶対厳守・文字数】親ツイートもリプライも、出力するそのツイート本文全体が${LLM_STRICT_TWEET_MAX}文字以内（改行\\nも1文字ずつ数える）。1文字でも超えたら全体を短くし直す。
+【構成】フック1行→具体シチュ1行→❌英語→「ネイティブは…👇」系の短い誘導。親に正解英語・コアイメージ・答え合わせは書かない。
+【冗長禁止】「なぜ日本人がそう言いがちかというと〜」の長い語り・前置きは禁止。共感は極短い1句まで。
+【改行】読みやすいよう \\n または \\n\\n。文字数が厳しければ \\n 優先。
+【ハッシュタグ】${LLM_STRICT_TWEET_MAX}字に余裕があるときだけ末尾に。無理ならタグなしでよい。
+【比較の同一性】❌と✅を対にするとき、日本語のシチュエーションは両方で同一にする。
+【出力形式】先に親ツイート全文、その直後に1行だけ ---REPLY---、その直後にリプライ全文。前後に説明や「以下」は付けない。`;
+
+/**
+ * 各フォーマットのユーザー prompt 内「リプライ」欄の冒頭（Groq 出力は100字・CTAは後工程で付与される場合あり）
  */
 const REPLY_PROMPT_INTRO =
-  `▼ リプライ（全体${REPLY_TWEET_MAX}文字以内）
-・レイアウト: 1行目のあと、各文のあとに必ず \\n\\n。
-・1行目: ネイティブの正解表現のみ（行頭に ✅）。親ツイートに出していない英語をここで初めて出す。
-・2行目以降: LinguistLens流のコアイメージ（なぜその言い方か）を、専門用語を減らし視覚的・比喩で説明。素材の coreImage / nuance を踏まえる。
-・【長さ】日本語の解説ブロック（✅の行を除く）は${REPLY_JA_EXPLANATION_MAX_CHARS}文字以内。要点のみ。文末は完結形（途切れ禁止）。
+  `▼ リプライ（本文全体${LLM_STRICT_TWEET_MAX}文字以内・改行含む・絶対厳守）
+・1行目: 「✅ 正解: 」＋英語1文のみ（親未掲載の正解を初出）。
+・2行目以降: コアイメージを日本語で1文だけ。比喩OK、専門用語は避ける。語り口の前置き禁止。
+・参考にするだけ（そのまま長く貼らない）: coreImage / nuance
 
 `;
 
@@ -257,10 +273,13 @@ const URL_IN_TEXT_RE = /https?:\/\/[^\s]+/g;
 function fallbackReplyText(ctaUrl: string): string {
   // Phase 1: URL なし → 学習を促す締め文で代替
   if (ctaUrl === "") {
-    return "コアイメージを意識すると、英語の感覚が少しずつ変わってきます。ぜひ次の会話で1度使ってみてください！";
+    return ensureMaxLength(
+      "✅ 正解は上の流れで。コアは「情景で単語を選ぶ」イメージで！",
+      LLM_STRICT_TWEET_MAX
+    );
   }
   const line = `コアイメージで解説中 → ${ctaUrl}`;
-  return ensureMaxLength(line, REPLY_TWEET_MAX);
+  return ensureMaxLength(line, REPLY_POST_MAX);
 }
 
 /** 比較用: URL除去＋空白正規化 */
@@ -312,8 +331,7 @@ function normalizeReplyForThread(
 ): string {
   let core = stripAllUrls(replyText);
   if (core === "") {
-    core =
-      "日本語話者向けに、なぜそうなるかをコアイメージで整理しています。";
+    core = "✅ コアイメージは「場面で言い方が変わる」。詳細は会話で！";
   }
 
   // Phase 1: URL なし → コアテキストをそのまま返す（URL 付与・重複チェック不要）
@@ -321,27 +339,24 @@ function normalizeReplyForThread(
     const parentComp = collapseComparableText(parentText);
     const coreComp = collapseComparableText(core);
     if (coreComp === parentComp) {
-      core =
-        "コアイメージで考えると直感が変わります。ぜひ使ってみてください！";
+      core = "✅ 正解はこのリプで。イメージで単語が選べるようになります。";
     }
-    return ensureMaxLength(core, REPLY_TWEET_MAX);
+    return ensureMaxLength(core, LLM_STRICT_TWEET_MAX);
   }
 
   const parentComp = collapseComparableText(parentText);
   let coreComp = collapseComparableText(core);
 
   if (coreComp === parentComp) {
-    core =
-      "【リプライ｜正解・解説】詳細は次の1リンクのみから。日本語話者の誤解ポイントを短くまとめています。";
+    core = "✅ 要点はリンク先。ここは正解英語＋コア1文だけにしました。";
     coreComp = collapseComparableText(core);
   }
 
   if (coreComp === parentComp) {
-    core =
-      "正解と補足はリンク先のページで。親ツイートとは別内容のみここに記載しています。";
+    core = "✅ 深掘りはURLへ。親と同じ内容にはしていません。";
   }
 
-  return truncateCoreKeepingCtaSuffix(core, ctaUrl, REPLY_TWEET_MAX);
+  return truncateCoreKeepingCtaSuffix(core, ctaUrl, REPLY_POST_MAX);
 }
 
 function logTwitterApiError(context: string, err: unknown): void {
@@ -527,32 +542,13 @@ function buildQuizPrompt(entry: LibraryEntry, ctaUrl: string): string {
     entry.badExample ?? entry.warnExample ?? "(不自然な例をモデルが簡潔に作る)";
   return `${INFLUENCER_GLOBAL_USER_BLOCK}
 
-次の教材で X の親ツイート＋リプライを書いてください。
-・英語フレーズ: 「${entry.expression}」（意味の目安: ${entry.meaning_ja}）
-・親では出さない正解の英語例（リプライ1行目で ✅ のあとに使う）: ${entry.goodExample}
-・NG例の参考: ${wrong}
+教材: 「${entry.expression}」意味:${entry.meaning_ja} / 正解英語（リプライのみ）:${entry.goodExample} / NG参考:${wrong}
 
-【フォーマット: インフルエンサー・伏せクイズ型】
+【伏せクイズ・出力イメージに近づける】親は例のように短く。
+▼ 親（${PARENT_TWEET_MAX}字・絶対厳守）: フック→「${entry.meaning_ja}」等のシチュ1行→❌で${wrong}を短く→「と言っていませんか？」級の短問い→「実はネイティブは…👇」。正解英語は出さない。長い説明禁止。
+${REPLY_PROMPT_INTRO}正解文は必ず: ${entry.goodExample}。コアは ${entry.coreImage} を1文に圧縮。
+${ctaUrl ? `※本文100字超え禁止のため http は出さない（システムが付与）。` : ""}
 
-▼ 親ツイート（${PARENT_TWEET_MAX}文字以内）
-次の順序で、各ブロックの直後に必ず空行（\\n\\n）を入れる。
-
-1行目: 惹きつけフック1文（例: 9割が誤解／TOEIC800点でも落とし穴／職場で一発アウトになりがち など、数字・権威・緊張感）。
-
-2行目: 具体的シチュエーション1文。日本語の文脈は ${entry.context} および「${entry.meaning_ja}」を言いたい場面に揃える。
-
-3行目: ❌ の英語のみ（上記 NG 例をそのシチュエーションに合わせて使う）。続けて短く「なぜ日本人がそう言いがちか」の共感。**正解の英語・A/B 両方・コアイメージは書かない。**
-
-（空行のあと）末尾: 「でもネイティブは実はこう言います…↓」「正解はリプライへ👇」など、答えを出さずリプライへ誘導する1〜2文。
-
-（空行のあと）ハッシュタグ: #英語 #TOEIC #英語学習
-
-${REPLY_PROMPT_INTRO}（参考: なぜ難しいか ${entry.why_hard_for_japanese} / コアイメージ素材 ${entry.coreImage}）
-${ctaUrl
-  ? `最終段落: リンクは1回だけ → ${ctaUrl}`
-  : `最終段落: URL なしの前向きな一文`}
-
-親ツイートとリプライを次の区切りのみで分ける（前後に余計な文字なし）:
 ---REPLY---`;
 }
 
@@ -564,33 +560,13 @@ function buildNgContrastPrompt(entry: LibraryEntry, ctaUrl: string): string {
     entry.badExample ?? entry.warnExample ?? "(不自然な例をモデルが簡潔に作る)";
   return `${INFLUENCER_GLOBAL_USER_BLOCK}
 
-次の教材で X の親ツイート＋リプライを書いてください。
-・英語フレーズ: 「${entry.expression}」（意味: ${entry.meaning_ja}）
-・リプライ1行目で初めて出す ✅ の英語: ${entry.goodExample}
-・親の ❌ に使う英語: ${wrong}
-・日本語シチュエーションは ❌ も ✅ も**同じ一文の状況説明**に揃えること（比較の同一性）。
+教材:「${entry.expression}」/ 意味:${entry.meaning_ja} / 親❌:${wrong} / リプ✅:${entry.goodExample} / 同一シチュ:${entry.context}
 
-【フォーマット: インフルエンサー・NG対比型】
+▼ 親（${PARENT_TWEET_MAX}字厳守）: フック→共通シチュ1行→❌のみ→短い誘導。✅・コア説明は禁止。
+${REPLY_PROMPT_INTRO}✅ ${entry.goodExample}。コア1文（${entry.coreImage}）。${entry.nuance}は1語句だけ借りてもよい。
+${ctaUrl ? `httpは出さない。` : ""}
 
-▼ 親ツイート（${PARENT_TWEET_MAX}文字以内）
-各ブロックの直後に空行（\\n\\n）。
-
-1行目: 惹きつけフック1文（日本人あるある／海外で空気が止まる 等）。
-
-2行目: その比較に使う**共通の**日本語シチュエーション1文（${entry.context} を踏まえる）。
-
-3行目: ❌ 「${wrong}」のみ。続けて「言いがちな理由」への共感を短く。**✅・正解英語・コアイメージは禁止。**
-
-（空行のあと）末尾: ネイティブの言い方は伏せたまま、リプライ誘導（例: でも実はネイティブは…↓／正解はリプライへ👇）。
-
-（空行のあと）ハッシュタグ: #英語 #英語学習 #LinguistLens
-
-${REPLY_PROMPT_INTRO}1行目の ✅ には必ず ${entry.goodExample} と**同一シチュエーション**の自然な形を出す。解説は ${entry.coreImage} / ${entry.nuance} を噛み砕いて。
-${ctaUrl
-  ? `最終段落: リンク1回 → ${ctaUrl}`
-  : `最終段落: URL なしで学びを促す一文`}
-
-親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
+---REPLY---`;
 }
 
 /**
@@ -599,31 +575,13 @@ ${ctaUrl
 function buildCuriosityGapPrompt(entry: LibraryEntry, ctaUrl: string): string {
   return `${INFLUENCER_GLOBAL_USER_BLOCK}
 
-次の教材で X の親ツイート＋リプライを書いてください。
-・意味: 「${entry.meaning_ja}」
-・親では**絶対に**英語の正解「${entry.expression}」や good 例「${entry.goodExample}」を書かない。リプライで初出。
+意味:「${entry.meaning_ja}」/ 親に絶対出すな:${entry.expression}・${entry.goodExample}
 
-【フォーマット: インフルエンサー・好奇心ギャップ型】
+▼ 親（${PARENT_TWEET_MAX}字）: フック→シチュ1行→「英語が出てこない」級の短い共感→リプライ誘導。英語の答え禁止。
+${REPLY_PROMPT_INTRO}✅ 正解: ${entry.goodExample}。コア1文（${entry.coreImage}）。${entry.why_hard_for_japanese}は圧縮して1句まで。
+${ctaUrl ? `httpは出さない。` : ""}
 
-▼ 親ツイート（${PARENT_TWEET_MAX}文字以内）
-各ブロックの直後に空行（\\n\\n）。
-
-1行目: 惹きつけフック1文（上級者と中級者を分ける／これ言えたら一目置かれる 等）。
-
-2行目: 「${entry.meaning_ja}」を英語で言いたい**具体的シチュエーション**1文（日本語）。
-
-3行目: 頭の中では日本語が浮かぶのに英語がすっと出ない、など**ギャップ・あるある**への共感。**正解の英語・コアイメージは書かない。**
-
-（空行のあと）末尾: 自然な英語はリプライで、と誘導（答えの単語は出さない）。
-
-（空行のあと）ハッシュタグ: #英語 #TOEIC #LinguistLens
-
-${REPLY_PROMPT_INTRO}1行目: ✅ ${entry.goodExample}（必要なら短い和訳を続ける）。コアイメージは ${entry.coreImage}。補足に ${entry.why_hard_for_japanese}。
-${ctaUrl
-  ? `最終段落: リンク1回 → ${ctaUrl}`
-  : `最終段落: URL なし`}
-
-親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
+---REPLY---`;
 }
 
 /**
@@ -633,44 +591,21 @@ function buildGrammarLessonPrompt(
   lesson: GrammarLessonSummary,
   ctaUrl: string
 ): string {
-  const quiz = lesson.practiceItems[0];
   const introSnippet =
-    lesson.intro.length > 200
-      ? `${lesson.intro.slice(0, 200)}…`
+    lesson.intro.length > 120
+      ? `${lesson.intro.slice(0, 120)}…`
       : lesson.intro;
-  const optionLines =
-    quiz?.options.map((o, i) => `${["A", "B", "C", "D"][i] ?? "?"}. ${o}`) ??
-    [];
   return `${INFLUENCER_GLOBAL_USER_BLOCK}
 
-文法特集「${lesson.h1}」の告知用に、親ツイート＋リプライを書いてください。
-・親では**正解の選択肢・正解英語・コアイメージ解説を出さない**。クイズの答えはリプライ以降のイメージ。
+文法:「${lesson.h1}」/ 参考:${introSnippet}
 
-【フォーマット: インフルエンサー・文法告知型】
+▼ 親（${PARENT_TWEET_MAX}字）: フック→${lesson.h1}に絡む短いシチュ→「無料・ミニクイズあり」まで1行。正解・英語ルールの答えは出さない。
+${ctaUrl ? `親に http を入れるな（長すぎる）。誘導は「続きは👇」のみ。` : "リプライへ誘導のみ。"}
 
-▼ 親ツイート（${PARENT_TWEET_MAX}文字以内）
-各ブロックの直後に空行（\\n\\n）。
+${REPLY_PROMPT_INTRO}✅ で特集の核を英語1文→コアを日本語1文（${lesson.h1}）。クイズ列挙は禁止（100字に入らない）。「挑戦はページで」程度でよい。
+${ctaUrl ? `httpは出さない。` : ""}
 
-1行目: 惹きつけフック1文（9割が混同／文法書では足りない感覚 等）。
-
-2行目: 読者が抱きがちな「わかってるつもり」シチュエーション1文。テーマは ${lesson.h1} に沿う。
-
-3行目: intro の要点を**日本語で短く**（参考: ${introSnippet}）。**ルールの正解表現・英語例の答え合わせは書かない。**
-
-（空行のあと）「ミニクイズ5問つき・無料」と伝え、${ctaUrl ? `続き・詳細は → ${ctaUrl}（親ツイート内の http リンクは最大1回）` : "クイズの答え・解説はリプライへ、と誘導（正解は書かない）"}。
-
-（空行のあと）ハッシュタグ: #英語文法 #英語 #LinguistLens
-
-${REPLY_PROMPT_INTRO}1行目: 特集の核心を英語で1文、行頭に ✅（ページの主メッセージに沿う短いネイティブ表現）。
-2行目以降: コアイメージで噛み砕き（intro・${lesson.h1} の「なぜそう感じるか」）。専門用語は避ける。
-続けてミニクイズ1問を出す（問題文・選択肢のみ。**正解の記号や英語を明示しない**）:
-「${quiz?.prompt ?? "コアイメージを問うクイズ"}」
-${optionLines.join(" / ")}
-${ctaUrl
-  ? `締め: 全5問は → ${ctaUrl}（リンクはリプライ内で合計1回まで）`
-  : `締め: 👇 答えはコメントで。正解は次スレで、など（URL なし）`}
-
-親ツイートとリプライを "---REPLY---" で区切って出力してください。`;
+---REPLY---`;
 }
 
 function buildPrompt(
@@ -710,19 +645,17 @@ async function generateTweetThread(
   console.log(`[post-to-x] Groq model: ${GROQ_MODEL}${PHASE1_MODE ? " [Phase 1: URL なし]" : ""}`);
 
   const systemContent =
-    "あなたは英語学習ジャンルでリーチが伸びやすいXインフルエンサーのトーンを再現するコピーライターであり、" +
-    "認知言語学ベースで「コアイメージ」を噛み砕く英語コーチです。" +
-    "【レイアウト】各短い文の直後に必ず空行（改行2つ）を入れ、スマホで段落が開いて読める本文にする。" +
-    "【比較】❌と✅を対にする場合は、日本語のシチュエーションを両方で同一にする。" +
-    "【役割分割】親ツイートに正解の英語・コアイメージ・答え合わせを書かない。リプライで初めて ✅ と解説を出す。" +
-    "リプライは親の本文のコピペをしない。" +
+    "あなたはXで英語ネタをバズらせる超短文インフルエンサー兼コーチです。" +
+    "【絶対厳守】親ツイートもリプライも、それぞれ本文全体を" +
+    String(LLM_STRICT_TWEET_MAX) +
+    "文字以内に収める（改行も1文字ずつ数える。英語・記号・絵文字含む）。超えた出力は失格なので、短く書き直す。" +
+    " 親はフック→シチュ→❌→リプライ誘導のみ。正解英語・コアイメージは親に書かない。" +
+    " リプライは「✅ 正解: 」＋英語1文＋コアイメージを日本語1文まで。長い説明・前置き（「なぜ〜かというと」等）は禁止。" +
+    " リプライは親のコピペをしない。" +
     (PHASE1_MODE
-      ? " URLは一切出力しない（Phase 1）。"
-      : " リプライ内のURLは指示どおり1回まで（重複禁止）。") +
-    " 区切りは ---REPLY--- のみ。markdown・コードフェンス・箇条書き記号の羅列は使わず、自然な短文と空行で構成する。" +
-    " リプライの日本語解説（✅行を除く）は" +
-    String(REPLY_JA_EXPLANATION_MAX_CHARS) +
-    "文字以内。文末は完結形。途切れた表現で終えない。";
+      ? " URLは一切出さない（Phase 1）。"
+      : " httpリンクはユーザー指示どおり（重複禁止）。") +
+    " 区切りは ---REPLY--- のみ。markdown禁止。文末は必ず完結した形にする。";
 
   const userContent = buildPrompt(source, format, ctaUrl);
 
@@ -739,7 +672,7 @@ async function generateTweetThread(
         { role: "user", content: userContent },
       ],
       temperature: 0.85,
-      max_tokens: 650,
+      max_tokens: 400,
     }),
   });
 
@@ -781,19 +714,15 @@ async function generateTweetThread(
           const entry = source.entry;
           const wrong =
             entry.badExample ?? entry.warnExample ?? "（誤用例）";
-          const quizParent = `9割が職場英語で踏みがちな落とし穴、これ知ってた？
+          const quizParent = `【要チェック】
 
-会議で「${entry.meaning_ja}」を英語で伝えたい場面。
+「${entry.meaning_ja}」の時。
 
 ❌ ${wrong}
 
-日本語の直訳っぽくて、なぜか口から出ちゃうよね。
+言いがち？
 
-でもネイティブが実際に言う英文、実は別物です…↓
-
-正解はリプライへ👇
-
-#英語 #TOEIC #英語学習`;
+ネイティブは…👇`;
           return ensureMaxLength(quizParent, PARENT_TWEET_MAX);
         })()
       : undefined;
@@ -805,18 +734,21 @@ async function generateTweetThread(
 
   let reply =
     replyPart.length > 0
-      ? ensureMaxLength(replyPart, REPLY_TWEET_MAX)
+      ? ensureMaxLength(replyPart, LLM_STRICT_TWEET_MAX)
       : fallbackReplyText(ctaUrl);
 
   if (PHASE1_MODE) {
     parent = ensureMaxLength(stripHttpUrlsForPhase1(parent), PARENT_TWEET_MAX);
-    reply = ensureMaxLength(stripHttpUrlsForPhase1(reply), REPLY_TWEET_MAX);
+    reply = ensureMaxLength(
+      stripHttpUrlsForPhase1(reply),
+      LLM_STRICT_TWEET_MAX
+    );
     console.log(
       "[post-to-x] [Phase 1] 生成済みツイートをサニタイズしました（http(s) URL・余分な空白を除去）。CTA は投稿に含めません。"
     );
   } else {
     parent = ensureMaxLength(parent, PARENT_TWEET_MAX);
-    reply = ensureMaxLength(reply, REPLY_TWEET_MAX);
+    reply = ensureMaxLength(reply, LLM_STRICT_TWEET_MAX);
   }
 
   return { parent, reply };
@@ -883,7 +815,7 @@ export async function postThreadToX(
     replyText,
     ctaUrl
   );
-  const replySafe = ensureMaxLength(replyNormalized, REPLY_TWEET_MAX);
+  const replySafe = ensureMaxLength(replyNormalized, REPLY_POST_MAX);
 
   const replyUrlMatches = replySafe.match(URL_IN_TEXT_RE);
   const replyUrlCount = replyUrlMatches ? replyUrlMatches.length : 0;
@@ -929,6 +861,11 @@ export async function postThreadToX(
 }
 
 async function main(): Promise<void> {
+  if (DRY_RUN) {
+    console.log(
+      "\n[post-to-x] DRY_RUN=有効 — X へは投稿しません。履歴も更新しません。\n"
+    );
+  }
   if (PHASE1_MODE) {
     console.log(
       "\n[post-to-x] ═══════════════════════════════════════════════════" +
@@ -956,6 +893,10 @@ async function main(): Promise<void> {
   const { parent, reply } = await generateTweetThread(source, format);
   console.log("--- Parent ---\n", parent, "\n---");
   console.log("--- Reply ---\n", reply, "\n---");
+
+  if (DRY_RUN) {
+    return;
+  }
 
   // Phase 1 は postThreadToX にも空文字を渡してリプライの URL 正規化をスキップ
   const ctaUrl = PHASE1_MODE ? "" : resolveCtaUrl(source);
