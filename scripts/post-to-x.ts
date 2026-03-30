@@ -44,7 +44,7 @@ const LIBRARY_PAGE = `${SITE_URL}/library`;
  * AIの文字数制限を少し緩和（100 -> 135）。
  * Xの上限（140文字）に収めつつ、末尾が不自然に切れるのを防ぎます。
  */
-const LLM_STRICT_TWEET_MAX = 135;
+const LLM_STRICT_TWEET_MAX = 190;
 const PARENT_TWEET_MAX = LLM_STRICT_TWEET_MAX;
 const REPLY_POST_MAX = 270;
 
@@ -304,7 +304,7 @@ const INFLUENCER_GLOBAL_USER_BLOCK = `【絶対遵守の生成ルール】
 3. 親ツイートとリプライの間に必ず \`---REPLY---\` のみを挟むこと。`;
 
 function buildQuizPrompt(entry: LibraryEntry): string {
-  const wrong = entry.badExample ?? entry.warnExample ?? "（不自然な英語）";
+  const wrong = entry.badExample ?? entry.warnExample ?? "（日本人がやりがちな直訳や不自然な英語）";
   return `${INFLUENCER_GLOBAL_USER_BLOCK}
 
 教材:「${entry.expression}」意味:${entry.meaning_ja}
@@ -312,7 +312,7 @@ function buildQuizPrompt(entry: LibraryEntry): string {
 【出力テンプレート】
 【9割の日本人が間違える英語】
 
-[「${entry.meaning_ja}」となる極めて日常的なシーン（20文字以内）]
+[「${entry.meaning_ja}」となる具体的な日常シーンを15〜20文字で。例：「車のエンジンがかからない時」「仕事でミスをして焦った時」など、必ず具体的な情景を書き「〜な時」「〜な場面」で終わらせること]
 ❌ ${wrong}
 と言っていませんか？
 
@@ -325,7 +325,7 @@ function buildQuizPrompt(entry: LibraryEntry): string {
 
 「[対象となる英単語/熟語]」のコアイメージは「[視覚的で分かりやすいコアイメージを40文字以内で]」です。
 
-[そのフレーズを使う時の感情やニュアンス（30文字以内で）]
+[そのフレーズを使う時の感情やニュアンス（例：驚きが伝わります、等）を30文字以内で]
 ぜひ使ってみてね！`;
 }
 
