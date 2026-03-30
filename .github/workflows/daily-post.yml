@@ -27,6 +27,8 @@ jobs:
       - run: npm install
       - run: npm run post-to-x
         env:
+          # Phase 1: CTA/URL を含めない純粋教育モード（scheduled 実行を常に Phase 1 で固定）
+          POST_TO_X_PHASE1: 1
           # 変数名は据え置き: 値は Groq API キー（scripts/post-to-x.ts が Groq を呼ぶ）
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}

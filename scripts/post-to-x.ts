@@ -68,6 +68,40 @@ const PARENT_TWEET_MAX = 270;
 const REPLY_TWEET_MAX = 270;
 
 /**
+ * リプライ内「日本語の解説・補足」に対する厳格上限（Groq プロンプトで強制）。
+ * 全体の REPLY_TWEET_MAX とは別。長文解説 → サーバー側カット → 不自然末尾 → 403 の連鎖を防ぐ。
+ */
+const REPLY_JA_EXPLANATION_MAX_CHARS = 100;
+
+/**
+ * 各フォーマットのユーザー prompt 内「リプライ」欄の冒頭（日本語解説の短さを強制）
+ */
+const REPLY_PROMPT_INTRO =
+  `▼ リプライ（全体${REPLY_TWEET_MAX}文字以内。日本語の解説・補足は必ず${REPLY_JA_EXPLANATION_MAX_CHARS}文字以内）
+【絶対遵守】解説は日本語で要点だけを極めて簡潔に。${REPLY_JA_EXPLANATION_MAX_CHARS}文字を超えないこと。文末は必ず完結した自然な形で終える（「〜してくださ」のような途切れた丁寧語で終わらせない）。
+
+`;
+
+/** 切り詰め時に末尾へ付ける省略記号（X が不自然な途中切断をスパム扱いしやすいため明示的に付与） */
+const TRUNCATION_SUFFIX = "...";
+
+/**
+ * 本文が max を超える場合のみ、末尾を `...` で終わるよう短くする（中間のハード slice を避ける）。
+ */
+function ensureMaxLength(text: string, max: number): string {
+  if (text.length <= max) return text;
+  console.warn(
+    `警告: 本文が${text.length}文字のため、${max}文字に切り詰めます（末尾に ${TRUNCATION_SUFFIX} を付与）`
+  );
+  if (max <= 0) return "";
+  const suffixLen = TRUNCATION_SUFFIX.length;
+  if (max <= suffixLen) {
+    return TRUNCATION_SUFFIX.slice(0, max);
+  }
+  return `${text.slice(0, max - suffixLen)}${TRUNCATION_SUFFIX}`;
+}
+
+/**
  * テスト実行時、親ツイート本文の重複による Duplicate Tweet（403）を避けやすくする。
  * POST_TO_X_DEBUG_DEDUP=1 / true / yes
  */
@@ -101,9 +135,9 @@ function applyDebugDedupSuffixToParent(
   const head =
     parentText.length <= budget
       ? parentText
-      : budget <= 1
-        ? "…"
-        : `${parentText.slice(0, budget - 1)}…`;
+      : budget < TRUNCATION_SUFFIX.length
+        ? TRUNCATION_SUFFIX.slice(0, Math.max(0, budget))
+        : `${parentText.slice(0, budget - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`;
   return `${head}${suffix}`;
 }
 
@@ -215,9 +249,7 @@ function fallbackReplyText(ctaUrl: string): string {
     return "コアイメージを意識すると、英語の感覚が少しずつ変わってきます。ぜひ次の会話で1度使ってみてください！";
   }
   const line = `コアイメージで解説中 → ${ctaUrl}`;
-  return line.length <= REPLY_TWEET_MAX
-    ? line
-    : line.slice(0, REPLY_TWEET_MAX - 1) + "…";
+  return ensureMaxLength(line, REPLY_TWEET_MAX);
 }
 
 /** 比較用: URL除去＋空白正規化 */
@@ -253,11 +285,11 @@ function truncateCoreKeepingCtaSuffix(
   if (maxCore === 0) {
     return ctaUrl.length <= maxTotal
       ? ctaUrl
-      : `${ctaUrl.slice(0, Math.max(0, maxTotal - 1))}…`;
+      : ensureMaxLength(ctaUrl, maxTotal);
   }
   let core = bodyCore;
   if (core.length > maxCore) {
-    core = `${core.slice(0, maxCore - 1)}…`;
+    core = ensureMaxLength(core, maxCore);
   }
   return `${core}${suffix}`;
 }
@@ -503,8 +535,7 @@ function buildQuizPrompt(entry: LibraryEntry, ctaUrl: string): string {
 3. 末尾に「👇 コメントで答えてみて！正解はリプライで」
 4. ハッシュタグ: #英語 #TOEIC #英語学習
 
-▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
-1. 「✅ 正解: B」を明記
+${REPLY_PROMPT_INTRO}1. 「✅ 正解: B」を明記
 2. なぜ A が不自然か（要点: ${entry.why_hard_for_japanese}）を1〜2文
 3. コアイメージ1文（素材: ${entry.coreImage}）
 ${ctaUrl
@@ -542,8 +573,7 @@ function buildNgContrastPrompt(entry: LibraryEntry, ctaUrl: string): string {
 3. コアイメージを1〜2文で（素材: ${entry.coreImage}）
 4. ハッシュタグ: #英語 #英語学習 #LinguistLens
 
-▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
-1. nuance を1〜2文（素材: ${entry.nuance}）
+${REPLY_PROMPT_INTRO}1. nuance を1〜2文（素材: ${entry.nuance}）
 2. 使用シーン1文（素材: ${entry.context}）
 ${ctaUrl
   ? `3. CTA: 「同じ落とし穴がある関連表現はこちら → ${ctaUrl}」`
@@ -575,8 +605,7 @@ function buildCuriosityGapPrompt(entry: LibraryEntry, ctaUrl: string): string {
 3. コアイメージを2〜3文で展開（素材: ${entry.coreImage} / ${entry.nuance}）
 4. ハッシュタグ: #英語 #TOEIC #LinguistLens
 
-▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
-1. 例文: "${entry.goodExample}"（和訳: ${entry.goodExampleJa}）
+${REPLY_PROMPT_INTRO}1. 例文: "${entry.goodExample}"（和訳: ${entry.goodExampleJa}）
 2. なぜ日本人には難しいか1文: ${entry.why_hard_for_japanese}
 ${ctaUrl
   ? `3. CTA: 「同じシーンで使える関連表現はこちら → ${ctaUrl}」`
@@ -615,8 +644,7 @@ function buildGrammarLessonPrompt(
 ${ctaUrl ? `4. CTA: 「→ ${ctaUrl}」` : "4. URLなし — 「ミニクイズに挑戦してみてください」などに留める"}
 5. ハッシュタグ: #英語文法 #英語 #LinguistLens
 
-▼ リプライ（${REPLY_TWEET_MAX}文字以内）:
-1. ミニクイズ1問:
+${REPLY_PROMPT_INTRO}1. ミニクイズ1問:
    "${quiz?.prompt ?? "コアイメージを問うクイズ"}"
    ${optionLines.join(" / ")}
 ${ctaUrl
@@ -671,7 +699,10 @@ async function generateTweetThread(
     (PHASE1_MODE
       ? "③ URLは一切出力しない（Phase 1: 純粋な教育コンテンツのみ）。"
       : "③ リプライ内のURLは指示どおり1回だけ（重複リンク禁止）。") +
-    "④ 区切りは ---REPLY--- のみ、前後に余計な文字・説明・markdown は一切出力しない。";
+    "④ 区切りは ---REPLY--- のみ、前後に余計な文字・説明・markdown は一切出力しない。" +
+    "⑤ リプライの日本語による解説・補足は必ず" +
+    String(REPLY_JA_EXPLANATION_MAX_CHARS) +
+    "文字以内に収め、要点のみ。冗長禁止。文末は必ず完結した形で終える（途切れた表現で終えない）。";
 
   const userContent = buildPrompt(source, format, ctaUrl);
 
@@ -730,45 +761,39 @@ async function generateTweetThread(
           const entry = source.entry;
           const wrong =
             entry.badExample ?? entry.warnExample ?? "（誤用例）";
-          return `【英語クイズ】この2つ、どちらが自然か即答できますか？
+          const quizParent = `【英語クイズ】この2つ、どちらが自然か即答できますか？
 
 A: ${wrong}
 B: ${entry.goodExample}
 
 👇 コメントで答えてみて！正解はリプライで
-#英語 #TOEIC #英語学習`.slice(0, PARENT_TWEET_MAX);
+#英語 #TOEIC #英語学習`;
+          return ensureMaxLength(quizParent, PARENT_TWEET_MAX);
         })()
       : undefined;
 
   let parent =
     parentRaw !== ""
-      ? parentRaw.slice(0, PARENT_TWEET_MAX)
-      : (defaultParent ?? text.slice(0, PARENT_TWEET_MAX));
+      ? ensureMaxLength(parentRaw, PARENT_TWEET_MAX)
+      : ensureMaxLength(defaultParent ?? text, PARENT_TWEET_MAX);
 
   let reply =
     replyPart.length > 0
-      ? replyPart.slice(0, REPLY_TWEET_MAX)
+      ? ensureMaxLength(replyPart, REPLY_TWEET_MAX)
       : fallbackReplyText(ctaUrl);
 
   if (PHASE1_MODE) {
-    const parentSan = stripHttpUrlsForPhase1(parent);
-    const replySan = stripHttpUrlsForPhase1(reply);
-    parent = ensureMaxLength(parentSan, PARENT_TWEET_MAX);
-    reply = ensureMaxLength(replySan, REPLY_TWEET_MAX);
+    parent = ensureMaxLength(stripHttpUrlsForPhase1(parent), PARENT_TWEET_MAX);
+    reply = ensureMaxLength(stripHttpUrlsForPhase1(reply), REPLY_TWEET_MAX);
     console.log(
       "[post-to-x] [Phase 1] 生成済みツイートをサニタイズしました（http(s) URL・余分な空白を除去）。CTA は投稿に含めません。"
     );
+  } else {
+    parent = ensureMaxLength(parent, PARENT_TWEET_MAX);
+    reply = ensureMaxLength(reply, REPLY_TWEET_MAX);
   }
 
   return { parent, reply };
-}
-
-function ensureMaxLength(text: string, max: number): string {
-  if (text.length <= max) return text;
-  console.warn(
-    `警告: 本文が${text.length}文字のため、${max}文字に切り詰めます`
-  );
-  return text.slice(0, max - 1) + "…";
 }
 
 function createTwitterRw() {
